@@ -59,6 +59,18 @@ export const StartupConfigSetSchema = z.object({
   ),
 });
 
+export const NodeBootActionSchema = z.enum([
+  "none",
+  "backup-once",
+  "inject-once",
+]);
+
+export const NodeBootActionStateSchema = z.object({
+  nodeId: z.string().min(1),
+  action: NodeBootActionSchema,
+  updatedAt: z.string().min(1).optional(),
+});
+
 export const LabDocumentSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -72,6 +84,7 @@ export const LabDocumentSchema = z.object({
   attachments: z.array(AttachmentSchema),
   annotations: z.array(AnnotationSchema),
   startupConfigSets: z.array(StartupConfigSetSchema),
+  nodeBootActions: z.array(NodeBootActionStateSchema).default(() => []),
   activeConfigSetId: z.string().min(1).nullable(),
 });
 
@@ -79,3 +92,5 @@ export type LabDocument = z.infer<typeof LabDocumentSchema>;
 export type LabNode = z.infer<typeof LabNodeSchema>;
 export type Attachment = z.infer<typeof AttachmentSchema>;
 export type StartupConfigSet = z.infer<typeof StartupConfigSetSchema>;
+export type NodeBootAction = z.infer<typeof NodeBootActionSchema>;
+export type NodeBootActionState = z.infer<typeof NodeBootActionStateSchema>;

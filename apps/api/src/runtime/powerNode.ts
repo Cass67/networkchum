@@ -625,13 +625,19 @@ export async function powerOnNode(
     (nc) => nc.nodeId === nodeId,
   )?.config;
 
-  // Day-0 FAT disk injection (iosv-vfat, csr1000v-vfat) only fires when the
-  // router finds no startup-config in NVRAM. If the overlay has been booted
-  // before, NVRAM already has a saved config and the FAT disk is ignored.
-  // Reset the overlay to a clean copy of the base image so NVRAM is blank
-  // and the day-0 disk takes effect.
+  const bootActions = lab.document.nodeBootActions ?? [];
+  const nodeBootAction =
+    bootActions.find((entry) => entry.nodeId === nodeId)?.action ?? "none";
+  const hasStartupConfigText =
+    typeof startupConfig === "string" && startupConfig.trim().length > 0;
+  const shouldInjectStartupConfig =
+    nodeBootAction === "inject-once" && hasStartupConfigText;
+
+  // Day-0 FAT disk injection (iosv-vfat, csr1000v-vfat) now requires both an
+  // explicit `inject-once` boot action and non-blank startup config text so the
+  // overlay can be reset safely for the injected data.
   const needsFreshOverlay =
-    startupConfig !== undefined &&
+    shouldInjectStartupConfig &&
     (configInjectMethod === "iosv-vfat" ||
       configInjectMethod === "csr1000v-vfat");
 
@@ -641,33 +647,8 @@ export async function powerOnNode(
   // Disk state persists across power cycles — the copy lives until the lab is deleted.
   const overlayPath = getNodeOverlayPath(labId, nodeId);
   await mkdir(path.dirname(overlayPath), { recursive: true });
-  if (needsFreshOverlay) {
-    await rm(overlayPath, { force: true });
-    console.log(
-      `[powerNode] resetting overlay for day-0 config injection: ${overlayPath}`,
-    );
-  }
-  let effectiveImagePath = imagePath;
-  try {
-    await access(overlayPath);
-    console.log(`[powerNode] reusing existing disk: ${overlayPath}`);
-    effectiveImagePath = overlayPath;
-  } catch {
-    try {
-      await copyFile(imagePath, overlayPath);
-      console.log(`[powerNode] cloned disk image: ${overlayPath}`);
-      effectiveImagePath = overlayPath;
-    } catch (err) {
-      console.warn(
-        `[powerNode] could not clone disk image, using base directly: ${err instanceof Error ? err.message : err}`,
-      );
-    }
-  }
 
-  const lockedQemu = await findRunningQemuForDisk(
-    effectiveImagePath,
-    runCommand,
-  );
+  const lockedQemu = await findRunningQemuForDisk(overlayPath, runCommand);
   if (lockedQemu) {
     const savedNicPorts = existingState?.nicPorts;
 
@@ -697,6 +678,29 @@ export async function powerOnNode(
       `[powerNode] recovered running qemu process pid=${lockedQemu.pid} for node ${nodeId}`,
     );
     return recoveredState;
+  }
+
+  if (needsFreshOverlay) {
+    await rm(overlayPath, { force: true });
+    console.log(
+      `[powerNode] resetting overlay for day-0 config injection: ${overlayPath}`,
+    );
+  }
+  let effectiveImagePath = imagePath;
+  try {
+    await access(overlayPath);
+    console.log(`[powerNode] reusing existing disk: ${overlayPath}`);
+    effectiveImagePath = overlayPath;
+  } catch {
+    try {
+      await copyFile(imagePath, overlayPath);
+      console.log(`[powerNode] cloned disk image: ${overlayPath}`);
+      effectiveImagePath = overlayPath;
+    } catch (err) {
+      console.warn(
+        `[powerNode] could not clone disk image, using base directly: ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   const findPort = dependencies.findAvailablePort ?? findAvailablePort;
@@ -751,7 +755,7 @@ export async function powerOnNode(
 
   let configExtraArgs: string[] = [];
   if (
-    startupConfig !== undefined &&
+    shouldInjectStartupConfig &&
     configInjectMethod &&
     configInjectMethod !== "none"
   ) {

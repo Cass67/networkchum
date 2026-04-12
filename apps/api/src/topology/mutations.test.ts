@@ -8,6 +8,7 @@ import {
   removeNetwork,
   removeNode,
 } from "./mutations.js";
+import * as mutations from "./mutations.js";
 
 function makeDocument(overrides: Partial<LabDocument> = {}): LabDocument {
   return {
@@ -20,6 +21,7 @@ function makeDocument(overrides: Partial<LabDocument> = {}): LabDocument {
     attachments: [],
     annotations: [],
     startupConfigSets: [],
+    nodeBootActions: [],
     activeConfigSetId: null,
     ...overrides,
   };
@@ -151,6 +153,29 @@ describe("removeNode", () => {
     expect(result.nodes).toHaveLength(0);
     expect(result.attachments).toHaveLength(0);
   });
+
+  it("removes boot action state for the removed node", () => {
+    const doc = makeDocument({
+      nodes: [
+        {
+          id: "node-a",
+          name: "A",
+          runtime: "container",
+          templateId: "tpl-1",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 512, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [],
+        },
+      ],
+      nodeBootActions: [{ nodeId: "node-a", action: "inject-once" }],
+    });
+
+    const result = removeNode(doc, "node-a");
+
+    expect(result.nodeBootActions).toEqual([]);
+  });
 });
 
 describe("removeNetwork", () => {
@@ -166,5 +191,101 @@ describe("removeNetwork", () => {
 
     expect(result.networks).toHaveLength(0);
     expect(result.attachments).toHaveLength(0);
+  });
+});
+
+describe("node boot action", () => {
+  it("persists a boot action for a node", () => {
+    const doc = makeDocument({
+      nodes: [
+        {
+          id: "node-a",
+          name: "A",
+          runtime: "container",
+          templateId: "tpl-1",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 512, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [],
+        },
+      ],
+      nodeBootActions: [],
+    });
+
+    const updated = mutations.setNodeBootAction(doc, "node-a", "inject-once");
+    expect(
+      updated.nodeBootActions.map(({ nodeId, action }) => ({ nodeId, action })),
+    ).toEqual([{ nodeId: "node-a", action: "inject-once" }]);
+    const [updatedEntry] = updated.nodeBootActions;
+    expect(updatedEntry?.updatedAt).toBeDefined();
+    expect(Number.isNaN(Date.parse(updatedEntry?.updatedAt ?? ""))).toBe(false);
+
+    const cleared = mutations.setNodeBootAction(updated, "node-a", "none");
+    expect(cleared.nodeBootActions).toEqual([]);
+  });
+
+  it("updates an existing boot action for the same node", () => {
+    const doc = makeDocument({
+      nodes: [
+        {
+          id: "node-a",
+          name: "A",
+          runtime: "container",
+          templateId: "tpl-1",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 512, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [],
+        },
+        {
+          id: "node-b",
+          name: "B",
+          runtime: "container",
+          templateId: "tpl-1",
+          imageId: null,
+          position: { x: 10, y: 10 },
+          config: { vcpu: 1, ramMb: 512, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [],
+        },
+      ],
+      nodeBootActions: [
+        {
+          nodeId: "node-a",
+          action: "inject-once",
+          updatedAt: "2020-01-01T00:00:00.000Z",
+        },
+        {
+          nodeId: "node-b",
+          action: "backup-once",
+          updatedAt: "2020-01-01T00:00:01.000Z",
+        },
+      ],
+    });
+
+    const originalTimestamp =
+      doc.nodeBootActions.find((entry) => entry.nodeId === "node-a")
+        ?.updatedAt ?? null;
+
+    const updated = mutations.setNodeBootAction(doc, "node-a", "backup-once");
+
+    expect(
+      updated.nodeBootActions
+        .filter((entry) => entry.nodeId !== "node-a")
+        .map(({ nodeId, action }) => ({ nodeId, action })),
+    ).toContainEqual({ nodeId: "node-b", action: "backup-once" });
+    const [updatedAEntry] = updated.nodeBootActions.filter(
+      (entry) => entry.nodeId === "node-a",
+    );
+    expect(updatedAEntry).toEqual(
+      expect.objectContaining({ nodeId: "node-a", action: "backup-once" }),
+    );
+    expect(updatedAEntry?.updatedAt).toBeDefined();
+    expect(Number.isNaN(Date.parse(updatedAEntry?.updatedAt ?? ""))).toBe(
+      false,
+    );
+    expect(updatedAEntry?.updatedAt).not.toBe(originalTimestamp);
   });
 });

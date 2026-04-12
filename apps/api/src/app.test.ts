@@ -9,6 +9,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 
+import type { NodeBootAction, NodeBootActionState } from "@networkchum/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "./app.js";
@@ -20,6 +21,56 @@ type App = ReturnType<typeof buildApp>;
 
 let tempDataDir = "";
 let app: App;
+
+async function createLabWithNode(nodeName: string) {
+  const createLabResponse = await app.inject({
+    method: "POST",
+    url: "/labs",
+    payload: { name: `${nodeName} Lab` },
+  });
+  const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+  const addNodeResponse = await app.inject({
+    method: "POST",
+    url: `/labs/${labId}/nodes`,
+    payload: {
+      templateId: "linux-alpine-container",
+      name: nodeName,
+      position: { x: 10, y: 10 },
+    },
+  });
+  expect(addNodeResponse.statusCode).toBe(201);
+  const nodeId = (
+    addNodeResponse.json() as {
+      lab: { document: { nodes: Array<{ id: string }> } };
+    }
+  ).lab.document.nodes[0]?.id;
+  if (!nodeId) {
+    throw new Error("Missing node id");
+  }
+
+  return { labId, nodeId };
+}
+
+async function patchBootAction(
+  labId: string,
+  nodeId: string,
+  action: NodeBootAction,
+) {
+  const response = await app.inject({
+    method: "PATCH",
+    url: `/labs/${labId}/nodes/${nodeId}/boot-action`,
+    payload: { action },
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json() as {
+    lab: {
+      document: {
+        nodeBootActions: NodeBootActionState[];
+      };
+    };
+  };
+}
 
 beforeAll(async () => {
   tempDataDir = await mkdtemp(path.join(os.tmpdir(), "networkchum-api-tests-"));
@@ -230,6 +281,117 @@ describe("api", () => {
 
     expect(payload.lab.document.nodes).toHaveLength(1);
     expect(payload.lab.document.nodes[0]?.name).toBe("host-1");
+  });
+
+  it("returns the updated lab when setting a boot action", async () => {
+    const { labId, nodeId } = await createLabWithNode("node-boot");
+    const patchPayload = await patchBootAction(labId, nodeId, "inject-once");
+
+    expect(Array.isArray(patchPayload.lab.document.nodeBootActions)).toBe(true);
+    expect(patchPayload.lab.document.nodeBootActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ nodeId, action: "inject-once" }),
+      ]),
+    );
+
+    const getLabResponse = await app.inject({
+      method: "GET",
+      url: `/labs/${labId}`,
+    });
+    const getPayload = getLabResponse.json() as {
+      lab: {
+        document: {
+          nodeBootActions: NodeBootActionState[];
+        };
+      };
+    };
+
+    expect(getPayload.lab.document.nodeBootActions).toEqual(
+      patchPayload.lab.document.nodeBootActions,
+    );
+  });
+
+  it("records a backup-once boot action", async () => {
+    const { labId, nodeId } = await createLabWithNode("node-backup");
+    const patchPayload = await patchBootAction(labId, nodeId, "backup-once");
+    expect(patchPayload.lab.document.nodeBootActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ nodeId, action: "backup-once" }),
+      ]),
+    );
+  });
+
+  it("clears boot actions when the payload uses action none", async () => {
+    const { labId, nodeId } = await createLabWithNode("node-boot-clear");
+    await patchBootAction(labId, nodeId, "inject-once");
+    const clearPayload = await patchBootAction(labId, nodeId, "none");
+
+    expect(
+      clearPayload.lab.document.nodeBootActions.some(
+        (entry) => entry.nodeId === nodeId,
+      ),
+    ).toBe(false);
+
+    const getLabResponse = await app.inject({
+      method: "GET",
+      url: `/labs/${labId}`,
+    });
+    const getPayload = getLabResponse.json() as {
+      lab: {
+        document: {
+          nodeBootActions: NodeBootActionState[];
+        };
+      };
+    };
+
+    expect(
+      getPayload.lab.document.nodeBootActions.some(
+        (entry) => entry.nodeId === nodeId,
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects invalid boot action values", async () => {
+    const { labId, nodeId } = await createLabWithNode("node-invalid-action");
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/labs/${labId}/nodes/${nodeId}/boot-action`,
+      payload: { action: "invalid-action" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual(
+      expect.objectContaining({ message: expect.any(String) }),
+    );
+  });
+
+  it("returns 404 when the lab cannot be found", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/labs/nonexistent-lab/nodes/node-missing/boot-action`,
+      payload: { action: "inject-once" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ message: "Lab not found" });
+  });
+
+  it("returns 404 when the node cannot be found", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Missing Node Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/labs/${labId}/nodes/nonexistent-node/boot-action`,
+      payload: { action: "inject-once" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ message: "Node not found" });
   });
 
   it("writes a backup snapshot after a lab mutation when auto backup is enabled", async () => {

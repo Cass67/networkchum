@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
+import { NodeBootActionSchema } from "@networkchum/shared";
+
 import {
   listLabs,
   replaceLabRecord,
@@ -33,6 +35,7 @@ import {
   moveNode,
   removeNodeConfig,
   setActiveConfigSet,
+  setNodeBootAction,
   setNodeConfig,
   upsertStartupConfigSet,
 } from "../topology/mutations.js";
@@ -64,6 +67,10 @@ const addNetworkSchema = z.object({
 const attachSchema = z.object({
   networkId: z.string().min(1),
   interfaceIds: z.array(z.string().min(1)).min(1),
+});
+
+const setNodeBootActionSchema = z.object({
+  action: NodeBootActionSchema,
 });
 
 export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
@@ -292,6 +299,48 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     }
     return reply.send({ lab: updatedLab });
   });
+
+  app.patch(
+    "/labs/:labId/nodes/:nodeId/boot-action",
+    async (request, reply) => {
+      const params = z
+        .object({ labId: z.string().min(1), nodeId: z.string().min(1) })
+        .parse(request.params);
+      let body;
+      try {
+        body = setNodeBootActionSchema.parse(request.body);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply
+            .code(400)
+            .send({ message: error.message, issues: error.issues });
+        }
+        throw error;
+      }
+      const lab = await getManagedLab(params.labId);
+      if (!lab) {
+        return reply.code(404).send({ message: "Lab not found" });
+      }
+
+      const nodeExists = lab.document.nodes.some(
+        (node) => node.id === params.nodeId,
+      );
+      if (!nodeExists) {
+        return reply.code(404).send({ message: "Node not found" });
+      }
+
+      const document = setNodeBootAction(
+        lab.document,
+        params.nodeId,
+        body.action,
+      );
+      const updatedLab = await updateLabDocument(params.labId, document);
+      if (updatedLab) {
+        await writeLabBackup(updatedLab);
+      }
+      return reply.send({ lab: updatedLab });
+    },
+  );
 
   app.delete(
     "/labs/:labId/attachments/:interfaceId",

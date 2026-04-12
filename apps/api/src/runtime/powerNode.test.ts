@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LabDocument } from "@networkchum/shared";
 
 import { createLab, getLab, updateLabDocument } from "../labs/labStore.js";
-import { addNode } from "../topology/mutations.js";
+import { addNode, setNodeBootAction } from "../topology/mutations.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import {
   ensureTapNetworking,
@@ -397,13 +397,14 @@ describe("powerOnNode", () => {
       const registry = new TemplateRegistry();
       const lab = await createLab("CSR Qemu Lab");
       const template = registry.get("cisco-asr")!;
-      const document = addNode(lab.document, {
+      let document = addNode(lab.document, {
         template,
         name: "csr-1",
         position: { x: 10, y: 10 },
         imageId: "/tmp/csr.qcow2",
       });
       const nodeId = document.nodes[0]!.id;
+      document = setNodeBootAction(document, nodeId, "inject-once");
       await updateLabDocument(lab.id, {
         ...document,
         startupConfigSets: [
@@ -440,6 +441,196 @@ describe("powerOnNode", () => {
     }
   });
 
+  it("skips CSR config injection when startup config is whitespace even with inject-once", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const { restorePath } = await installFakeCsrTools(tempDir);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const registry = new TemplateRegistry();
+      const lab = await createLab("CSR Blank Config Lab");
+      const template = registry.get("cisco-asr")!;
+      let document = addNode(lab.document, {
+        template,
+        name: "csr-blank",
+        position: { x: 10, y: 10 },
+        imageId: "/tmp/csr.qcow2",
+      });
+      const nodeId = document.nodes[0]!.id;
+      document = setNodeBootAction(document, nodeId, "inject-once");
+      await updateLabDocument(lab.id, {
+        ...document,
+        startupConfigSets: [
+          {
+            id: "set-blank",
+            name: "Blank Config",
+            nodeConfigs: [{ nodeId, config: "   \n  " }],
+          },
+        ],
+        activeConfigSetId: "set-blank",
+      });
+
+      const state = await powerOnNode(lab.id, nodeId, {
+        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+        hasBinary: async () => true,
+        findAvailablePort: async (port) => port,
+        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+      });
+
+      const hasStartupDrive = (state?.commandPreview ?? []).some(
+        (arg) =>
+          typeof arg === "string" &&
+          arg.includes(`${tempDir}/configs/${lab.id}/${nodeId}-startup.img`),
+      );
+      expect(hasStartupDrive).toBe(false);
+      expect(
+        logSpy.mock.calls.some(([msg]) =>
+          typeof msg === "string"
+            ? msg.includes("CSR1000v config-drive layout")
+            : false,
+        ),
+      ).toBe(false);
+    } finally {
+      logSpy.mockRestore();
+      restorePath();
+    }
+  });
+
+  it("skips CSR1000v config-drive and overlay reset when a startup config exists but no boot action", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const { restorePath } = await installFakeCsrTools(tempDir);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const registry = new TemplateRegistry();
+      const lab = await createLab("CSR Boot Action Lab");
+      const template = registry.get("cisco-asr")!;
+      let document = addNode(lab.document, {
+        template,
+        name: "csr-1",
+        position: { x: 10, y: 10 },
+        imageId: "/tmp/csr.qcow2",
+      });
+      const nodeId = document.nodes[0]!.id;
+      await updateLabDocument(lab.id, {
+        ...document,
+        startupConfigSets: [
+          {
+            id: "set-1",
+            name: "Active Config",
+            nodeConfigs: [{ nodeId, config: "hostname csr-1\n" }],
+          },
+        ],
+        activeConfigSetId: "set-1",
+      });
+
+      const state = await powerOnNode(lab.id, nodeId, {
+        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+        hasBinary: async () => true,
+        findAvailablePort: async (port) => port,
+        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+      });
+
+      const previewArgs = state?.commandPreview ?? [];
+      expect(
+        previewArgs.some(
+          (arg) =>
+            typeof arg === "string" &&
+            arg.includes(`${tempDir}/configs/${lab.id}/${nodeId}-startup.img`),
+        ),
+      ).toBe(false);
+      expect(
+        previewArgs.some(
+          (arg) =>
+            typeof arg === "string" &&
+            arg.includes("if=virtio,format=raw") &&
+            arg.includes("csr1000v-vfat"),
+        ),
+      ).toBe(false);
+      expect(
+        logSpy.mock.calls.some(([msg]) =>
+          typeof msg === "string"
+            ? msg.includes("resetting overlay for day-0 config injection")
+            : false,
+        ),
+      ).toBe(false);
+      expect(
+        logSpy.mock.calls.some(([msg]) =>
+          typeof msg === "string"
+            ? msg.includes("CSR1000v config-drive layout")
+            : false,
+        ),
+      ).toBe(false);
+    } finally {
+      logSpy.mockRestore();
+      restorePath();
+    }
+  });
+
+  it("injects CSR1000v config-drive when boot action includes inject-once", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const { restorePath, mcopyLogPath } = await installFakeCsrTools(tempDir);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const registry = new TemplateRegistry();
+      const lab = await createLab("CSR Boot Action Inject Lab");
+      const template = registry.get("cisco-asr")!;
+      let document = addNode(lab.document, {
+        template,
+        name: "csr-1",
+        position: { x: 10, y: 10 },
+        imageId: "/tmp/csr.qcow2",
+      });
+      const nodeId = document.nodes[0]!.id;
+      document = setNodeBootAction(document, nodeId, "inject-once");
+      await updateLabDocument(lab.id, {
+        ...document,
+        startupConfigSets: [
+          {
+            id: "set-1",
+            name: "Active Config",
+            nodeConfigs: [{ nodeId, config: "hostname csr-1\n" }],
+          },
+        ],
+        activeConfigSetId: "set-1",
+      });
+
+      const state = await powerOnNode(lab.id, nodeId, {
+        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+        hasBinary: async () => true,
+        findAvailablePort: async (port) => port,
+        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+      });
+
+      expect(state?.status).toBe("running");
+      expect(state?.commandPreview).toContain(
+        `file=${tempDir}/configs/${lab.id}/${nodeId}-startup.img,if=virtio,format=raw`,
+      );
+      await expect(readFile(mcopyLogPath, "utf8")).resolves.toContain(
+        "::iosxe_config.txt",
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        `[powerNode] selected CSR1000v config-drive layout=csr1000v-vfat artifact=${tempDir}/configs/${lab.id}/${nodeId}-startup.img`,
+      );
+    } finally {
+      logSpy.mockRestore();
+      restorePath();
+    }
+  });
+
   it("does not attach CSR1000v config-drive args when the active set has no config for the node", async () => {
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), "networkchum-runtime-"),
@@ -452,13 +643,14 @@ describe("powerOnNode", () => {
       const registry = new TemplateRegistry();
       const lab = await createLab("CSR Qemu Lab Without Config");
       const template = registry.get("cisco-asr")!;
-      const document = addNode(lab.document, {
+      let document = addNode(lab.document, {
         template,
         name: "csr-1",
         position: { x: 10, y: 10 },
         imageId: "/tmp/csr.qcow2",
       });
       const nodeId = document.nodes[0]!.id;
+      document = setNodeBootAction(document, nodeId, "inject-once");
       await updateLabDocument(lab.id, {
         ...document,
         startupConfigSets: [
@@ -492,6 +684,74 @@ describe("powerOnNode", () => {
     }
   });
 
+  it("gates IOSv day-0 drive on inject-once boot action", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const runScenario = async (withBootAction: boolean) => {
+      const registry = new TemplateRegistry();
+      const lab = await createLab(
+        withBootAction ? "IOSv Boot Action Lab" : "IOSv No Boot Action Lab",
+      );
+      const template = registry.get("cisco-iosv")!;
+      let document = addNode(lab.document, {
+        template,
+        name: `iosv-${withBootAction ? "action" : "default"}`,
+        position: { x: 10, y: 10 },
+        imageId: "/tmp/iosv.qcow2",
+      });
+      const nodeId = document.nodes[0]!.id;
+      if (withBootAction) {
+        document = setNodeBootAction(document, nodeId, "inject-once");
+      }
+      await updateLabDocument(lab.id, {
+        ...document,
+        startupConfigSets: [
+          {
+            id: "set-1",
+            name: "Active Config",
+            nodeConfigs: [{ nodeId, config: "hostname iosv\n" }],
+          },
+        ],
+        activeConfigSetId: "set-1",
+      });
+
+      const state = await powerOnNode(lab.id, nodeId, {
+        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+        hasBinary: async () => true,
+        findAvailablePort: async (port) => port,
+        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+      });
+
+      return { state, lab, nodeId };
+    };
+
+    const withoutAction = await runScenario(false);
+    expect(
+      (withoutAction.state?.commandPreview ?? []).some(
+        (arg) =>
+          typeof arg === "string" &&
+          arg.includes(
+            `${tempDir}/configs/${withoutAction.lab.id}/${withoutAction.nodeId}-startup.img`,
+          ),
+      ),
+    ).toBe(false);
+
+    const withAction = await runScenario(true);
+    expect(
+      (withAction.state?.commandPreview ?? []).some(
+        (arg) =>
+          typeof arg === "string" &&
+          arg.includes(
+            `${tempDir}/configs/${withAction.lab.id}/${withAction.nodeId}-startup.img`,
+          ),
+      ),
+    ).toBe(true);
+  });
+
   it("persists and logs exact CSR1000v commandPreview in runtime state when startup config is active", async () => {
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), "networkchum-runtime-"),
@@ -505,13 +765,14 @@ describe("powerOnNode", () => {
       const registry = new TemplateRegistry();
       const lab = await createLab("CSR Qemu Diagnostics Lab");
       const template = registry.get("cisco-asr")!;
-      const document = addNode(lab.document, {
+      let document = addNode(lab.document, {
         template,
         name: "csr-1",
         position: { x: 10, y: 10 },
         imageId: "/tmp/csr.qcow2",
       });
       const nodeId = document.nodes[0]!.id;
+      document = setNodeBootAction(document, nodeId, "inject-once");
       await updateLabDocument(lab.id, {
         ...document,
         startupConfigSets: [

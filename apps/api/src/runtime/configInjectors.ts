@@ -74,6 +74,9 @@ export async function injectCloudInit(
 
 // --- Cisco CSR1000v (IOS-XE) vfat ---
 // Same mechanism as IOSv but IOS-XE looks for `iosxe_config.txt` not `startup-config`.
+// The day-0 disk is attached only when the user queues an explicit
+// `inject-once` boot action with a non-empty startup config, so normal power
+// cycles keep previously saved NVRAM intact.
 export async function injectCsr1000vConfigDrive(
   config: string,
   outputPath: string,
