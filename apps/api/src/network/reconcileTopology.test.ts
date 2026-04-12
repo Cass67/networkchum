@@ -99,7 +99,7 @@ describe("reconcileTopology", () => {
     ]);
   });
 
-  it("produces no wiring operations for an unattached interface", () => {
+  it("creates taps for unattached interfaces without bridging them", () => {
     const lab = makeLab({
       networks: [
         { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
@@ -124,8 +124,20 @@ describe("reconcileTopology", () => {
 
     const ops = reconcileTopology(lab);
     const tapOps = ops.filter((op) => op.kind === "create-tap");
+    const attachOps = ops.filter((op) => op.kind === "attach-to-bridge");
 
-    expect(tapOps).toHaveLength(1);
+    expect(tapOps).toHaveLength(2);
+    expect(tapOps).toEqual([
+      { kind: "create-tap", tapName: "tap-c123-odea-0" },
+      { kind: "create-tap", tapName: "tap-c123-odea-1" },
+    ]);
+    expect(attachOps).toEqual([
+      {
+        kind: "attach-to-bridge",
+        interfaceName: "tap-c123-odea-0",
+        bridgeName: "nc-br-net1",
+      },
+    ]);
   });
 
   it("produces separate bridges for multiple networks", () => {

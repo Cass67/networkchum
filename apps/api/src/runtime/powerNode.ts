@@ -667,6 +667,10 @@ export async function powerOnNode(
     extraDrives,
     extraArgs: configExtraArgs,
     machineType: "q35",
+    // CSR1000v (IOS-XE): main disk on IDE so BIOS boots it; virtio config
+    // disk is invisible to BIOS but scanned by IOS-XE for day-0 config.
+    mainDiskInterface:
+      configInjectMethod === "csr1000v-vfat" ? "ide" : undefined,
     config: {
       ramMb: node.config.ramMb,
       vcpu: node.config.vcpu,

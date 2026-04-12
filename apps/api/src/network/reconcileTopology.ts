@@ -24,24 +24,31 @@ export function reconcileTopology(document: LabDocument): NetworkOperation[] {
     });
   }
 
-  for (const attachment of document.attachments) {
-    const node = document.nodes.find((n) =>
-      n.interfaces.some((iface) => iface.id === attachment.interfaceId),
-    );
-    if (!node) continue;
+  const attachmentByInterfaceId = new Map(
+    document.attachments.map((attachment) => [
+      attachment.interfaceId,
+      attachment,
+    ]),
+  );
 
-    const iface = node.interfaces.find((i) => i.id === attachment.interfaceId);
-    if (!iface) continue;
+  for (const node of document.nodes) {
+    if (node.runtime !== "qemu") continue;
 
-    const tap = tapName(document.id, node.id, iface.slot);
+    for (const iface of node.interfaces) {
+      const tap = tapName(document.id, node.id, iface.slot);
 
-    operations.push({ kind: "create-tap", tapName: tap });
-    operations.push({ kind: "set-interface-up", interfaceName: tap });
-    operations.push({
-      kind: "attach-to-bridge",
-      interfaceName: tap,
-      bridgeName: bridgeName(attachment.networkId),
-    });
+      operations.push({ kind: "create-tap", tapName: tap });
+      operations.push({ kind: "set-interface-up", interfaceName: tap });
+
+      const attachment = attachmentByInterfaceId.get(iface.id);
+      if (!attachment) continue;
+
+      operations.push({
+        kind: "attach-to-bridge",
+        interfaceName: tap,
+        bridgeName: bridgeName(attachment.networkId),
+      });
+    }
   }
 
   return operations;
