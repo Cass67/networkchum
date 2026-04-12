@@ -31,7 +31,7 @@ import {
 } from "../storagePaths.js";
 import {
   injectCloudInit,
-  injectCsr1000vVfat,
+  injectCsr1000vConfigDrive,
   injectIosvVfat,
   injectVeosFlash,
 } from "./configInjectors.js";
@@ -628,8 +628,14 @@ export async function powerOnNode(
         console.log(`[powerNode] injected IOSv vfat config: ${imgPath}`);
       } else if (configInjectMethod === "csr1000v-vfat") {
         const imgPath = getNodeConfigDrivePath(labId, nodeId, "img");
-        configExtraArgs = await injectCsr1000vVfat(startupConfig, imgPath);
-        console.log(`[powerNode] injected CSR1000v vfat config: ${imgPath}`);
+        const configDrive = await injectCsr1000vConfigDrive(
+          startupConfig,
+          imgPath,
+        );
+        configExtraArgs = [...configDrive.qemuArgs];
+        console.log(
+          `[powerNode] selected CSR1000v config-drive layout=${configDrive.layout} artifact=${configDrive.outputPath}`,
+        );
       } else if (configInjectMethod === "veos-flash") {
         // Flash partition lives inside the main overlay disk (partition 2)
         await injectVeosFlash(startupConfig, effectiveImagePath);
@@ -688,6 +694,9 @@ export async function powerOnNode(
     networkBackend,
   });
 
+  const commandPreview = [...qemuCommand];
+  console.log(`[powerNode] QEMU command preview: ${commandPreview.join(" ")}`);
+
   const result = await doLaunch(qemuCommand, serialPort);
 
   const state = {
@@ -703,7 +712,7 @@ export async function powerOnNode(
     consolePort: result.ok ? serialPort : null,
     nicPorts: result.ok ? nicPorts : undefined,
     message: result.ok ? null : result.stderr,
-    commandPreview: qemuCommand,
+    commandPreview,
     updatedAt: new Date().toISOString(),
   };
 

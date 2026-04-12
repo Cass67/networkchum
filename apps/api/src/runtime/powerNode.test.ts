@@ -1,8 +1,15 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LabDocument } from "@networkchum/shared";
 
 import { createLab, getLab, updateLabDocument } from "../labs/labStore.js";
@@ -13,9 +20,67 @@ import {
   findAvailableQemuPortBase,
   powerOnNode,
 } from "./powerNode.js";
-import { upsertRuntimeState } from "./runtimeStateStore.js";
+import { listRuntimeStates, upsertRuntimeState } from "./runtimeStateStore.js";
 
 const tempDirs: string[] = [];
+
+async function installFakeCsrTools(tempDir: string): Promise<{
+  restorePath: () => void;
+  mcopyLogPath: string;
+}> {
+  const binDir = path.join(tempDir, "bin");
+  await mkdir(binDir, { recursive: true });
+  const mcopyLogPath = path.join(tempDir, "mcopy.log");
+
+  const scripts = new Map<string, string>([
+    [
+      "dd",
+      `#!/bin/sh
+of=""
+for arg in "$@"; do
+  case "$arg" in
+    of=*) of="\${arg#of=}" ;;
+  esac
+done
+
+if [ -z "$of" ]; then
+  exit 1
+fi
+
+mkdir -p "$(dirname "$of")"
+: > "$of"
+`,
+    ],
+    ["mformat", "#!/bin/sh\nexit 0\n"],
+    [
+      "mcopy",
+      `#!/bin/sh
+printf '%s\n' "$*" >> "${mcopyLogPath}"
+case "$*" in
+  *::iosxe_config.txt*) exit 0 ;;
+  *) exit 1 ;;
+esac
+`,
+    ],
+  ]);
+
+  await Promise.all(
+    Array.from(scripts.entries(), async ([name, contents]) => {
+      const scriptPath = path.join(binDir, name);
+      await writeFile(scriptPath, contents, "utf8");
+      await chmod(scriptPath, 0o755);
+    }),
+  );
+
+  const previousPath = process.env.PATH ?? "";
+  process.env.PATH = `${binDir}:${previousPath}`;
+  return {
+    restorePath: () => {
+      process.env.PATH = previousPath;
+    },
+    mcopyLogPath,
+  };
+}
 
 afterEach(async () => {
   delete process.env.NETWORKCHUM_DATA_DIR;
@@ -317,6 +382,178 @@ describe("powerOnNode", () => {
 
     expect(state?.status).toBe("failed");
     expect(state?.message).toContain("qemu");
+  });
+
+  it("includes CSR1000v config-drive args in commandPreview when startup config is active", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const { restorePath, mcopyLogPath } = await installFakeCsrTools(tempDir);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const registry = new TemplateRegistry();
+      const lab = await createLab("CSR Qemu Lab");
+      const template = registry.get("cisco-asr")!;
+      const document = addNode(lab.document, {
+        template,
+        name: "csr-1",
+        position: { x: 10, y: 10 },
+        imageId: "/tmp/csr.qcow2",
+      });
+      const nodeId = document.nodes[0]!.id;
+      await updateLabDocument(lab.id, {
+        ...document,
+        startupConfigSets: [
+          {
+            id: "set-1",
+            name: "Active Config",
+            nodeConfigs: [{ nodeId, config: "hostname csr-1\n" }],
+          },
+        ],
+        activeConfigSetId: "set-1",
+      });
+
+      const state = await powerOnNode(lab.id, nodeId, {
+        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+        hasBinary: async () => true,
+        findAvailablePort: async (port) => port,
+        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+      });
+
+      expect(state?.status).toBe("running");
+      expect(state?.commandPreview).toContain("-drive");
+      expect(state?.commandPreview).toContain(
+        `file=${tempDir}/configs/${lab.id}/${nodeId}-startup.img,if=virtio,format=raw`,
+      );
+      await expect(readFile(mcopyLogPath, "utf8")).resolves.toContain(
+        "::iosxe_config.txt",
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        `[powerNode] selected CSR1000v config-drive layout=csr1000v-vfat artifact=${tempDir}/configs/${lab.id}/${nodeId}-startup.img`,
+      );
+    } finally {
+      logSpy.mockRestore();
+      restorePath();
+    }
+  });
+
+  it("does not attach CSR1000v config-drive args when the active set has no config for the node", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const { restorePath } = await installFakeCsrTools(tempDir);
+    try {
+      const registry = new TemplateRegistry();
+      const lab = await createLab("CSR Qemu Lab Without Config");
+      const template = registry.get("cisco-asr")!;
+      const document = addNode(lab.document, {
+        template,
+        name: "csr-1",
+        position: { x: 10, y: 10 },
+        imageId: "/tmp/csr.qcow2",
+      });
+      const nodeId = document.nodes[0]!.id;
+      await updateLabDocument(lab.id, {
+        ...document,
+        startupConfigSets: [
+          {
+            id: "set-1",
+            name: "Active Config",
+            nodeConfigs: [
+              { nodeId: "some-other-node", config: "hostname other\n" },
+            ],
+          },
+        ],
+        activeConfigSetId: "set-1",
+      });
+
+      const state = await powerOnNode(lab.id, nodeId, {
+        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+        hasBinary: async () => true,
+        findAvailablePort: async (port) => port,
+        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+      });
+
+      expect(state?.status).toBe("running");
+      expect(state?.commandPreview.join(" ")).not.toContain(
+        `${tempDir}/configs/${lab.id}/${nodeId}-startup.img`,
+      );
+      expect(state?.commandPreview.join(" ")).not.toContain(
+        "if=virtio,format=raw",
+      );
+    } finally {
+      restorePath();
+    }
+  });
+
+  it("persists and logs exact CSR1000v commandPreview in runtime state when startup config is active", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const { restorePath, mcopyLogPath } = await installFakeCsrTools(tempDir);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const registry = new TemplateRegistry();
+      const lab = await createLab("CSR Qemu Diagnostics Lab");
+      const template = registry.get("cisco-asr")!;
+      const document = addNode(lab.document, {
+        template,
+        name: "csr-1",
+        position: { x: 10, y: 10 },
+        imageId: "/tmp/csr.qcow2",
+      });
+      const nodeId = document.nodes[0]!.id;
+      await updateLabDocument(lab.id, {
+        ...document,
+        startupConfigSets: [
+          {
+            id: "set-1",
+            name: "Active Config",
+            nodeConfigs: [{ nodeId, config: "hostname csr-1\n" }],
+          },
+        ],
+        activeConfigSetId: "set-1",
+      });
+
+      const state = await powerOnNode(lab.id, nodeId, {
+        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+        hasBinary: async () => true,
+        findAvailablePort: async (port) => port,
+        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+      });
+
+      const persistedState = (await listRuntimeStates(lab.id)).find(
+        (runtimeState) => runtimeState.nodeId === nodeId,
+      );
+
+      expect(state?.status).toBe("running");
+      expect(state?.commandPreview).toBeDefined();
+      expect(persistedState?.commandPreview).toEqual(state?.commandPreview);
+      expect(persistedState?.commandPreview.join(" ")).toContain(
+        `${tempDir}/configs/${lab.id}/${nodeId}-startup.img`,
+      );
+      expect(persistedState?.commandPreview.join(" ")).toContain(
+        "if=virtio,format=raw",
+      );
+      await expect(readFile(mcopyLogPath, "utf8")).resolves.toContain(
+        "::iosxe_config.txt",
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        `[powerNode] QEMU command preview: ${state!.commandPreview.join(" ")}`,
+      );
+    } finally {
+      logSpy.mockRestore();
+      restorePath();
+    }
   });
 
   it("returns running state with serial console for qemu nodes when binary exists", async () => {
