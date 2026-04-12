@@ -470,6 +470,18 @@ If you want your labs and images in a dedicated location:
 NETWORKCHUM_DATA_DIR=/path/to/networkchum-data npm run dev:api
 ```
 
+Equivalent with the root start script:
+
+```bash
+./start.sh localhost dev:api --data-dir /path/to/networkchum-data
+```
+
+You can combine that with LAN mode as well:
+
+```bash
+./start.sh lan dev:api --data-dir /path/to/networkchum-data
+```
+
 This is useful if you want:
 
 - larger/faster storage for uploaded images and overlays

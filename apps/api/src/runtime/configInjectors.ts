@@ -83,14 +83,21 @@ export async function injectCsr1000vVfat(
   const tmpConfig = path.join(os.tmpdir(), `nc-csr-cfg-${Date.now()}.txt`);
   try {
     await writeFile(tmpConfig, config, "utf8");
+    // 8MB forces FAT16 — IOS-XE doesn't recognise FAT12 for day-0 config
     await execFileAsync("dd", [
       "if=/dev/zero",
       `of=${outputPath}`,
       "bs=1024",
-      "count=1024",
+      "count=8192",
     ]);
-    // IOS-XE identifies the day-0 disk by FAT volume label "config-1"
-    await execFileAsync("mformat", ["-i", outputPath, "-v", "config-1", "::"]);
+    await execFileAsync("mformat", [
+      "-i",
+      outputPath,
+      "-v",
+      "config-1",
+      "-F",
+      "::",
+    ]);
     await execFileAsync("mcopy", [
       "-i",
       outputPath,
@@ -101,14 +108,8 @@ export async function injectCsr1000vVfat(
     await rm(tmpConfig, { force: true });
   }
 
-  // IOS-XE scans IDE drives for a FAT disk containing iosxe_config.txt.
-  // bootindex=99 keeps SeaBIOS from trying to boot from this disk before the OS disk.
-  return [
-    "-drive",
-    `file=${outputPath},if=none,id=cfgdisk,format=raw`,
-    "-device",
-    "ide-hd,drive=cfgdisk,bootindex=99",
-  ];
+  // Cisco KVM guide: day-0 config disk must be virtio
+  return ["-drive", `file=${outputPath},if=virtio,format=raw`];
 }
 
 // --- Cisco IOSv vfat ---
