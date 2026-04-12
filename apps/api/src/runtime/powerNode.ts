@@ -12,7 +12,11 @@ import {
   getNodeAttachmentsForContainer,
 } from "../network/dockerNetworking.js";
 import { buildCommand } from "../network/buildCommands.js";
-import { reconcileTopology } from "../network/reconcileTopology.js";
+import {
+  reconcileTopology,
+  bridgeName,
+  detectPhysicalNic,
+} from "../network/reconcileTopology.js";
 import { buildContainerSpec } from "./container/buildContainerSpec.js";
 import { resolveNodeImagePath } from "../images/resolveNodeImage.js";
 import { buildQemuCommand, tapName } from "./qemu/buildQemuCommand.js";
@@ -418,6 +422,140 @@ export async function powerOnNode(
     return state;
   }
 
+  if (node.runtime === "cloud") {
+    console.log(`[powerNode] activating cloud node ${nodeId} in lab ${labId}`);
+
+    if (getNetworkBackend() === "tap") {
+      const ops = reconcileTopology(lab.document, nodeId);
+      let ok = true;
+      let errorMsg: string | null = null;
+      for (const op of ops) {
+        const cmd = buildCommand(op);
+        if (!cmd) continue;
+        const result = await runCommand(cmd[0]!, cmd.slice(1));
+        if (!result.ok && !isAlreadyExistsError(result.stderr)) {
+          console.warn(`[cloud] ${op.kind}: ${result.stderr.trim()}`);
+          ok = false;
+          errorMsg = buildNetworkFailureMessage(op.kind, result.stderr, cmd);
+        }
+      }
+
+      const state = {
+        labId,
+        nodeId,
+        status: ok ? ("running" as const) : ("failed" as const),
+        runtime: "cloud" as const,
+        accelerationMode: null,
+        externalId: ok ? "cloud-tap" : null,
+        connectCommand: undefined,
+        consolePort: null,
+        nicPorts: undefined,
+        message: errorMsg,
+        commandPreview: [],
+        updatedAt: new Date().toISOString(),
+      };
+      await upsertRuntimeState(state);
+      return state;
+    }
+
+    const containerName = runtimeName(labId, nodeId);
+    const attachments = getNodeAttachmentsForContainer(lab.document, nodeId);
+
+    const networkIds = [...new Set(attachments.map((a) => a.networkId))];
+    for (const networkId of networkIds) {
+      const createCmd = buildDockerNetworkCreateCommand(networkId);
+      await runCommand(createCmd[0]!, createCmd.slice(1));
+    }
+
+    const primaryNetwork = attachments[0]
+      ? dockerNetworkName(attachments[0].networkId)
+      : undefined;
+
+    const spec = buildContainerSpec({
+      nodeName: containerName,
+      image: "alpine:latest",
+      cpu: 1,
+      memoryMb: 128,
+      network: primaryNetwork,
+    });
+    console.log("[powerNode] cloud NAT container:", spec.command.join(" "));
+    const result = await runCommand(spec.command[0]!, spec.command.slice(1));
+
+    if (result.ok) {
+      const containerId = result.stdout.trim() || containerName;
+      const natCommands = [
+        [
+          "docker",
+          "exec",
+          containerId,
+          "sh",
+          "-c",
+          "apk add --no-cache iptables",
+        ],
+        [
+          "docker",
+          "exec",
+          containerId,
+          "sh",
+          "-c",
+          "sysctl -w net.ipv4.ip_forward=1",
+        ],
+        [
+          "docker",
+          "exec",
+          containerId,
+          "sh",
+          "-c",
+          "iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
+        ],
+        [
+          "docker",
+          "exec",
+          containerId,
+          "sh",
+          "-c",
+          "iptables -A FORWARD -i eth0 -o eth1 -j ACCEPT",
+        ],
+        [
+          "docker",
+          "exec",
+          containerId,
+          "sh",
+          "-c",
+          "iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT",
+        ],
+      ];
+      for (const cmd of natCommands) {
+        await runCommand(cmd[0]!, cmd.slice(1));
+      }
+
+      for (let i = 1; i < attachments.length; i += 1) {
+        const connectCmd = buildDockerNetworkConnectCommand(
+          attachments[i]!.networkId,
+          containerId,
+        );
+        await runCommand(connectCmd[0]!, connectCmd.slice(1));
+      }
+    }
+
+    const state = {
+      labId,
+      nodeId,
+      status: result.ok ? ("running" as const) : ("failed" as const),
+      runtime: "cloud" as const,
+      accelerationMode: null,
+      externalId: result.ok ? result.stdout.trim() || containerName : null,
+      connectCommand: undefined,
+      consolePort: null,
+      nicPorts: undefined,
+      message: result.ok ? null : result.stderr,
+      commandPreview: spec.command,
+      updatedAt: new Date().toISOString(),
+    };
+    await upsertRuntimeState(state);
+    return state;
+  }
+
   const qemuBinary = await resolveBinary();
 
   if (!qemuBinary) {
@@ -754,6 +892,32 @@ export async function powerOffNode(
 
       await runCommand("docker", ["stop", containerId]);
       await runCommand("docker", ["rm", "-f", containerId]);
+    }
+  }
+
+  if (previous?.runtime === "cloud" && previous.status === "running") {
+    if (getNetworkBackend() === "tap") {
+      const lab = await getLab(labId);
+      if (lab) {
+        const node = lab.document.nodes.find((n) => n.id === nodeId);
+        if (node) {
+          const physicalNic = detectPhysicalNic();
+          if (physicalNic) {
+            await runCommand("ip", [
+              "link",
+              "set",
+              "dev",
+              physicalNic,
+              "nomaster",
+            ]).catch(() => {});
+          }
+        }
+      }
+    } else {
+      if (previous.externalId) {
+        await runCommand("docker", ["stop", previous.externalId]);
+        await runCommand("docker", ["rm", "-f", previous.externalId]);
+      }
     }
   }
 

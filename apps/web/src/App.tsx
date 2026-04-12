@@ -357,6 +357,18 @@ const demoCatalog: CatalogSummary[] = [
       interfaceCount: { default: 1, min: 1, max: 4 },
     },
   },
+  {
+    id: "cloud",
+    name: "Cloud (External Network)",
+    source: "built-in",
+    vendor: "NetworkChum",
+    runtime: "cloud",
+    configSchema: {
+      ramMb: { default: 0, min: 0, max: 0 },
+      vcpu: { default: 0, min: 0, max: 0 },
+      interfaceCount: { default: 1, min: 1, max: 8 },
+    },
+  },
 ];
 
 const browserApi = typeof fetch === "function" ? createApiClient(fetch) : null;

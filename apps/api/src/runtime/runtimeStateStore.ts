@@ -9,7 +9,7 @@ export type RuntimeState = {
   labId: string;
   nodeId: string;
   status: "running" | "stopped" | "failed";
-  runtime: "qemu" | "container";
+  runtime: "qemu" | "container" | "cloud";
   accelerationMode: string | null;
   externalId?: string | null;
   connectCommand?: string[];

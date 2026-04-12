@@ -14,7 +14,7 @@ export const TemplateSchema = z.object({
   displayName: z.string().min(1),
   vendor: z.string().min(1),
   boot: z.object({
-    console: z.enum(["serial", "vnc"]),
+    console: z.enum(["serial", "vnc", "none"]),
     machineType: z.string().min(1).optional(),
     nicModel: z.string().min(1).optional(),
     acceleration: z.string().min(1),

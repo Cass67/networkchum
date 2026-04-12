@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const RuntimeKindSchema = z.enum(["qemu", "container"]);
+export const RuntimeKindSchema = z.enum(["qemu", "container", "cloud"]);
 export const DesiredPowerSchema = z.enum(["on", "off"]);
 
 export const NodeInterfaceSchema = z.object({

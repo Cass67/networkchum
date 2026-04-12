@@ -613,4 +613,19 @@ export const defaultTemplates: Template[] = [
       interfaceCount: { default: 2, min: 1, max: 8 },
     },
   },
+  {
+    id: "cloud",
+    runtime: "cloud",
+    displayName: "Cloud (External Network)",
+    vendor: "NetworkChum",
+    boot: {
+      console: "none",
+      acceleration: "n/a",
+    },
+    configSchema: {
+      ramMb: { default: 0, min: 0, max: 0 },
+      vcpu: { default: 0, min: 0, max: 0 },
+      interfaceCount: { default: 1, min: 1, max: 8 },
+    },
+  },
 ];
