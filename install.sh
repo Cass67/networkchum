@@ -223,12 +223,29 @@ install_linux_apt() {
   maybe_add_kvm_access
 }
 
+resolve_dnf_qemu_package() {
+  if [ "$DRY_RUN" -eq 1 ] || ! have_cmd dnf; then
+    printf '%s\n' "qemu-kvm"
+    return
+  fi
+
+  for package_name in qemu-kvm qemu-system-x86 qemu-system-x86-core; do
+    if dnf info -q "$package_name" >/dev/null 2>&1; then
+      printf '%s\n' "$package_name"
+      return
+    fi
+  done
+
+  printf '%s\n' "qemu-kvm"
+}
+
 install_linux_dnf() {
   runtime=$1
   user_name=$(current_user)
+  qemu_package=$(resolve_dnf_qemu_package)
 
   run_cmd sudo dnf install -y git nodejs npm curl
-  run_cmd sudo dnf install -y qemu-system-x86 qemu-img iproute bridge-utils socat xterm
+  run_cmd sudo dnf install -y "$qemu_package" qemu-img iproute socat xterm
 
   case "$runtime" in
     podman)

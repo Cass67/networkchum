@@ -41,6 +41,7 @@ Useful installer modes:
 
 - `./install.sh --dry-run` to preview the commands
 - on Linux, the installer asks whether you want `podman` or `docker` unless you pass `--container-runtime=podman` or `--container-runtime=docker`
+- on `dnf`-based Linux, the installer defaults to `podman` and installs `podman-docker` so the app can keep using the `docker` CLI
 
 ```bash
 git clone <your-repo-url>
@@ -231,25 +232,26 @@ For VM-backed nodes on Linux, install:
 
 - QEMU
 - `ip` tooling from `iproute2`
-- bridge helpers if your distro splits them out
 
 Ubuntu or Debian:
 
 ```bash
-sudo apt install -y qemu-system-x86 qemu-utils iproute2 bridge-utils
+sudo apt install -y qemu-system-x86 qemu-utils iproute2
 ```
 
-Fedora:
+RHEL, Oracle Linux, Fedora, or other `dnf`-based distros:
 
 ```bash
-sudo dnf install -y qemu-system-x86 qemu-img iproute bridge-utils
+sudo dnf install -y qemu-kvm qemu-img iproute
 ```
 
 Arch:
 
 ```bash
-sudo pacman -S --needed qemu-base qemu-desktop iproute2 bridge-utils
+sudo pacman -S --needed qemu-base qemu-desktop iproute2
 ```
+
+NetworkChum uses the `ip` command for bridge and TAP setup, so `bridge-utils`/`brctl` is not required for the current runtime.
 
 Verify:
 
@@ -376,7 +378,6 @@ For the strongest Linux operator setup, install:
 - Git
 - QEMU
 - `iproute2`
-- bridge tools
 - Docker
 - `socat`
 - at least one supported terminal launcher
