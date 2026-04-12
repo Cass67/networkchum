@@ -1,4 +1,17 @@
+import os from "node:os";
+
 import type { NetworkOperation } from "./types.js";
+
+function currentUser(): string | null {
+  if (process.env.SUDO_USER) return process.env.SUDO_USER;
+  if (process.env.USER) return process.env.USER;
+
+  try {
+    return os.userInfo().username;
+  } catch {
+    return null;
+  }
+}
 
 export function buildCommand(op: NetworkOperation): string[] {
   switch (op.kind) {
@@ -6,8 +19,22 @@ export function buildCommand(op: NetworkOperation): string[] {
       return ["ip", "link", "add", "name", op.bridgeName, "type", "bridge"];
     case "delete-bridge":
       return ["ip", "link", "del", "name", op.bridgeName];
-    case "create-tap":
-      return ["ip", "tuntap", "add", "dev", op.tapName, "mode", "tap"];
+    case "create-tap": {
+      const user = currentUser();
+      return user
+        ? [
+            "ip",
+            "tuntap",
+            "add",
+            "dev",
+            op.tapName,
+            "mode",
+            "tap",
+            "user",
+            user,
+          ]
+        : ["ip", "tuntap", "add", "dev", op.tapName, "mode", "tap"];
+    }
     case "delete-tap":
       return ["ip", "link", "del", "dev", op.tapName];
     case "attach-to-bridge":

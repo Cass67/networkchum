@@ -39,15 +39,18 @@ describe("buildCommand", () => {
       kind: "create-tap",
       tapName: "tap-lab1-node1-0",
     };
-    expect(buildCommand(op)).toEqual([
-      "ip",
-      "tuntap",
-      "add",
-      "dev",
-      "tap-lab1-node1-0",
-      "mode",
-      "tap",
-    ]);
+    expect(buildCommand(op)).toEqual(
+      expect.arrayContaining([
+        "ip",
+        "tuntap",
+        "add",
+        "dev",
+        "tap-lab1-node1-0",
+        "mode",
+        "tap",
+        "user",
+      ]),
+    );
   });
 
   it("deletes a tap device", () => {
