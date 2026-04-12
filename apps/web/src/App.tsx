@@ -1046,11 +1046,22 @@ export function App({
       return null;
     }
 
-    return {
+    const request: {
+      terminal: MacOsTerminalPreference;
+      host: string;
+      port: number;
+      relayHost?: string;
+    } = {
       terminal: macOsTerminalPreference,
       host: command[1],
       port: Number(command[2]),
     };
+
+    if (!isLocalPageHost(locationLike.hostname)) {
+      request.relayHost = locationLike.hostname;
+    }
+
+    return request;
   }
 
   function buildNativeConsoleCommand(command: string[]) {

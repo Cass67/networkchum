@@ -1001,6 +1001,7 @@ describe("App", () => {
           terminal: "iterm",
           host: "127.0.0.1",
           port: 5004,
+          relayHost: "192.168.2.57",
         }),
       }),
     );

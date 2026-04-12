@@ -31,13 +31,26 @@ function validatePayload(payload) {
   ) {
     throw new Error("Invalid port");
   }
+  if (
+    payload.relayHost !== undefined &&
+    (typeof payload.relayHost !== "string" ||
+      !/^[A-Za-z0-9._-]+$/.test(payload.relayHost))
+  ) {
+    throw new Error("Invalid relay host");
+  }
 
   return payload;
 }
 
+function shellSingleQuote(value) {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
 export function buildNativeCommand(payload, options = {}) {
-  const { host, port, terminal, template } = validatePayload(payload);
+  const { host, port, terminal, template, relayHost } =
+    validatePayload(payload);
   const hasBinary = options.hasBinary ?? defaultHasBinary;
+  let command = "";
 
   if (terminal === "custom") {
     if (
@@ -48,16 +61,20 @@ export function buildNativeCommand(payload, options = {}) {
       throw new Error("Invalid custom terminal template");
     }
 
-    return template
+    command = template
       .replaceAll("{host}", host)
       .replaceAll("{port}", String(port));
+  } else if (hasBinary("socat")) {
+    command = `socat STDIO,rawer,echo=0 TCP:${host}:${port}`;
+  } else {
+    command = `/usr/bin/nc ${host} ${port}`;
   }
 
-  if (hasBinary("socat")) {
-    return `socat STDIO,rawer,echo=0 TCP:${host}:${port}`;
+  if (relayHost) {
+    return `ssh -t ${relayHost} ${shellSingleQuote(command)}`;
   }
 
-  return `/usr/bin/nc ${host} ${port}`;
+  return command;
 }
 
 export function buildLaunchSpec(command, options = {}) {
@@ -105,22 +122,10 @@ export function buildLaunchSpec(command, options = {}) {
     }
 
     if (launcher === "gnome-terminal") {
-      return {
-        command: launcher,
-        args: [
-          "--",
-          "/usr/local/bin/telnet",
-          "127.0.0.1",
-          command.split(" ").at(-1) ?? "",
-        ],
-      };
+      return { command: launcher, args: ["--", "sh", "-lc", command] };
     }
 
-    if (launcher === "konsole") {
-      return { command: launcher, args: ["-e", command] };
-    }
-
-    return { command: launcher, args: ["-e", command] };
+    return { command: launcher, args: ["-e", "sh", "-lc", command] };
   }
 
   throw new Error(`Unsupported platform: ${platform}`);

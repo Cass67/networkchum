@@ -27,6 +27,21 @@ test("buildNativeCommand prefers socat for built-in terminals when available", (
   );
 });
 
+test("buildNativeCommand wraps the transport in ssh when relayHost is provided", () => {
+  assert.equal(
+    buildNativeCommand(
+      {
+        terminal: "iterm",
+        host: "127.0.0.1",
+        port: 5004,
+        relayHost: "192.168.2.57",
+      },
+      { hasBinary: (name) => name === "socat" },
+    ),
+    "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
+  );
+});
+
 test("buildNativeCommand rejects unsupported terminals", () => {
   assert.throws(
     () =>
@@ -90,7 +105,30 @@ test("buildLaunchSpec uses the first available linux terminal launcher", () => {
   });
 
   assert.equal(spec.command, "x-terminal-emulator");
-  assert.deepEqual(spec.args, ["-e", "/usr/local/bin/telnet 127.0.0.1 5004"]);
+  assert.deepEqual(spec.args, [
+    "-e",
+    "sh",
+    "-lc",
+    "/usr/local/bin/telnet 127.0.0.1 5004",
+  ]);
+});
+
+test("buildLaunchSpec preserves ssh-wrapped commands for gnome-terminal", () => {
+  const spec = buildLaunchSpec(
+    "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
+    {
+      platform: "linux",
+      hasBinary: (name) => name === "gnome-terminal",
+    },
+  );
+
+  assert.equal(spec.command, "gnome-terminal");
+  assert.deepEqual(spec.args, [
+    "--",
+    "sh",
+    "-lc",
+    "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
+  ]);
 });
 
 test("buildLaunchSpec rejects unsupported platforms", () => {
@@ -117,6 +155,37 @@ test("bridge returns command in dry run mode", async () => {
   const payload = await response.json();
   assert.equal(response.status, 200);
   assert.equal(payload.command, "/usr/bin/nc 127.0.0.1 5004");
+
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+});
+
+test("bridge returns an ssh-wrapped command in dry run mode when relayHost is provided", async () => {
+  const server = createBridgeServer({
+    dryRun: true,
+    hasBinary: (name) => name === "socat",
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+
+  const response = await fetch(`http://127.0.0.1:${port}/open-console`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      terminal: "iterm",
+      host: "127.0.0.1",
+      port: 5004,
+      relayHost: "192.168.2.57",
+    }),
+  });
+
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(
+    payload.command,
+    "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
+  );
 
   await new Promise((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
