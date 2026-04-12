@@ -1,0 +1,76 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -lt 1 ]; then
+  echo "usage: $0 networkchum://open-console?terminal=iterm&host=127.0.0.1&port=5004" >&2
+  exit 64
+fi
+
+URL="$1"
+
+PARSED=$(
+  /usr/bin/python3 - "$URL" <<'PY'
+import sys
+from urllib.parse import parse_qs, urlparse
+
+url = sys.argv[1]
+parsed = urlparse(url)
+
+if parsed.scheme != 'networkchum':
+    raise SystemExit('invalid scheme')
+
+path = parsed.path or ''
+netloc = parsed.netloc or ''
+route = path if path else f'/{netloc}' if netloc else ''
+if route != '/open-console':
+    raise SystemExit('invalid route')
+
+query = parse_qs(parsed.query)
+terminal = query.get('terminal', [''])[0]
+host = query.get('host', [''])[0]
+port = query.get('port', [''])[0]
+
+if terminal != 'iterm':
+    raise SystemExit('unsupported terminal')
+
+if host not in ('127.0.0.1', 'localhost'):
+    raise SystemExit('unsupported host')
+
+try:
+    port_number = int(port)
+except ValueError as exc:
+    raise SystemExit('invalid port') from exc
+
+if port_number < 1 or port_number > 65535:
+    raise SystemExit('invalid port')
+
+print(terminal)
+print(host)
+print(port_number)
+PY
+)
+
+TERMINAL=$(printf '%s\n' "$PARSED" | sed -n '1p')
+HOST=$(printf '%s\n' "$PARSED" | sed -n '2p')
+PORT=$(printf '%s\n' "$PARSED" | sed -n '3p')
+COMMAND="/usr/local/bin/telnet $HOST $PORT"
+
+if [ "${NETWORKCHUM_HELPER_DRY_RUN:-0}" = "1" ]; then
+  printf 'terminal=%s\nhost=%s\nport=%s\ncommand=%s\n' "$TERMINAL" "$HOST" "$PORT" "$COMMAND"
+  exit 0
+fi
+
+/usr/bin/osascript <<OSA
+tell application "iTerm"
+  activate
+  if (count of windows) = 0 then
+    create window with default profile
+  end if
+  tell current window
+    create tab with default profile
+    tell current session
+      write text "$COMMAND"
+    end tell
+  end tell
+end tell
+OSA

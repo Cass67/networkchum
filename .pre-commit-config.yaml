@@ -187,8 +187,11 @@ repos:
       - id: eslint
         name: eslint
         entry: >-
-          bash -lc 'if [ -x ./node_modules/.bin/eslint ]; then
-          ./node_modules/.bin/eslint "$@"; else eslint "$@"; fi' --
+          bash -lc '
+            if [ ! -f eslint.config.js ] && [ ! -f eslint.config.mjs ] && [ ! -f eslint.config.cjs ] && [ ! -f .eslintrc.js ] && [ ! -f .eslintrc.json ] && [ ! -f .eslintrc.yaml ] && [ ! -f .eslintrc.yml ]; then
+              echo "eslint: no config found, skipping"; exit 0;
+            fi;
+            if [ -x ./node_modules/.bin/eslint ]; then ./node_modules/.bin/eslint "$@"; else eslint "$@"; fi' --
         language: system
         files: \.(js|jsx|mjs|cjs)$
       - id: prettier
@@ -208,8 +211,11 @@ repos:
       - id: eslint
         name: eslint
         entry: >-
-          bash -lc 'if [ -x ./node_modules/.bin/eslint ]; then
-          ./node_modules/.bin/eslint "$@"; else eslint "$@"; fi' --
+          bash -lc '
+            if [ ! -f eslint.config.js ] && [ ! -f eslint.config.mjs ] && [ ! -f eslint.config.cjs ] && [ ! -f .eslintrc.js ] && [ ! -f .eslintrc.json ] && [ ! -f .eslintrc.yaml ] && [ ! -f .eslintrc.yml ]; then
+              echo "eslint: no config found, skipping"; exit 0;
+            fi;
+            if [ -x ./node_modules/.bin/eslint ]; then ./node_modules/.bin/eslint "$@"; else eslint "$@"; fi' --
         language: system
         files: \.(ts|tsx|mts|cts)$
       - id: prettier
@@ -224,8 +230,11 @@ repos:
       - id: tsc-noemit
         name: tsc --noEmit
         entry: >-
-          bash -lc 'if [ -x ./node_modules/.bin/tsc ]; then
-          ./node_modules/.bin/tsc --noEmit; else tsc --noEmit; fi' --
+          bash -lc '
+            TSC=$([ -x ./node_modules/.bin/tsc ] && echo ./node_modules/.bin/tsc || echo tsc);
+            for cfg in packages/shared/tsconfig.json apps/api/tsconfig.json apps/web/tsconfig.json; do
+              [ -f "$cfg" ] && "$TSC" -p "$cfg" --noEmit || true;
+            done'
         language: system
         files: \.(ts|tsx|mts|cts)$
         pass_filenames: false

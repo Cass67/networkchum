@@ -1,0 +1,1405 @@
+import "@testing-library/jest-dom/vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { App } from "./App.js";
+
+afterEach(() => {
+  cleanup();
+});
+
+beforeEach(() => {
+  const store = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value);
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => {
+        store.clear();
+      },
+    },
+  });
+  document.documentElement.removeAttribute("data-theme");
+});
+
+describe("App", () => {
+  it("renders the shell", () => {
+    render(<App />);
+
+    expect(
+      screen.getByRole("heading", { name: "NetworkChum" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Labs" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Devices" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Switch to day mode" }),
+    ).toBeInTheDocument();
+  });
+
+  it("uses dedicated scroll containers for the side panels", () => {
+    render(<App />);
+
+    const shell = document.querySelector(".app-shell");
+    const leftSidebar = document.querySelector(".left-sidebar");
+    const sidebarContent = document.querySelector(".sidebar-content");
+    const rightPanel = document.querySelector(".right-panel");
+
+    expect(shell).not.toBeNull();
+    expect(leftSidebar).not.toBeNull();
+    expect(sidebarContent).not.toBeNull();
+    expect(rightPanel).not.toBeNull();
+
+    expect(getComputedStyle(shell!).overflow).toBe("hidden");
+    expect(getComputedStyle(leftSidebar!).display).toBe("flex");
+    expect(getComputedStyle(leftSidebar!).minHeight).toBe("0px");
+    expect(getComputedStyle(sidebarContent!).flexGrow).toBe("1");
+    expect(getComputedStyle(sidebarContent!).minHeight).toBe("0px");
+    expect(getComputedStyle(sidebarContent!).overflowY).toBe("auto");
+    expect(getComputedStyle(rightPanel!).minHeight).toBe("0px");
+    expect(getComputedStyle(rightPanel!).overflowY).toBe("auto");
+  });
+
+  it("loads labs and catalog from the api client", async () => {
+    const api = {
+      listLabs: async () => [
+        { id: "lab-9", name: "Fetched Lab" },
+        { id: "lab-10", name: "Second Lab" },
+      ],
+      listCatalog: async () => [
+        { id: "entry-1", name: "Fetched Device", source: "image-bound" },
+      ],
+      createLab: async () => ({ id: "lab-10", name: "New Lab" }),
+      getLab: async (labId: string) => ({
+        id: labId,
+        name: labId === "lab-10" ? "Second Lab" : "Fetched Lab",
+        document: {
+          nodes:
+            labId === "lab-10"
+              ? [
+                  {
+                    id: "node-9",
+                    name: "second-node",
+                    position: { x: 300, y: 180 },
+                  },
+                ]
+              : [],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      addNode: async (
+        _labId: string,
+        input: {
+          templateId: string;
+          name: string;
+          position: { x: number; y: number };
+        },
+      ) => ({
+        id: "lab-9",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: input.name, position: { x: 120, y: 80 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [],
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Fetched Lab").length).toBeGreaterThan(0);
+      expect(screen.getByText("Empty canvas")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Second Lab" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("second-node").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Fetched Device")).toBeInTheDocument();
+    });
+
+    const addNodeButtons = screen.getAllByRole("button", {
+      name: "Add Alpine Container",
+    });
+    fireEvent.click(addNodeButtons[addNodeButtons.length - 1]!);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("alpine-2").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Power On alpine-2" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("running").length).toBeGreaterThan(0);
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Connect alpine-2" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a newly created lab on the canvas", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [
+        { id: "entry-1", name: "Fetched Device", source: "image-bound" },
+      ],
+      createLab: async () => ({ id: "lab-20", name: "New Lab" }),
+      getLab: async (labId: string) => ({
+        id: labId,
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-20",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create Lab" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Delete Lab" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Canvas")).toBeInTheDocument();
+    });
+  });
+
+  it("renames the selected lab from the inspector", async () => {
+    const renameLab = vi.fn(async (labId: string, name: string) => ({
+      id: labId,
+      name,
+      document: { nodes: [], networks: [], attachments: [] },
+    }));
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "entry-1", name: "Fetched Device", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      renameLab,
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Delete Lab" });
+
+    fireEvent.change(screen.getByLabelText("Lab name"), {
+      target: { value: "Edge Lab" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Name" }));
+
+    await waitFor(() => {
+      expect(renameLab).toHaveBeenCalledWith("lab-1", "Edge Lab");
+      expect(screen.getAllByText("Edge Lab").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("toggles auto backup for the selected lab", async () => {
+    const setLabAutoBackup = vi.fn(
+      async (labId: string, autoBackup: boolean) => ({
+        id: labId,
+        name: "Fetched Lab",
+        autoBackup,
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+    );
+
+    const api = {
+      listLabs: async () => [
+        { id: "lab-1", name: "Fetched Lab", autoBackup: false },
+      ],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({
+        id: "lab-2",
+        name: "New Lab",
+        autoBackup: false,
+      }),
+      renameLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        autoBackup: false,
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      setLabAutoBackup,
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        autoBackup: false,
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        autoBackup: false,
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Delete Lab" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Auto Backup" }));
+
+    await waitFor(() => {
+      expect(setLabAutoBackup).toHaveBeenCalledWith("lab-1", true);
+      expect(
+        screen.getByRole("checkbox", { name: "Auto Backup" }),
+      ).toBeChecked();
+    });
+  });
+
+  it("edits template defaults from the devices tab", async () => {
+    const updateTemplate = vi.fn(
+      async (
+        _templateId: string,
+        input: { vcpu: number; ramMb: number; interfaceCount: number },
+      ) => ({
+        id: "linux-generic-vm",
+        name: "Linux Generic VM",
+        vendor: "Linux",
+        runtime: "qemu",
+        configSchema: {
+          ramMb: { default: input.ramMb, min: 1024, max: 16384 },
+          vcpu: { default: input.vcpu, min: 1, max: 8 },
+          interfaceCount: { default: input.interfaceCount, min: 1, max: 16 },
+        },
+      }),
+    );
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        {
+          id: "linux-generic-vm",
+          name: "Linux Generic VM",
+          source: "built-in",
+          vendor: "Linux",
+          runtime: "qemu",
+          configSchema: {
+            ramMb: { default: 2048, min: 1024, max: 16384 },
+            vcpu: { default: 2, min: 1, max: 8 },
+            interfaceCount: { default: 2, min: 1, max: 16 },
+          },
+        },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+      updateTemplate,
+    };
+
+    render(<App api={api} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+
+    await screen.findByText("2 vCPU • 2048 MB RAM • 2 interfaces");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit Linux Generic VM" }),
+    );
+    fireEvent.change(screen.getByLabelText("vCPU"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("RAM (MB)"), {
+      target: { value: "4096" },
+    });
+    fireEvent.change(screen.getByLabelText("Interfaces"), {
+      target: { value: "6" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Template" }));
+
+    await waitFor(() => {
+      expect(updateTemplate).toHaveBeenCalledWith("linux-generic-vm", {
+        vcpu: 4,
+        ramMb: 4096,
+        interfaceCount: 6,
+      });
+      expect(
+        screen.getByText("4 vCPU • 4096 MB RAM • 6 interfaces"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("does not request the hardcoded demo lab when the backend starts with no labs", async () => {
+    const getLab = vi.fn(async (labId: string) => ({
+      id: labId,
+      name: "New Lab",
+      document: { nodes: [], networks: [], attachments: [] },
+    }));
+
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [
+        { id: "entry-1", name: "Fetched Device", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-20", name: "New Lab" }),
+      getLab,
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-20",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await waitFor(() => {
+      expect(getLab).not.toHaveBeenCalledWith("lab-1");
+    });
+  });
+
+  it("shows a create-lab error when the request fails", async () => {
+    const api = {
+      listLabs: async () => [{ id: "lab-9", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "entry-1", name: "Fetched Device", source: "image-bound" },
+      ],
+      createLab: async () => {
+        throw new Error("backend unavailable");
+      },
+      getLab: async () => ({
+        id: "lab-9",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-9",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Create Lab" }).at(-1)!,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Failed to create lab")).toBeInTheDocument();
+    });
+  });
+
+  it("requires confirmation before deleting a lab", async () => {
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        {
+          id: "linux-alpine-container",
+          name: "Alpine Container",
+          source: "built-in",
+        },
+      ],
+      listImages: async () => [],
+      listRuntimeStates: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      deleteLab: async () => ({ labId: "lab-1" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      deleteNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      deleteCable: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+      powerOffNode: async () => ({ nodeId: "node-1", status: "stopped" }),
+      uploadImage: async () => ({
+        id: "img-1",
+        name: "csr1000v.qcow2",
+        templateId: null,
+        suggestedTemplateId: null,
+        source: "upload",
+        catalogState: "active",
+      }),
+      bindImageToTemplate: async () => ({
+        id: "img-1",
+        name: "csr1000v.qcow2",
+        templateId: "cisco-asr",
+        suggestedTemplateId: "cisco-asr",
+        source: "upload",
+        catalogState: "active",
+      }),
+      unbindImageFromTemplate: async () => ({
+        id: "img-1",
+        name: "csr1000v.qcow2",
+        templateId: null,
+        suggestedTemplateId: "cisco-asr",
+        source: "upload",
+        catalogState: "active",
+      }),
+      removeImageFromCatalog: async () => ({
+        id: "img-1",
+        name: "csr1000v.qcow2",
+        templateId: null,
+        suggestedTemplateId: "cisco-asr",
+        source: "upload",
+        catalogState: "removed",
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Delete Lab" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Lab" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Delete Lab" }),
+    ).toBeInTheDocument();
+  });
+
+  it("lists backups from the lab context menu and opens restore confirmation", async () => {
+    const fetchSpy = vi.fn(async (input: string) => {
+      if (input === "http://127.0.0.1:4010/health") {
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const api = {
+      listLabs: async () => [
+        { id: "lab-1", name: "Fetched Lab", autoBackup: true },
+      ],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({
+        id: "lab-2",
+        name: "New Lab",
+        autoBackup: false,
+      }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        autoBackup: true,
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      listLabBackups: async () => [{ fileName: "2026-04-11T14-20-05Z.json" }],
+      restoreLabBackup: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        autoBackup: true,
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        autoBackup: true,
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Open Fetched Lab" });
+    fireEvent.contextMenu(
+      screen.getByRole("button", { name: "Open Fetched Lab" }),
+      { clientX: 40, clientY: 40 },
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "List Backups" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Lab Backups" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Restore 2026-04-11T14-20-05Z.json" }),
+    );
+
+    expect(
+      await screen.findByRole("dialog", { name: "Restore Backup" }),
+    ).toBeInTheDocument();
+  });
+
+  it("refreshes runtime state from the backend when the window regains focus", async () => {
+    let runtimeCallCount = 0;
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "arista-veos", name: "Arista vEOS", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "Arista-Veos-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => {
+        runtimeCallCount += 1;
+        return runtimeCallCount > 1
+          ? [
+              {
+                nodeId: "node-1",
+                status: "running",
+                connectCommand: ["telnet", "127.0.0.1", "5004"],
+                message: null,
+              },
+            ]
+          : [];
+      },
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["telnet", "127.0.0.1", "5004"],
+        message: null,
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Power On Arista-Veos-1" });
+
+    window.dispatchEvent(new Event("focus"));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("running").length).toBeGreaterThan(0);
+      expect(
+        screen.getByRole("button", { name: "Open Console" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("uses the web console on double-click when preference is web console", async () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "arista-veos", name: "Arista vEOS", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "Arista-Veos-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["telnet", "127.0.0.1", "5004"],
+          message: null,
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["telnet", "127.0.0.1", "5004"],
+        message: null,
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Open Console" });
+    fireEvent.doubleClick(screen.getByTestId("node-node-1"));
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("calls the native console bridge when preference is open in Terminal", async () => {
+    const fetchSpy = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true }),
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "arista-veos", name: "Arista vEOS", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "Arista-Veos-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["telnet", "127.0.0.1", "5004"],
+          message: null,
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["telnet", "127.0.0.1", "5004"],
+        message: null,
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Open Console" });
+    fireEvent.change(screen.getByLabelText("Native Console Preference"), {
+      target: { value: "iterm-helper" },
+    });
+    fireEvent.doubleClick(screen.getByTestId("node-node-1"));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://127.0.0.1:4010/open-console",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          terminal: "iterm",
+          host: "127.0.0.1",
+          port: 5004,
+        }),
+      }),
+    );
+  });
+
+  it("copies the native telnet command on double-click when preference is copy command", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "arista-veos", name: "Arista vEOS", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "Arista-Veos-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["telnet", "127.0.0.1", "5004"],
+          message: null,
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["telnet", "127.0.0.1", "5004"],
+        message: null,
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Open Console" });
+    fireEvent.change(screen.getByLabelText("Native Console Preference"), {
+      target: { value: "copy-command" },
+    });
+    fireEvent.doubleClick(screen.getByTestId("node-node-1"));
+
+    expect(writeText).toHaveBeenCalledWith("/usr/bin/nc 127.0.0.1 5004");
+  });
+
+  it("shows the telnet port in the selection sidebar for a running telnet-backed node", async () => {
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "arista-veos", name: "Arista vEOS", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "Arista-Veos-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["telnet", "127.0.0.1", "5004"],
+          message: null,
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["telnet", "127.0.0.1", "5004"],
+        message: null,
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Open Console" });
+
+    expect(await screen.findByText("Console Port: 5004")).toBeInTheDocument();
+  });
+
+  it("copies the native telnet command for a telnet-backed node", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "arista-veos", name: "Arista vEOS", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "Arista-Veos-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["telnet", "127.0.0.1", "5004"],
+          message: null,
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["telnet", "127.0.0.1", "5004"],
+        message: null,
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Copy Native Command" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy Native Command" }),
+    );
+
+    expect(writeText).toHaveBeenCalledWith("/usr/bin/nc 127.0.0.1 5004");
+  });
+
+  it("remembers the selected theme across remounts", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    const { unmount } = render(<App api={api} />);
+
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch to day mode" }));
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute("data-theme", "light");
+      expect(window.localStorage.getItem("networkchum-theme")).toBe("light");
+    });
+
+    unmount();
+    render(<App api={api} />);
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute("data-theme", "light");
+      expect(
+        screen.getByRole("button", { name: "Switch to night mode" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("renders and remembers the native console preference across remounts", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    const { unmount } = render(<App api={api} />);
+
+    expect(screen.getByLabelText("Native Console Preference")).toHaveValue(
+      "web-console",
+    );
+
+    fireEvent.change(screen.getByLabelText("Native Console Preference"), {
+      target: { value: "iterm-helper" },
+    });
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("networkchum-native-console")).toBe(
+        "iterm-helper",
+      );
+    });
+
+    unmount();
+    render(<App api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Native Console Preference")).toHaveValue(
+        "iterm-helper",
+      );
+    });
+  });
+
+  it("shows built-in terminals and an add terminal option", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    expect(screen.getByLabelText("macOS Terminal")).toHaveTextContent("iTerm");
+    expect(screen.getByLabelText("macOS Terminal")).toHaveTextContent(
+      "Terminal.app",
+    );
+    expect(screen.getByLabelText("macOS Terminal")).toHaveTextContent(
+      "Add Terminal...",
+    );
+  });
+
+  it("adds a custom terminal and persists it across remounts", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    const { unmount } = render(<App api={api} />);
+
+    fireEvent.change(screen.getByLabelText("macOS Terminal"), {
+      target: { value: "add-terminal" },
+    });
+    expect(
+      screen.getByRole("dialog", { name: "Add Terminal" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Terminal Name"), {
+      target: { value: "Ghostty" },
+    });
+    fireEvent.change(screen.getByLabelText("Terminal Command Template"), {
+      target: { value: "ghostty -e /usr/local/bin/telnet {host} {port}" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Terminal" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("macOS Terminal")).toHaveTextContent(
+        "Ghostty",
+      );
+      expect(
+        window.localStorage.getItem("networkchum-macos-terminals"),
+      ).toContain("Ghostty");
+    });
+
+    unmount();
+    render(<App api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("macOS Terminal")).toHaveTextContent(
+        "Ghostty",
+      );
+    });
+  });
+
+  it("edits a saved custom terminal", async () => {
+    window.localStorage.setItem(
+      "networkchum-macos-terminals",
+      JSON.stringify([
+        {
+          id: "custom-ghostty",
+          label: "Ghostty",
+          template: "ghostty -e /usr/local/bin/telnet {host} {port}",
+        },
+      ]),
+    );
+    window.localStorage.setItem("networkchum-macos-terminal", "custom-ghostty");
+
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Terminal" }));
+    expect(
+      screen.getByRole("dialog", { name: "Edit Terminal" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Terminal Command Template"), {
+      target: {
+        value:
+          "ghostty --title networkchum -e /usr/local/bin/telnet {host} {port}",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Terminal" }));
+
+    await waitFor(() => {
+      expect(
+        window.localStorage.getItem("networkchum-macos-terminals"),
+      ).toContain(
+        "ghostty --title networkchum -e /usr/local/bin/telnet {host} {port}",
+      );
+    });
+  });
+
+  it("deletes a saved custom terminal and falls back to iTerm", async () => {
+    window.localStorage.setItem(
+      "networkchum-macos-terminals",
+      JSON.stringify([
+        {
+          id: "custom-ghostty",
+          label: "Ghostty",
+          template: "ghostty -e /usr/local/bin/telnet {host} {port}",
+        },
+      ]),
+    );
+    window.localStorage.setItem("networkchum-macos-terminal", "custom-ghostty");
+
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Terminal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Terminal" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("macOS Terminal")).toHaveValue("iterm");
+      expect(
+        window.localStorage.getItem("networkchum-macos-terminals"),
+      ).not.toContain("Ghostty");
+    });
+  });
+
+  it("shows bridge health as online when the bridge health check succeeds", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+    const fetchSpy = vi.fn(async (input: string) => {
+      if (input === "http://127.0.0.1:4010/health") {
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    render(<App api={api} />);
+
+    expect(await screen.findByText("Bridge: Online")).toBeInTheDocument();
+  });
+
+  it("remembers the macOS terminal preference across remounts", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+    const fetchSpy = vi.fn(async () => ({
+      ok: false,
+      json: async () => ({ ok: false }),
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { unmount } = render(<App api={api} />);
+
+    fireEvent.change(screen.getByLabelText("macOS Terminal"), {
+      target: { value: "terminal-app" },
+    });
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("networkchum-macos-terminal")).toBe(
+        "terminal-app",
+      );
+    });
+
+    unmount();
+    render(<App api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("macOS Terminal")).toHaveValue(
+        "terminal-app",
+      );
+    });
+  });
+
+  it("shows busy runtime state for a node with an occupied native console", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) })),
+    );
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "arista-veos", name: "Arista vEOS", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "Arista-Veos-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["telnet", "127.0.0.1", "5004"],
+          consolePort: 5004,
+          consoleInUse: true,
+          message: "Serial console already in use by another client.",
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["telnet", "127.0.0.1", "5004"],
+        message: null,
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Open Fetched Lab" });
+    fireEvent.click(screen.getByRole("button", { name: "Open Fetched Lab" }));
+
+    expect(await screen.findByText("Console Status: Busy")).toBeInTheDocument();
+  });
+});

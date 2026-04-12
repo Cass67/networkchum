@@ -1,0 +1,196 @@
+import http from "node:http";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+
+export const BRIDGE_HOST = "127.0.0.1";
+export const BRIDGE_PORT = 4010;
+
+function defaultHasBinary(name) {
+  const searchPath = process.env.PATH?.split(":") ?? [];
+  return searchPath.some((entry) => existsSync(`${entry}/${name}`));
+}
+
+function validatePayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Invalid payload");
+  }
+  if (
+    payload.terminal !== "iterm" &&
+    payload.terminal !== "terminal-app" &&
+    payload.terminal !== "custom"
+  ) {
+    throw new Error("Unsupported terminal");
+  }
+  if (payload.host !== "127.0.0.1" && payload.host !== "localhost") {
+    throw new Error("Unsupported host");
+  }
+  if (
+    !Number.isInteger(payload.port) ||
+    payload.port < 1 ||
+    payload.port > 65535
+  ) {
+    throw new Error("Invalid port");
+  }
+
+  return payload;
+}
+
+export function buildNativeCommand(payload, options = {}) {
+  const { host, port, terminal, template } = validatePayload(payload);
+  const hasBinary = options.hasBinary ?? defaultHasBinary;
+
+  if (terminal === "custom") {
+    if (
+      typeof template !== "string" ||
+      !template.includes("{host}") ||
+      !template.includes("{port}")
+    ) {
+      throw new Error("Invalid custom terminal template");
+    }
+
+    return template
+      .replaceAll("{host}", host)
+      .replaceAll("{port}", String(port));
+  }
+
+  if (hasBinary("socat")) {
+    return `socat STDIO,rawer,echo=0 TCP:${host}:${port}`;
+  }
+
+  return `/usr/bin/nc ${host} ${port}`;
+}
+
+export function buildLaunchSpec(command, options = {}) {
+  const platform = options.platform ?? process.platform;
+  const hasBinary = options.hasBinary ?? defaultHasBinary;
+  const terminal = options.terminal ?? "iterm";
+
+  if (platform === "darwin") {
+    if (terminal === "terminal-app") {
+      return {
+        command: "/usr/bin/osascript",
+        args: [
+          "-e",
+          'tell application "Terminal" to activate',
+          "-e",
+          'tell application "Terminal" to do script ' + JSON.stringify(command),
+        ],
+      };
+    }
+
+    return {
+      command: "/usr/bin/osascript",
+      args: [
+        "-e",
+        'tell application "iTerm" to activate',
+        "-e",
+        'tell application "iTerm" to create window with default profile',
+        "-e",
+        `tell application "iTerm" to tell current session of current window to write text ${JSON.stringify(command)}`,
+      ],
+    };
+  }
+
+  if (platform === "linux") {
+    const candidates = [
+      "x-terminal-emulator",
+      "gnome-terminal",
+      "konsole",
+      "xfce4-terminal",
+      "xterm",
+    ];
+    const launcher = candidates.find((candidate) => hasBinary(candidate));
+    if (!launcher) {
+      throw new Error("No supported terminal launcher found");
+    }
+
+    if (launcher === "gnome-terminal") {
+      return {
+        command: launcher,
+        args: [
+          "--",
+          "/usr/local/bin/telnet",
+          "127.0.0.1",
+          command.split(" ").at(-1) ?? "",
+        ],
+      };
+    }
+
+    if (launcher === "konsole") {
+      return { command: launcher, args: ["-e", command] };
+    }
+
+    return { command: launcher, args: ["-e", command] };
+  }
+
+  throw new Error(`Unsupported platform: ${platform}`);
+}
+
+export function createBridgeServer(options = {}) {
+  const dryRun = options.dryRun ?? false;
+  const hasBinary = options.hasBinary ?? defaultHasBinary;
+  const launch =
+    options.launch ??
+    ((command, terminal) => {
+      const spec = buildLaunchSpec(command, { terminal });
+      spawn(spec.command, spec.args, {
+        stdio: "ignore",
+        detached: true,
+      }).unref();
+    });
+
+  return http.createServer(async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "content-type");
+
+    if (req.method === "OPTIONS" && req.url === "/open-console") {
+      res.writeHead(204).end();
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/health") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.method !== "POST" || req.url !== "/open-console") {
+      res.writeHead(404).end("Not found");
+      return;
+    }
+
+    let body = "";
+    for await (const chunk of req) {
+      body += chunk;
+    }
+
+    try {
+      const payload = JSON.parse(body);
+      const command = buildNativeCommand(payload, { hasBinary });
+      if (!dryRun) {
+        launch(command, payload.terminal);
+      }
+
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, command }));
+    } catch (error) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        }),
+      );
+    }
+  });
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const server = createBridgeServer();
+  server.listen(BRIDGE_PORT, BRIDGE_HOST, () => {
+    console.log(
+      `Native console bridge listening on http://${BRIDGE_HOST}:${BRIDGE_PORT}`,
+    );
+  });
+}
