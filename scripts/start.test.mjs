@@ -58,7 +58,10 @@ test("start.sh supports sudo-api for the full stack", () => {
     result.stdout,
     /LAN URL: http:\/\/<server-ip>|LAN URL: http:\/\//,
   );
-  assert.match(result.stdout, /\[dry-run\] .*sudo env PATH=.*npm run dev:api/);
+  assert.match(
+    result.stdout,
+    /\[dry-run\] .*sudo -n env PATH=.*npm run dev:api/,
+  );
   assert.match(result.stdout, /npm run dev:web/);
   assert.match(result.stdout, /npm run dev:bridge/);
 });
@@ -69,7 +72,7 @@ test("start.sh includes the npm directory in sudo PATH", () => {
   assert.equal(result.status, 0, result.stderr);
 
   const npmMatch = result.stdout.match(
-    /"sudo env PATH=([^ ]+) .*? (\/[^ ]+\/npm) run dev:api"/,
+    /"sudo(?: -n)? env PATH=([^ ]+) .*? (\/[^ ]+\/npm) run dev:api"/,
   );
   assert.ok(npmMatch, result.stdout);
 
@@ -85,4 +88,14 @@ test("start.sh supports sudo-api for dev:api", () => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /\[dry-run\] sudo env PATH=.* .*npm run dev:api/);
+});
+
+test("start.sh uses non-interactive sudo for the full stack api child", () => {
+  const result = runStart(["lan", "--sudo-api"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /\[dry-run\] .*sudo -n env PATH=.*npm run dev:api/,
+  );
 });

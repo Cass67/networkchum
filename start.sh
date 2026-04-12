@@ -97,13 +97,29 @@ build_env_prefix() {
 build_sudo_api_command() {
   npm_path=$1
   root_path=$2
+  sudo_flags=$3
+  sudo_prefix="sudo"
+
+  if [ -n "$sudo_flags" ]; then
+    sudo_prefix="$sudo_prefix $sudo_flags"
+  fi
 
   if [ -n "$DATA_DIR" ]; then
-    printf 'sudo env PATH=%s NETWORKCHUM_BIND_MODE=%s NETWORKCHUM_DATA_DIR=%s %s run dev:api' \
-      "$root_path" "$MODE" "$DATA_DIR" "$npm_path"
+    printf '%s env PATH=%s NETWORKCHUM_BIND_MODE=%s NETWORKCHUM_DATA_DIR=%s %s run dev:api' \
+      "$sudo_prefix" "$root_path" "$MODE" "$DATA_DIR" "$npm_path"
   else
-    printf 'sudo env PATH=%s NETWORKCHUM_BIND_MODE=%s %s run dev:api' \
-      "$root_path" "$MODE" "$npm_path"
+    printf '%s env PATH=%s NETWORKCHUM_BIND_MODE=%s %s run dev:api' \
+      "$sudo_prefix" "$root_path" "$MODE" "$npm_path"
+  fi
+}
+
+ensure_sudo_session() {
+  if [ "$SUDO_API" -ne 1 ]; then
+    return
+  fi
+
+  if [ "$SCRIPT_NAME" = "dev" ] || [ "$SCRIPT_NAME" = "dev:api" ]; then
+    sudo -v
   fi
 }
 
@@ -218,11 +234,11 @@ fi
 if [ "$DRY_RUN" -eq 1 ]; then
   if [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev" ]; then
     printf '[dry-run] npm exec concurrently -- -k -n api,web,bridge "%s" "%s %s run dev:web" "%s %s run dev:bridge"\n' \
-      "$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH")" \
+      "$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH" "-n")" \
       "$ENV_PREFIX" "$NPM_PATH" \
       "$ENV_PREFIX" "$NPM_PATH"
   elif [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev:api" ]; then
-    printf '[dry-run] %s\n' "$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH")"
+    printf '[dry-run] %s\n' "$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH" "")"
   else
     printf '[dry-run] %s %s run %s\n' "$ENV_PREFIX" "$NPM_PATH" "$SCRIPT_NAME"
   fi
@@ -230,14 +246,15 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 cd "$ROOT_DIR"
+ensure_sudo_session
 
 if [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev" ]; then
-  API_CMD=$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH")
+  API_CMD=$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH" "-n")
   WEB_CMD="$ENV_PREFIX $NPM_PATH run dev:web"
   BRIDGE_CMD="$ENV_PREFIX $NPM_PATH run dev:bridge"
   sh -c "$ENV_PREFIX $NPM_PATH exec concurrently -- -k -n api,web,bridge \"$API_CMD\" \"$WEB_CMD\" \"$BRIDGE_CMD\""
 elif [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev:api" ]; then
-  sh -c "$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH")"
+  sh -c "$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH" "")"
 else
   sh -c "$ENV_PREFIX $NPM_PATH run $SCRIPT_NAME"
 fi
