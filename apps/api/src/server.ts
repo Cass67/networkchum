@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import { resolveListenHost } from "@networkchum/shared";
+
 import { buildApp } from "./app.js";
 import { scanImages } from "./images/scanImages.js";
 import { syncSocketTopology } from "./runtime/syncSocketTopology.js";
@@ -30,7 +32,10 @@ const app = buildApp({
 });
 
 app
-  .listen({ host: "127.0.0.1", port: 4000 })
+  .listen({
+    host: resolveListenHost(process.env.NETWORKCHUM_BIND_MODE),
+    port: 4000,
+  })
   .then(async () => {
     const socketTopology = await syncSocketTopology();
     if (socketTopology.nics > 0) {

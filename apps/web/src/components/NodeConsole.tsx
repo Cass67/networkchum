@@ -3,6 +3,8 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef } from "react";
 
+import { resolveConsoleWebSocketUrl } from "../runtimeUrls.js";
+
 type NodeConsoleProps = {
   labId: string;
   nodeId: string;
@@ -32,7 +34,7 @@ export function NodeConsole({
       fitAddon.fit();
     }
 
-    const wsUrl = `ws://127.0.0.1:4000/labs/${labId}/nodes/${nodeId}/console`;
+    const wsUrl = resolveConsoleWebSocketUrl(window.location, labId, nodeId);
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "arraybuffer";
 

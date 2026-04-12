@@ -8,6 +8,8 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
+    "start": "./start.sh",
+    "start:lan": "./start.sh lan",
     "dev": "concurrently -k -n api,web,bridge \"npm run dev --workspace @networkchum/api\" \"npm run dev --workspace @networkchum/web\" \"npm run dev:bridge\"",
     "dev:reset": "pkill -f \"tsx watch src/server.ts\"; pkill -f \"vite --host 127.0.0.1 --port 5173 --strictPort\"; npm run dev",
     "dev:api": "npm run dev --workspace @networkchum/api",

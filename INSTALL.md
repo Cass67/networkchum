@@ -45,11 +45,23 @@ Useful installer modes:
 - set `NETWORKCHUM_NODE_MAJOR=22` if you want the Node.js 22.x line instead of the default 24.x line
 - on `dnf`-based Linux, the installer defaults to `podman` and installs `podman-docker` so the app can keep using the `docker` CLI
 
+Useful start modes:
+
+- `./start.sh` keeps the app on localhost
+- `./start.sh lan` binds the web UI and API for LAN access
+- `NETWORKCHUM_BIND_MODE=lan npm run dev` is the direct env-based equivalent
+
 ```bash
 git clone <your-repo-url>
 cd networkchum
 npm install
-npm run dev
+./start.sh
+```
+
+For LAN access on Linux:
+
+```bash
+./start.sh lan
 ```
 
 That starts:
@@ -57,6 +69,8 @@ That starts:
 - the API at `http://127.0.0.1:4000`
 - the web UI at `http://127.0.0.1:5173`
 - the native console bridge at `http://127.0.0.1:4010`
+
+In `lan` mode, the web UI and API bind for LAN access and the script prints the server URL to open from another machine.
 
 At this point you can use the UI, create labs, add nodes, manage images, and work with whatever runtime features your host supports. To get the most out of the app, continue with the platform-specific setup below.
 
@@ -486,6 +500,8 @@ If the bridge is unavailable, the app still supports:
 
 - the in-browser web console
 - copy-command workflows for native terminal use
+
+When you open the UI from another machine over the LAN, prefer the in-browser web console. Native terminal launch remains a local-machine workflow.
 
 ### Understand host expectations
 

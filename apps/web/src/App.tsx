@@ -14,6 +14,7 @@ import { SelectionPanel } from "./components/SelectionPanel.js";
 import { StartupConfigDialog } from "./components/StartupConfigDialog.js";
 import { TemplateEditorDialog } from "./components/TemplateEditorDialog.js";
 import { TopologyCanvas } from "./components/TopologyCanvas.js";
+import { resolveApiBaseUrl, resolveBridgeBaseUrl } from "./runtimeUrls.js";
 
 const NodeConsole = lazy(async () => {
   const module = await import("./components/NodeConsole.js");
@@ -740,8 +741,16 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
 
   useEffect(() => {
     let cancelled = false;
+    const bridgeBaseUrl = resolveBridgeBaseUrl(window.location);
 
-    void fetch("http://127.0.0.1:4010/health")
+    if (!bridgeBaseUrl) {
+      setBridgeStatus("offline");
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void fetch(`${bridgeBaseUrl}/health`)
       .then((response) =>
         response.ok ? response.json() : Promise.reject(new Error("offline")),
       )
@@ -1058,8 +1067,17 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
 
     const helperRequest = buildItermHelperUrl(command);
     if (helperRequest) {
+      const bridgeBaseUrl = resolveBridgeBaseUrl(window.location);
+      if (!bridgeBaseUrl) {
+        setBridgeStatus("offline");
+        setNativeConsoleError(
+          "Native console bridge is only available when using NetworkChum locally.",
+        );
+        return;
+      }
+
       try {
-        const response = await fetch("http://127.0.0.1:4010/open-console", {
+        const response = await fetch(`${bridgeBaseUrl}/open-console`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(helperRequest),
@@ -1098,8 +1116,9 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
       return;
     }
 
+    const apiBaseUrl = resolveApiBaseUrl(window.location);
     await fetch(
-      `http://127.0.0.1:4000/labs/${selectedLabId}/nodes/${nodeId}/disconnect-console`,
+      `${apiBaseUrl}/labs/${selectedLabId}/nodes/${nodeId}/disconnect-console`,
       {
         method: "POST",
       },
