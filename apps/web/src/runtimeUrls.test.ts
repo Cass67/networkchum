@@ -18,14 +18,14 @@ describe("runtimeUrls", () => {
     ).toBe("http://127.0.0.1:4010");
   });
 
-  it("disables the native bridge on remote page hosts", () => {
+  it("uses the client-local native bridge even on remote page hosts", () => {
     expect(isLocalPageHost("192.168.1.25")).toBe(false);
     expect(
       resolveBridgeBaseUrl({
         protocol: "http:",
         hostname: "192.168.1.25",
       }),
-    ).toBeNull();
+    ).toBe("http://127.0.0.1:4010");
   });
 
   it("uses the page host for console websocket traffic", () => {

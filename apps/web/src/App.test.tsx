@@ -927,7 +927,7 @@ describe("App", () => {
     );
   });
 
-  it("copies an ssh-wrapped command instead of using the bridge on remote hosts", async () => {
+  it("calls the client-local native console bridge on remote hosts", async () => {
     const fetchSpy = vi.fn(async () => ({
       ok: true,
       json: async () => ({ ok: true }),
@@ -992,10 +992,19 @@ describe("App", () => {
     });
     fireEvent.doubleClick(screen.getByTestId("node-node-1"));
 
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(writeText).toHaveBeenCalledWith(
-      "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://127.0.0.1:4010/open-console",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          terminal: "iterm",
+          host: "127.0.0.1",
+          port: 5004,
+        }),
+      }),
     );
+    expect(writeText).not.toHaveBeenCalled();
   });
 
   it("shows the telnet port in the selection sidebar for a running telnet-backed node", async () => {
@@ -1238,11 +1247,14 @@ describe("App", () => {
     });
   });
 
-  it("falls back to a prompt when remote open-in-terminal cannot use the clipboard", async () => {
-    const fetchSpy = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ ok: true }),
-    }));
+  it("falls back to a prompt when the remote page cannot reach the client-local bridge and clipboard access is blocked", async () => {
+    const fetchSpy = vi.fn(async (input: string) => {
+      if (input === "http://127.0.0.1:4010/health") {
+        return { ok: false, json: async () => ({ ok: false }) };
+      }
+
+      throw new Error("bridge offline");
+    });
     vi.stubGlobal("fetch", fetchSpy);
 
     const writeText = vi.fn(async () => {
@@ -1306,7 +1318,7 @@ describe("App", () => {
     });
     fireEvent.doubleClick(screen.getByTestId("node-node-1"));
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledWith("http://127.0.0.1:4010/health");
     await waitFor(() => {
       expect(promptSpy).toHaveBeenCalledWith(
         "Clipboard access is unavailable. Copy this command manually:",
@@ -1645,6 +1657,47 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App api={api} />);
+
+    expect(await screen.findByText("Bridge: Online")).toBeInTheDocument();
+  });
+
+  it("shows bridge health as online on remote pages when the client-local bridge responds", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+    const fetchSpy = vi.fn(async (input: string) => {
+      if (input === "http://127.0.0.1:4010/health") {
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    render(
+      <App
+        api={api}
+        locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
+      />,
+    );
 
     expect(await screen.findByText("Bridge: Online")).toBeInTheDocument();
   });

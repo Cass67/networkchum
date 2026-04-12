@@ -1123,7 +1123,10 @@ export function App({
         setNativeConsoleError(null);
       } catch {
         setBridgeStatus("offline");
-        setNativeConsoleError("Native console bridge is not running.");
+        await handleCopyNativeCommand(nodeId);
+        setNativeConsoleError(
+          "Native console bridge is not running. Copy the command instead.",
+        );
       }
     }
   }

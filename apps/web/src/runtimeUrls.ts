@@ -31,13 +31,9 @@ export function resolveApiBaseUrl(locationLike: BrowserLocationLike): string {
 }
 
 export function resolveBridgeBaseUrl(
-  locationLike: BrowserLocationLike,
-): string | null {
-  if (!isLocalPageHost(locationLike.hostname)) {
-    return null;
-  }
-
-  return `${resolveHttpProtocol(locationLike.protocol)}//127.0.0.1:${BRIDGE_PORT}`;
+  _locationLike: BrowserLocationLike,
+): string {
+  return `http://127.0.0.1:${BRIDGE_PORT}`;
 }
 
 export function resolveConsoleWebSocketUrl(
