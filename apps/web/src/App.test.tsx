@@ -858,7 +858,9 @@ describe("App", () => {
     });
     fireEvent.doubleClick(screen.getByTestId("node-node-1"));
 
-    expect(writeText).toHaveBeenCalledWith("/usr/bin/nc 127.0.0.1 5004");
+    expect(writeText).toHaveBeenCalledWith(
+      "socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004",
+    );
   });
 
   it("copies an ssh-wrapped native telnet command on remote hosts", async () => {
@@ -921,7 +923,7 @@ describe("App", () => {
     fireEvent.doubleClick(screen.getByTestId("node-node-1"));
 
     expect(writeText).toHaveBeenCalledWith(
-      "ssh -t 192.168.2.57 '/usr/bin/nc 127.0.0.1 5004'",
+      "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
     );
   });
 
@@ -992,7 +994,7 @@ describe("App", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(writeText).toHaveBeenCalledWith(
-      "ssh -t 192.168.2.57 '/usr/bin/nc 127.0.0.1 5004'",
+      "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
     );
   });
 
@@ -1096,7 +1098,9 @@ describe("App", () => {
       screen.getByRole("button", { name: "Copy Native Command" }),
     );
 
-    expect(writeText).toHaveBeenCalledWith("/usr/bin/nc 127.0.0.1 5004");
+    expect(writeText).toHaveBeenCalledWith(
+      "socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004",
+    );
   });
 
   it("copies an ssh-wrapped native telnet command for a remote telnet-backed node", async () => {
@@ -1158,7 +1162,7 @@ describe("App", () => {
     );
 
     expect(writeText).toHaveBeenCalledWith(
-      "ssh -t 192.168.2.57 '/usr/bin/nc 127.0.0.1 5004'",
+      "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
     );
   });
 
@@ -1224,12 +1228,12 @@ describe("App", () => {
     );
 
     expect(writeText).toHaveBeenCalledWith(
-      "ssh -t 192.168.2.57 '/usr/bin/nc 127.0.0.1 5004'",
+      "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
     );
     await waitFor(() => {
       expect(promptSpy).toHaveBeenCalledWith(
         "Clipboard access is unavailable. Copy this command manually:",
-        "ssh -t 192.168.2.57 '/usr/bin/nc 127.0.0.1 5004'",
+        "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
       );
     });
   });
@@ -1306,7 +1310,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(promptSpy).toHaveBeenCalledWith(
         "Clipboard access is unavailable. Copy this command manually:",
-        "ssh -t 192.168.2.57 '/usr/bin/nc 127.0.0.1 5004'",
+        "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
       );
     });
   });

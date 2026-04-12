@@ -1058,7 +1058,7 @@ export function App({
       return null;
     }
 
-    const localCommand = `/usr/bin/nc ${command[1]} ${command[2]}`;
+    const localCommand = `socat STDIO,rawer,echo=0 TCP:${command[1]}:${command[2]}`;
     if (isLocalPageHost(locationLike.hostname)) {
       return localCommand;
     }
