@@ -192,4 +192,52 @@ describe("reconcileTopology", () => {
       bridgeName: "nc-br-netbeta",
     });
   });
+
+  it("can limit tap operations to a single node", () => {
+    const lab = makeLab({
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "node-a",
+          name: "host-a",
+          runtime: "qemu",
+          templateId: "tmpl",
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 256, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-a-0", name: "eth0", slot: 0 }],
+        },
+        {
+          id: "node-b",
+          name: "host-b",
+          runtime: "qemu",
+          templateId: "tmpl",
+          position: { x: 100, y: 0 },
+          config: { vcpu: 1, ramMb: 256, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-b-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [
+        { interfaceId: "if-a-0", networkId: "net-1" },
+        { interfaceId: "if-b-0", networkId: "net-1" },
+      ],
+    });
+
+    const ops = reconcileTopology(lab, "node-b");
+
+    expect(ops).toEqual([
+      { kind: "create-bridge", bridgeName: "nc-br-net1" },
+      { kind: "set-interface-up", interfaceName: "nc-br-net1" },
+      { kind: "create-tap", tapName: "tap-c123-odeb-0" },
+      { kind: "set-interface-up", interfaceName: "tap-c123-odeb-0" },
+      {
+        kind: "attach-to-bridge",
+        interfaceName: "tap-c123-odeb-0",
+        bridgeName: "nc-br-net1",
+      },
+    ]);
+  });
 });

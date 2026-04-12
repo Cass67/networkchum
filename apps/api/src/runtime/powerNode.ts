@@ -80,8 +80,9 @@ export async function ensureTapNetworking(
       return false;
     }
   },
+  targetNodeId?: string,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const ops = reconcileTopology(document);
+  const ops = reconcileTopology(document, targetNodeId);
 
   for (const op of ops) {
     const cmd = buildCommand(op);
@@ -570,7 +571,12 @@ export async function powerOnNode(
   // QEMU tries to open them. Reconcile now; ignore "already exists" errors.
   if (networkBackend === "tap") {
     console.log("[powerNode] setting up TAP networking");
-    const networkResult = await ensureTapNetworking(lab.document, runCommand);
+    const networkResult = await ensureTapNetworking(
+      lab.document,
+      runCommand,
+      undefined,
+      nodeId,
+    );
     if (!networkResult.ok) {
       console.error(`[powerNode] ${networkResult.message}`);
       const state = {

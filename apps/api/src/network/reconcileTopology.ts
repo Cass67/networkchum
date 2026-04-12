@@ -10,7 +10,10 @@ function bridgeName(networkId: string): string {
   return `nc-br-${clean.slice(-8)}`;
 }
 
-export function reconcileTopology(document: LabDocument): NetworkOperation[] {
+export function reconcileTopology(
+  document: LabDocument,
+  targetNodeId?: string,
+): NetworkOperation[] {
   const operations: NetworkOperation[] = [];
 
   for (const network of document.networks) {
@@ -33,6 +36,7 @@ export function reconcileTopology(document: LabDocument): NetworkOperation[] {
 
   for (const node of document.nodes) {
     if (node.runtime !== "qemu") continue;
+    if (targetNodeId && node.id !== targetNodeId) continue;
 
     for (const iface of node.interfaces) {
       const tap = tapName(document.id, node.id, iface.slot);
