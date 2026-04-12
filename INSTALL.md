@@ -351,6 +351,29 @@ Why this matters:
 
 For Linux TAP labs, the API process also needs permission to create and delete bridge/TAP devices. The supported development path is `./start.sh lan --sudo-api ...`, which runs only the API under `sudo`.
 
+If you do not want to type a sudo password every time, add a constrained `sudoers` rule for the exact API launch command that `start.sh` uses on that host.
+
+Generate it first:
+
+```bash
+./start.sh --dry-run lan --sudo-api --data-dir ~/networkchum-data
+```
+
+That prints a `sudo -n env PATH=... /path/to/npm run dev:api` command. Copy only that API command shape into `visudo` and grant `NOPASSWD` for that exact command.
+
+Example only, adjust it to match your dry-run output exactly:
+
+```sudoers
+cass ALL=(root) NOPASSWD:SETENV: /usr/bin/env PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NETWORKCHUM_BIND_MODE=lan NETWORKCHUM_DATA_DIR=/home/cass/networkchum-data /usr/local/bin/npm run dev:api
+```
+
+Guidelines:
+
+- keep the rule exact and host-specific
+- do not allow a generic `npm`, `node`, `sh`, or `bash` sudo rule
+- keep the approved data directory fixed if you want the narrowest rule
+- always edit sudoers with `visudo`
+
 ### Install Docker for container nodes
 
 Install a Linux container runtime.

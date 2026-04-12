@@ -110,6 +110,38 @@ npm run dev:api
 npm run dev:web
 ```
 
+For Linux TAP labs without repeated password prompts, use:
+
+```bash
+./start.sh lan --sudo-api --data-dir ~/networkchum-data
+```
+
+If you want that API elevation to run without an interactive sudo prompt, add a constrained `sudoers` rule for the exact API command on that host:
+
+1. Generate the exact command:
+
+```bash
+./start.sh --dry-run lan --sudo-api --data-dir ~/networkchum-data
+```
+
+2. Copy only the `sudo -n env PATH=... npm run dev:api` portion.
+3. Open `visudo` and add a `NOPASSWD` rule for that exact command.
+
+Example only, adjust paths and data directory to match your dry-run output:
+
+```sudoers
+cass ALL=(root) NOPASSWD:SETENV: /usr/bin/env PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin NETWORKCHUM_BIND_MODE=lan NETWORKCHUM_DATA_DIR=/home/cass/networkchum-data /usr/local/bin/npm run dev:api
+```
+
+Keep that rule as narrow as possible:
+
+- use the exact `PATH` from the dry-run output
+- use the exact `NETWORKCHUM_DATA_DIR` you want this host to manage
+- allow only `run dev:api`, not a broader `npm` or shell rule
+- edit with `visudo`, not a plain text editor
+
+Once that rule is in place, `./start.sh lan --sudo-api --data-dir ~/networkchum-data` can start the API without stopping for a sudo password prompt.
+
 ## Data Storage
 
 By default, the API stores local state under:
