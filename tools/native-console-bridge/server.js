@@ -38,6 +38,13 @@ function validatePayload(payload) {
   ) {
     throw new Error("Invalid relay host");
   }
+  if (
+    payload.relayUser !== undefined &&
+    (typeof payload.relayUser !== "string" ||
+      !/^[A-Za-z0-9._-]+$/.test(payload.relayUser))
+  ) {
+    throw new Error("Invalid relay user");
+  }
 
   return payload;
 }
@@ -47,7 +54,7 @@ function shellSingleQuote(value) {
 }
 
 export function buildNativeCommand(payload, options = {}) {
-  const { host, port, terminal, template, relayHost } =
+  const { host, port, terminal, template, relayHost, relayUser } =
     validatePayload(payload);
   const hasBinary = options.hasBinary ?? defaultHasBinary;
   let command = "";
@@ -71,7 +78,8 @@ export function buildNativeCommand(payload, options = {}) {
   }
 
   if (relayHost) {
-    return `ssh -t ${relayHost} ${shellSingleQuote(command)}`;
+    const relayTarget = relayUser ? `${relayUser}@${relayHost}` : relayHost;
+    return `ssh -t ${relayTarget} ${shellSingleQuote(command)}`;
   }
 
   return command;

@@ -316,6 +316,7 @@ const THEME_STORAGE_KEY = "networkchum-theme";
 const NATIVE_CONSOLE_STORAGE_KEY = "networkchum-native-console";
 const MACOS_TERMINAL_STORAGE_KEY = "networkchum-macos-terminal";
 const MACOS_TERMINAL_REGISTRY_STORAGE_KEY = "networkchum-macos-terminals";
+const REMOTE_SSH_USER_STORAGE_KEY = "networkchum-remote-ssh-user";
 
 type ThemeMode = "dark" | "light";
 type NativeConsolePreference = "web-console" | "copy-command" | "iterm-helper";
@@ -392,6 +393,18 @@ function readStoredMacOsTerminalRegistry(): MacOsTerminalEntry[] {
       : [];
   } catch {
     return [];
+  }
+}
+
+function readStoredRemoteSshUser(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    return window.localStorage?.getItem(REMOTE_SSH_USER_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
   }
 }
 
@@ -633,6 +646,9 @@ export function App({
   const [macOsTerminalRegistry, setMacOsTerminalRegistry] = useState<
     MacOsTerminalEntry[]
   >(() => readStoredMacOsTerminalRegistry());
+  const [remoteSshUser, setRemoteSshUser] = useState<string>(() =>
+    readStoredRemoteSshUser(),
+  );
   const [bridgeStatus, setBridgeStatus] = useState<"online" | "offline">(
     "offline",
   );
@@ -752,6 +768,17 @@ export function App({
       // Ignore storage failures and keep the in-memory registry.
     }
   }, [macOsTerminalRegistry]);
+
+  useEffect(() => {
+    try {
+      window.localStorage?.setItem(
+        REMOTE_SSH_USER_STORAGE_KEY,
+        remoteSshUser.trim(),
+      );
+    } catch {
+      // Ignore storage failures and keep the in-memory preference.
+    }
+  }, [remoteSshUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1051,6 +1078,7 @@ export function App({
       host: string;
       port: number;
       relayHost?: string;
+      relayUser?: string;
     } = {
       terminal: macOsTerminalPreference,
       host: command[1],
@@ -1059,6 +1087,9 @@ export function App({
 
     if (!isLocalPageHost(locationLike.hostname)) {
       request.relayHost = locationLike.hostname;
+      if (remoteSshUser.trim()) {
+        request.relayUser = remoteSshUser.trim();
+      }
     }
 
     return request;
@@ -1074,7 +1105,10 @@ export function App({
       return localCommand;
     }
 
-    return `ssh -t ${locationLike.hostname} '${localCommand}'`;
+    const relayTarget = remoteSshUser.trim()
+      ? `${remoteSshUser.trim()}@${locationLike.hostname}`
+      : locationLike.hostname;
+    return `ssh -t ${relayTarget} '${localCommand}'`;
   }
 
   function promptForNativeConsoleCommand(nativeCommand: string) {
@@ -1528,6 +1562,21 @@ export function App({
             ))}
           </select>
         </label>
+        {!isLocalPageHost(locationLike.hostname) ? (
+          <label className="field" style={{ minWidth: 180 }}>
+            <span className="field-label">SSH Relay User</span>
+            <input
+              className="field-input"
+              aria-label="SSH Relay User"
+              type="text"
+              value={remoteSshUser}
+              onChange={(event) => setRemoteSshUser(event.target.value)}
+              placeholder="cass"
+              autoComplete="username"
+              spellCheck={false}
+            />
+          </label>
+        ) : null}
         {selectedCustomTerminal ? (
           <button
             type="button"

@@ -42,6 +42,22 @@ test("buildNativeCommand wraps the transport in ssh when relayHost is provided",
   );
 });
 
+test("buildNativeCommand includes relayUser in the ssh target when provided", () => {
+  assert.equal(
+    buildNativeCommand(
+      {
+        terminal: "iterm",
+        host: "127.0.0.1",
+        port: 5004,
+        relayHost: "192.168.2.57",
+        relayUser: "cass",
+      },
+      { hasBinary: (name) => name === "socat" },
+    ),
+    "ssh -t cass@192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
+  );
+});
+
 test("buildNativeCommand rejects unsupported terminals", () => {
   assert.throws(
     () =>
@@ -185,6 +201,38 @@ test("bridge returns an ssh-wrapped command in dry run mode when relayHost is pr
   assert.equal(
     payload.command,
     "ssh -t 192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
+  );
+
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+});
+
+test("bridge returns an ssh-wrapped command with relayUser in dry run mode", async () => {
+  const server = createBridgeServer({
+    dryRun: true,
+    hasBinary: (name) => name === "socat",
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+
+  const response = await fetch(`http://127.0.0.1:${port}/open-console`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      terminal: "iterm",
+      host: "127.0.0.1",
+      port: 5004,
+      relayHost: "192.168.2.57",
+      relayUser: "cass",
+    }),
+  });
+
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(
+    payload.command,
+    "ssh -t cass@192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
   );
 
   await new Promise((resolve, reject) =>
