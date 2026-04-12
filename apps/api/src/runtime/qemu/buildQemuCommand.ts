@@ -43,11 +43,11 @@ export function buildQemuCommand(input: BuildQemuCommandInput): string[] {
     String(input.config.ramMb),
     "-smp",
     String(input.config.vcpu),
-    // Boot strictly from the first hard drive (the virtio OS disk).
-    // Without this, SeaBIOS may try IDE drives first when a day-0 config
-    // disk is attached as if=ide, causing the VM to hang on a non-bootable FAT disk.
+    // Boot from hard disk first. Without strict=on SeaBIOS falls through
+    // non-bootable drives (e.g. a day-0 FAT config disk on IDE) and lands
+    // on the virtio OS disk.
     "-boot",
-    "order=c,strict=on",
+    "order=c",
     "-drive",
     `file=${input.imagePath},if=virtio,format=qcow2`,
   ];
