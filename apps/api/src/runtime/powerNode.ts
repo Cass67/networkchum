@@ -3,7 +3,7 @@ import { access, copyFile, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { getLab } from "../labs/labStore.js";
+import { getLab, updateLabDocument } from "../labs/labStore.js";
 import {
   buildDockerNetworkConnectCommand,
   buildDockerNetworkCreateCommand,
@@ -28,6 +28,7 @@ import { syncSocketTopology } from "./syncSocketTopology.js";
 import { virtualSwitch } from "./virtualSwitch.js";
 import { getNetworkBackend, getPlatform } from "./hostCapabilities.js";
 import { listRuntimeStates, upsertRuntimeState } from "./runtimeStateStore.js";
+import type { RuntimeState } from "./runtimeStateStore.js";
 import {
   getDataFile,
   getNodeConfigDrivePath,
@@ -40,7 +41,8 @@ import {
   injectVeosFlash,
 } from "./configInjectors.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
-import type { LabDocument } from "@networkchum/shared";
+import { setNodeBootAction } from "../topology/mutations.js";
+import type { LabDocument, LabNode, NodeBootAction } from "@networkchum/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -48,6 +50,14 @@ type CommandResult = {
   ok: boolean;
   stdout: string;
   stderr: string;
+};
+
+type ScheduleRunningConfigBackupParams = {
+  labId: string;
+  nodeId: string;
+  node: LabNode;
+  runtimeState: RuntimeState;
+  bootAction: NodeBootAction;
 };
 
 type RuntimeDependencies = {
@@ -59,6 +69,9 @@ type RuntimeDependencies = {
     serialPort: number,
   ) => Promise<{ ok: boolean; pid: number | null; stderr: string }>;
   findAvailablePort?: (startPort: number) => Promise<number>;
+  scheduleRunningConfigBackup?: (
+    params: ScheduleRunningConfigBackupParams,
+  ) => Promise<unknown>;
 };
 
 function isAlreadyExistsError(stderr: string): boolean {
@@ -354,6 +367,60 @@ export async function powerOnNode(
     (state) => state.nodeId === nodeId,
   );
 
+  const bootActions = lab.document.nodeBootActions ?? [];
+  const nodeBootAction = (bootActions.find((entry) => entry.nodeId === nodeId)
+    ?.action ?? "none") as NodeBootAction;
+  const clearOneShotBootAction = async () => {
+    if (nodeBootAction === "none") {
+      return;
+    }
+
+    const clearedDocument = setNodeBootAction(lab.document, nodeId, "none");
+    try {
+      await updateLabDocument(labId, clearedDocument);
+    } catch (error) {
+      console.warn(
+        `[powerNode] failed to clear node boot action for ${nodeId}: ${
+          error instanceof Error ? error.message : "unknown"
+        }`,
+      );
+    }
+  };
+
+  const scheduleRunningConfigBackup = dependencies.scheduleRunningConfigBackup;
+  const scheduleBackupIfNeeded = (runtimeState: RuntimeState) => {
+    if (
+      nodeBootAction !== "backup-once" ||
+      runtimeState.status !== "running" ||
+      !scheduleRunningConfigBackup
+    ) {
+      return;
+    }
+
+    try {
+      const maybePromise = scheduleRunningConfigBackup({
+        labId,
+        nodeId,
+        node,
+        runtimeState,
+        bootAction: nodeBootAction,
+      });
+      Promise.resolve(maybePromise).catch((error) => {
+        console.warn(
+          `[powerNode] failed to schedule running config backup for ${nodeId}: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`,
+        );
+      });
+    } catch (error) {
+      console.warn(
+        `[powerNode] failed to schedule running config backup for ${nodeId}: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`,
+      );
+    }
+  };
+
   if (existingState?.status === "running") {
     if (existingState.runtime === "qemu") {
       await syncSocketTopology();
@@ -419,6 +486,8 @@ export async function powerOnNode(
     };
 
     await upsertRuntimeState(state);
+    scheduleBackupIfNeeded(state);
+    await clearOneShotBootAction();
     return state;
   }
 
@@ -455,6 +524,7 @@ export async function powerOnNode(
         updatedAt: new Date().toISOString(),
       };
       await upsertRuntimeState(state);
+      scheduleBackupIfNeeded(state);
       return state;
     }
 
@@ -553,6 +623,7 @@ export async function powerOnNode(
       updatedAt: new Date().toISOString(),
     };
     await upsertRuntimeState(state);
+    scheduleBackupIfNeeded(state);
     return state;
   }
 
@@ -625,9 +696,6 @@ export async function powerOnNode(
     (nc) => nc.nodeId === nodeId,
   )?.config;
 
-  const bootActions = lab.document.nodeBootActions ?? [];
-  const nodeBootAction =
-    bootActions.find((entry) => entry.nodeId === nodeId)?.action ?? "none";
   const hasStartupConfigText =
     typeof startupConfig === "string" && startupConfig.trim().length > 0;
   const shouldInjectStartupConfig =
@@ -671,6 +739,7 @@ export async function powerOnNode(
     };
 
     await upsertRuntimeState(recoveredState);
+    await clearOneShotBootAction();
     if (networkBackend === "socket") {
       await syncSocketTopology();
     }
@@ -859,6 +928,8 @@ export async function powerOnNode(
   };
 
   await upsertRuntimeState(state);
+  scheduleBackupIfNeeded(state);
+  await clearOneShotBootAction();
   if (result.ok && networkBackend === "socket") {
     await syncSocketTopology();
   }

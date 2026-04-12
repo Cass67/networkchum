@@ -1,3 +1,4 @@
+import "./setupCanvasMock";
 import "@testing-library/jest-dom/vitest";
 import {
   cleanup,
@@ -8,8 +9,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { NodeBootAction } from "@networkchum/shared";
 import { App } from "./App.js";
-
 afterEach(() => {
   cleanup();
 });
@@ -145,9 +146,15 @@ describe("App", () => {
     });
 
     const addNodeButtons = screen.getAllByRole("button", {
-      name: "Add Alpine Container",
+      name: "Add Fetched Device",
     });
     fireEvent.click(addNodeButtons[addNodeButtons.length - 1]!);
+
+    await screen.findByTestId("add-node-dialog-overlay");
+    fireEvent.change(screen.getByTestId("node-name-input"), {
+      target: { value: "alpine-2" },
+    });
+    fireEvent.click(screen.getByTestId("add-node-submit"));
 
     await waitFor(() => {
       expect(screen.getAllByText("alpine-2").length).toBeGreaterThan(0);
@@ -198,6 +205,75 @@ describe("App", () => {
         screen.getByRole("button", { name: "Delete Lab" }),
       ).toBeInTheDocument();
       expect(screen.getByText("Canvas")).toBeInTheDocument();
+    });
+  });
+
+  it("shows running-config backup summary for a focused node", async () => {
+    const listRunningConfigBackups = vi.fn(async () => [
+      {
+        id: "backup-1",
+        labId: "lab-backup",
+        nodeId: "node-backup",
+        status: "captured" as const,
+        source: "Boot backup",
+        createdAt: "2026-04-12T00:00:00.000Z",
+      },
+    ]);
+
+    const api = {
+      listLabs: async () => [{ id: "lab-backup", name: "Backup Lab" }],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-backup",
+        name: "Backup Lab",
+        document: {
+          nodes: [
+            {
+              id: "node-backup",
+              name: "Backup Node",
+              position: { x: 10, y: 10 },
+            },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-backup",
+        name: "Backup Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-backup",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+      listRunningConfigBackups,
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Open Backup Lab" });
+    fireEvent.click(screen.getByRole("button", { name: "Open Backup Lab" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("node-node-backup")).toBeInTheDocument();
+    });
+
+    const node = screen.getByTestId("node-node-backup");
+    fireEvent.mouseDown(node);
+    fireEvent.click(node);
+
+    await waitFor(() => {
+      expect(listRunningConfigBackups).toHaveBeenCalledWith(
+        "lab-backup",
+        "node-backup",
+      );
+      expect(screen.getByText("Boot backup")).toBeInTheDocument();
+      expect(screen.getByText(/captured/i)).toBeInTheDocument();
     });
   });
 
@@ -1958,5 +2034,112 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Fetched Lab" }));
 
     expect(await screen.findByText("Console Status: Busy")).toBeInTheDocument();
+  });
+
+  describe("Startup Config", () => {
+    const createLabDocument = (action: NodeBootAction) => ({
+      nodes: [
+        {
+          id: "node-1",
+          name: "startup-node",
+          position: { x: 10, y: 10 },
+        },
+      ],
+      networks: [],
+      attachments: [],
+      startupConfigSets: [
+        {
+          id: "set-default",
+          name: "Default",
+          nodeConfigs: [],
+        },
+      ],
+      nodeBootActions: [{ nodeId: "node-1", action }],
+      activeConfigSetId: "set-default",
+    });
+
+    const buildApi = (action: NodeBootAction) => {
+      const lab = {
+        id: "lab-1",
+        name: "Startup Lab",
+        autoBackup: false,
+        document: createLabDocument(action),
+      };
+      const setNodeConfig = vi.fn(async () => lab);
+      const setNodeBootAction = vi.fn(async (_labId, _nodeId, nextAction) => ({
+        ...lab,
+        document: {
+          ...lab.document,
+          nodeBootActions: [{ nodeId: "node-1", action: nextAction }],
+        },
+      }));
+
+      const api = {
+        listLabs: async () => [{ id: lab.id, name: lab.name }],
+        listCatalog: async () => [],
+        createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+        getLab: async () => lab,
+        listRuntimeStates: async () => [],
+        addNode: async () => lab,
+        powerOnNode: async () => ({
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+          message: null,
+        }),
+        setNodeConfig,
+        setNodeBootAction,
+      };
+
+      return { api, setNodeBootAction };
+    };
+
+    const openStartupConfigDialog = async () => {
+      const node = await screen.findByTestId("node-node-1");
+      fireEvent.mouseDown(node);
+      fireEvent.click(node);
+      const startupButton = await screen.findByRole("button", {
+        name: "Startup Config",
+      });
+      fireEvent.click(startupButton);
+      await screen.findByRole("dialog", { name: "Startup Config" });
+    };
+
+    it("renders the Next Power-Up Action dropdown with the queued action", async () => {
+      const { api } = buildApi("backup-once");
+      render(<App api={api} />);
+
+      await openStartupConfigDialog();
+
+      expect(screen.getByLabelText("Next Power-Up Action")).toHaveValue(
+        "backup-once",
+      );
+    });
+
+    it.each([
+      ["No Boot Action", "none"],
+      ["Backup Running Config Once", "backup-once"],
+      ["Inject Startup Config Once", "inject-once"],
+    ] as const)(
+      "save with %s calls setNodeBootAction(..., %s)",
+      async (_label, action) => {
+        const { api, setNodeBootAction } = buildApi("none");
+        render(<App api={api} />);
+
+        await openStartupConfigDialog();
+        fireEvent.change(screen.getByLabelText("Next Power-Up Action"), {
+          target: { value: action },
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+        await waitFor(() => {
+          expect(setNodeBootAction).toHaveBeenCalledWith(
+            "lab-1",
+            "node-1",
+            action,
+          );
+        });
+      },
+    );
   });
 });

@@ -694,6 +694,45 @@ body {
   overflow-wrap: anywhere;
 }
 
+.detail-value--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.backup-records {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.backup-record {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.backup-record-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+}
+
+.backup-record-timestamp {
+  color: var(--text-muted);
+}
+
+.backup-record-source {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
 .device-card {
   display: flex;
   align-items: flex-start;

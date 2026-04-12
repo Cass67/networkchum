@@ -3,6 +3,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import "./theme.css";
 
 import { createApiClient } from "./api/client.js";
+import type { RunningConfigBackupRecord } from "./api/client.js";
 import { AddNodeDialog } from "./components/AddNodeDialog.js";
 import { ConfirmDialog } from "./components/ConfirmDialog.js";
 import { ContextMenu } from "./components/ContextMenu.js";
@@ -66,11 +67,19 @@ type StartupConfigSetData = {
   nodeConfigs: Array<{ nodeId: string; config: string }>;
 };
 
+type NodeBootAction = "none" | "backup-once" | "inject-once";
+type NodeBootActionState = {
+  nodeId: string;
+  action: NodeBootAction;
+  updatedAt?: string;
+};
+
 type LabDocumentData = {
   nodes: LabNodeData[];
   networks: Array<{ id: string; kind: string; name: string; visible: boolean }>;
   attachments: Array<{ interfaceId: string; networkId: string }>;
   startupConfigSets?: StartupConfigSetData[];
+  nodeBootActions?: NodeBootActionState[];
   activeConfigSetId?: string | null;
 };
 
@@ -170,6 +179,10 @@ type ApiClient = {
       message?: string | null;
     }>
   >;
+  listRunningConfigBackups?: (
+    labId: string,
+    nodeId: string,
+  ) => Promise<RunningConfigBackupRecord[]>;
   createNetwork?: (
     labId: string,
     input: { name: string; visible?: boolean },
@@ -194,6 +207,11 @@ type ApiClient = {
     setId: string,
     nodeId: string,
     config: string,
+  ) => Promise<{ id: string; name: string; document: LabDocumentData }>;
+  setNodeBootAction?: (
+    labId: string,
+    nodeId: string,
+    action: NodeBootAction,
   ) => Promise<{ id: string; name: string; document: LabDocumentData }>;
   moveNode?: (
     labId: string,
@@ -729,6 +747,9 @@ export function App({
   const [nodeMessages, setNodeMessages] = useState<
     Record<string, string | null>
   >({});
+  const [selectedNodeBackups, setSelectedNodeBackups] = useState<
+    RunningConfigBackupRecord[]
+  >([]);
   const [createLabError, setCreateLabError] = useState<string | null>(null);
   const [selectedLabId, setSelectedLabId] = useState<string | null>(null);
   const [selectedLab, setSelectedLab] = useState<{
@@ -979,6 +1000,33 @@ export function App({
       window.removeEventListener("focus", handleFocus);
     };
   }, [api.listRuntimeStates, selectedLabId]);
+
+  const listRunningConfigBackups = api.listRunningConfigBackups;
+
+  useEffect(() => {
+    if (!listRunningConfigBackups || !selectedLabId || !selectedNodeId) {
+      setSelectedNodeBackups([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    void listRunningConfigBackups(selectedLabId, selectedNodeId)
+      .then((records) => {
+        if (!cancelled) {
+          setSelectedNodeBackups(records);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedNodeBackups([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listRunningConfigBackups, selectedLabId, selectedNodeId]);
 
   function applyLabUpdate(nextLab: {
     id: string;
@@ -1414,7 +1462,11 @@ export function App({
     setStartupConfigDialog({ nodeId, nodeName: node.name });
   }
 
-  async function handleSaveStartupConfig(nodeId: string, config: string) {
+  async function handleSaveStartupConfig(
+    nodeId: string,
+    config: string,
+    action: NodeBootAction,
+  ) {
     if (!selectedLabId || !selectedLab || !api.setNodeConfig) return;
 
     const doc = selectedLab.document;
@@ -1445,7 +1497,10 @@ export function App({
       nodeId,
       config,
     );
-    applyLabUpdate(nextLab);
+    const finalLab = api.setNodeBootAction
+      ? await api.setNodeBootAction(selectedLabId, nodeId, action)
+      : nextLab;
+    applyLabUpdate(finalLab);
   }
 
   async function handleConfirm() {
@@ -1914,6 +1969,7 @@ export function App({
           }}
           nativeConsoleModeLabel={nativeConsoleModeLabel}
           selectedNodeId={selectedNodeId}
+          nodeRunningConfigBackups={selectedNodeBackups}
         />
       </aside>
 
@@ -1937,6 +1993,14 @@ export function App({
               activeSet?.nodeConfigs.find(
                 (nc) => nc.nodeId === startupConfigDialog.nodeId,
               )?.config ?? ""
+            );
+          })()}
+          initialBootAction={(() => {
+            const doc = selectedLab?.document;
+            return (
+              doc?.nodeBootActions?.find(
+                (entry) => entry.nodeId === startupConfigDialog.nodeId,
+              )?.action ?? "none"
             );
           })()}
           onSave={handleSaveStartupConfig}

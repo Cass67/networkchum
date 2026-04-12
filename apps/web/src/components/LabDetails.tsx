@@ -1,3 +1,5 @@
+import type { RunningConfigBackupRecord } from "../api/client.js";
+
 type LabNode = {
   id: string;
   name: string;
@@ -16,7 +18,25 @@ type LabDetailsProps = {
   onDisconnectNativeConsole?: (nodeId: string) => void;
   nativeConsoleModeLabel?: string;
   selectedNodeId?: string | null;
+  nodeRunningConfigBackups?: RunningConfigBackupRecord[];
 };
+
+const runningConfigStatusClass: Record<
+  RunningConfigBackupRecord["status"],
+  string
+> = {
+  captured: "status-pill--running",
+  failed: "status-pill--failed",
+  unsupported: "status-pill--stopped",
+};
+
+function formatBackupTimestamp(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString();
+}
 
 export function LabDetails({
   labName,
@@ -30,8 +50,10 @@ export function LabDetails({
   onDisconnectNativeConsole,
   nativeConsoleModeLabel,
   selectedNodeId = null,
+  nodeRunningConfigBackups = [],
 }: LabDetailsProps) {
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
+  const backupRecords = nodeRunningConfigBackups ?? [];
 
   return (
     <section className="panel-section">
@@ -168,6 +190,38 @@ export function LabDetails({
                 </span>
               </div>
             ) : null}
+          </div>
+          <div className="detail-row">
+            <span className="detail-label">Running-config backups</span>
+            <span className="detail-value detail-value--stacked">
+              {backupRecords.length ? (
+                <ul className="backup-records">
+                  {backupRecords.map((backup) => (
+                    <li key={backup.id} className="backup-record">
+                      <span className="backup-record-row">
+                        <span className="backup-record-timestamp">
+                          {formatBackupTimestamp(backup.createdAt)}
+                        </span>
+                        <span
+                          className={`status-pill ${
+                            runningConfigStatusClass[backup.status]
+                          }`}
+                        >
+                          {backup.status}
+                        </span>
+                      </span>
+                      <span className="backup-record-source">
+                        {backup.source}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span className="panel-description">
+                  No running-config backups captured yet.
+                </span>
+              )}
+            </span>
           </div>
         </div>
       ) : null}

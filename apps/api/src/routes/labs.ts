@@ -26,6 +26,7 @@ import { detectAccelerationMode } from "../runtime/hostCapabilities.js";
 import { powerOffNode, powerOnNode } from "../runtime/powerNode.js";
 import { syncSocketTopology } from "../runtime/syncSocketTopology.js";
 import { listRuntimeStates } from "../runtime/runtimeStateStore.js";
+import { listRunningConfigBackupRecords } from "../runtime/runningConfigBackupStore.js";
 import {
   addNetwork,
   addNode,
@@ -188,6 +189,21 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     const params = z.object({ labId: z.string().min(1) }).parse(request.params);
     return reply.send({ backups: await listLabBackups(params.labId) });
   });
+
+  app.get(
+    "/labs/:labId/nodes/:nodeId/running-config-backups",
+    async (request, reply) => {
+      const params = z
+        .object({ labId: z.string().min(1), nodeId: z.string().min(1) })
+        .parse(request.params);
+      return reply.send({
+        backups: await listRunningConfigBackupRecords(
+          params.labId,
+          params.nodeId,
+        ),
+      });
+    },
+  );
 
   app.post("/labs/:labId/restore-backup", async (request, reply) => {
     const params = z.object({ labId: z.string().min(1) }).parse(request.params);

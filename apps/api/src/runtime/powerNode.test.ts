@@ -355,6 +355,153 @@ describe("powerOnNode", () => {
     ]);
   });
 
+  it("clears inject-once boot action after launch attempt", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const registry = new TemplateRegistry();
+    const lab = await createLab("Inject Once Clear Lab");
+    const template = registry.get("linux-alpine-container")!;
+    let document = addNode(lab.document, {
+      template,
+      name: "inject-clear",
+      position: { x: 10, y: 10 },
+    });
+    const nodeId = document.nodes[0]!.id;
+    document = setNodeBootAction(document, nodeId, "inject-once");
+    await updateLabDocument(lab.id, document);
+
+    const state = await powerOnNode(lab.id, nodeId, {
+      runCommand: async (command, args) => {
+        expect(command).toBe("docker");
+        expect(args).toContain("run");
+        return { ok: true, stdout: "container-id-123", stderr: "" };
+      },
+      hasBinary: async () => true,
+    });
+
+    expect(state?.status).toBe("running");
+    const updatedLab = await getLab(lab.id);
+    expect(updatedLab?.document.nodeBootActions).toEqual([]);
+  });
+
+  it("clears backup-once boot action after launch attempt", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const registry = new TemplateRegistry();
+    const lab = await createLab("Backup Once Clear Lab");
+    const template = registry.get("linux-alpine-container")!;
+    let document = addNode(lab.document, {
+      template,
+      name: "backup-clear",
+      position: { x: 10, y: 10 },
+    });
+    const nodeId = document.nodes[0]!.id;
+    document = setNodeBootAction(document, nodeId, "backup-once");
+    await updateLabDocument(lab.id, document);
+
+    const state = await powerOnNode(lab.id, nodeId, {
+      runCommand: async (_command, _args) => ({
+        ok: true,
+        stdout: "container-id-123",
+        stderr: "",
+      }),
+      hasBinary: async () => true,
+    });
+
+    expect(state?.status).toBe("running");
+    const updatedLab = await getLab(lab.id);
+    expect(updatedLab?.document.nodeBootActions).toEqual([]);
+  });
+
+  it("schedules backup-once when boot action is set", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const registry = new TemplateRegistry();
+    const lab = await createLab("Backup Once Trigger Lab");
+    const template = registry.get("linux-alpine-container")!;
+    let document = addNode(lab.document, {
+      template,
+      name: "backup-call",
+      position: { x: 10, y: 10 },
+    });
+    const nodeId = document.nodes[0]!.id;
+    document = setNodeBootAction(document, nodeId, "backup-once");
+    await updateLabDocument(lab.id, document);
+
+    const scheduleBackup = vi.fn(async () => undefined);
+    const state = await powerOnNode(lab.id, nodeId, {
+      runCommand: async (_command, _args) => ({
+        ok: true,
+        stdout: "container-id-123",
+        stderr: "",
+      }),
+      hasBinary: async () => true,
+      scheduleRunningConfigBackup: scheduleBackup,
+    });
+
+    expect(state?.status).toBe("running");
+    expect(scheduleBackup).toHaveBeenCalledWith(
+      expect.objectContaining({ labId: lab.id, nodeId }),
+    );
+    expect(scheduleBackup).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears inject-once boot action even when startup config is blank", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const registry = new TemplateRegistry();
+    const lab = await createLab("Blank Config Inject Lab");
+    const template = registry.get("linux-alpine-container")!;
+    let document = addNode(lab.document, {
+      template,
+      name: "blank-config",
+      position: { x: 10, y: 10 },
+    });
+    const nodeId = document.nodes[0]!.id;
+    document = setNodeBootAction(document, nodeId, "inject-once");
+    document = {
+      ...document,
+      startupConfigSets: [
+        {
+          id: "set-blank",
+          name: "Blank Config",
+          nodeConfigs: [{ nodeId, config: "   \n   " }],
+        },
+      ],
+      activeConfigSetId: "set-blank",
+    };
+    await updateLabDocument(lab.id, document);
+
+    const state = await powerOnNode(lab.id, nodeId, {
+      runCommand: async (command, args) => {
+        expect(command).toBe("docker");
+        expect(args).toContain("run");
+        return { ok: true, stdout: "container-id-123", stderr: "" };
+      },
+      hasBinary: async () => true,
+    });
+
+    expect(state?.status).toBe("running");
+    const updatedLab = await getLab(lab.id);
+    expect(updatedLab?.document.nodeBootActions).toEqual([]);
+  });
+
   it("returns failed state for qemu nodes when no qemu binary exists", async () => {
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), "networkchum-runtime-"),

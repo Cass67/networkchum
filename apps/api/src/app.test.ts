@@ -12,6 +12,7 @@ import path from "node:path";
 import type { NodeBootAction, NodeBootActionState } from "@networkchum/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { appendRunningConfigBackupRecord } from "./runtime/runningConfigBackupStore.js";
 import { buildApp } from "./app.js";
 import { saveImages } from "./images/imageStore.js";
 import { getLab } from "./labs/labStore.js";
@@ -319,6 +320,34 @@ describe("api", () => {
         expect.objectContaining({ nodeId, action: "backup-once" }),
       ]),
     );
+  });
+
+  it("returns running-config backups for a node", async () => {
+    const { labId, nodeId } = await createLabWithNode("node-api-backup");
+    await appendRunningConfigBackupRecord({
+      id: "backup-1",
+      labId,
+      nodeId,
+      status: "captured",
+      source: "Boot backup",
+      createdAt: "2026-04-12T00:00:00.000Z",
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/labs/${labId}/nodes/${nodeId}/running-config-backups`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      backups: expect.arrayContaining([
+        expect.objectContaining({
+          id: "backup-1",
+          status: "captured",
+          source: "Boot backup",
+        }),
+      ]),
+    });
   });
 
   it("clears boot actions when the payload uses action none", async () => {

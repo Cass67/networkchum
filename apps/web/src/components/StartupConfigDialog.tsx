@@ -1,10 +1,16 @@
 import { useState } from "react";
+import type { NodeBootAction } from "@networkchum/shared";
 
 type StartupConfigDialogProps = {
   nodeId: string;
   nodeName: string;
   initialConfig: string;
-  onSave: (nodeId: string, config: string) => Promise<void>;
+  initialBootAction: NodeBootAction;
+  onSave: (
+    nodeId: string,
+    config: string,
+    action: NodeBootAction,
+  ) => Promise<void>;
   onClose: () => void;
 };
 
@@ -12,16 +18,18 @@ export function StartupConfigDialog({
   nodeId,
   nodeName,
   initialConfig,
+  initialBootAction,
   onSave,
   onClose,
 }: StartupConfigDialogProps) {
   const [config, setConfig] = useState(initialConfig);
+  const [bootAction, setBootAction] = useState(initialBootAction);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
     try {
-      await onSave(nodeId, config);
+      await onSave(nodeId, config, bootAction);
       onClose();
     } finally {
       setSaving(false);
@@ -45,6 +53,21 @@ export function StartupConfigDialog({
           <p className="panel-description">
             Saved as a cdrom drive attached on power-on.
           </p>
+          <label className="field" style={{ marginTop: 0 }}>
+            <span className="field-label">Next Power-Up Action</span>
+            <select
+              className="field-input"
+              aria-label="Next Power-Up Action"
+              value={bootAction}
+              onChange={(event) =>
+                setBootAction(event.target.value as NodeBootAction)
+              }
+            >
+              <option value="none">No Boot Action</option>
+              <option value="backup-once">Backup Running Config Once</option>
+              <option value="inject-once">Inject Startup Config Once</option>
+            </select>
+          </label>
         </div>
         <textarea
           className="field-input"

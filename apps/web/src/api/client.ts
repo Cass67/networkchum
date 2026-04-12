@@ -1,3 +1,5 @@
+import type { NodeBootAction, NodeBootActionState } from "@networkchum/shared";
+
 type LabSummary = {
   id: string;
   name: string;
@@ -6,6 +8,15 @@ type LabSummary = {
 
 type LabBackupSummary = {
   fileName: string;
+};
+
+export type RunningConfigBackupRecord = {
+  id: string;
+  labId: string;
+  nodeId: string;
+  status: "captured" | "failed" | "unsupported";
+  source: string;
+  createdAt: string;
 };
 
 type CatalogSummary = {
@@ -47,6 +58,7 @@ type LabDocumentSummary = {
   networks: Array<{ id: string; kind: string; name: string; visible: boolean }>;
   attachments: Array<{ interfaceId: string; networkId: string }>;
   startupConfigSets?: StartupConfigSetSummary[];
+  nodeBootActions?: NodeBootActionState[];
   activeConfigSetId?: string | null;
 };
 
@@ -287,6 +299,19 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
       return payload.states;
     },
 
+    async listRunningConfigBackups(
+      labId: string,
+      nodeId: string,
+    ): Promise<RunningConfigBackupRecord[]> {
+      const response = await fetcher(
+        `${baseUrl}/labs/${labId}/nodes/${nodeId}/running-config-backups`,
+      );
+      const payload = await parseResponse<{
+        backups: RunningConfigBackupRecord[];
+      }>(response as Response);
+      return payload.backups;
+    },
+
     async listImages(): Promise<ImageRecordSummary[]> {
       const response = await fetcher(`${baseUrl}/images`);
       const payload = await parseResponse<{ images: ImageRecordSummary[] }>(
@@ -492,6 +517,25 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
           method: "PUT",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ config }),
+        },
+      );
+      const payload = await parseResponse<{ lab: LabDetails }>(
+        response as Response,
+      );
+      return payload.lab;
+    },
+
+    async setNodeBootAction(
+      labId: string,
+      nodeId: string,
+      action: NodeBootAction,
+    ): Promise<LabDetails> {
+      const response = await fetcher(
+        `${baseUrl}/labs/${labId}/nodes/${nodeId}/boot-action`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action }),
         },
       );
       const payload = await parseResponse<{ lab: LabDetails }>(

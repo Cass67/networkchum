@@ -80,6 +80,7 @@ export function DeviceCatalog({
                   className="btn btn-sm"
                   onClick={() => onSelectTemplate(entry.id)}
                   data-testid={`add-from-catalog-${entry.id}`}
+                  aria-label={`Add ${entry.name}`}
                 >
                   Add
                 </button>
