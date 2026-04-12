@@ -1,0 +1,380 @@
+#!/bin/sh
+set -eu
+
+ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
+
+DRY_RUN=0
+ASSUME_YES=0
+OS_OVERRIDE=""
+PKG_MANAGER_OVERRIDE=""
+CONTAINER_RUNTIME=""
+
+say() {
+  printf '%s\n' "$*"
+}
+
+die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+have_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+current_user() {
+  if [ -n "${SUDO_USER:-}" ]; then
+    printf '%s\n' "$SUDO_USER"
+    return
+  fi
+
+  if [ -n "${USER:-}" ]; then
+    printf '%s\n' "$USER"
+    return
+  fi
+
+  id -un
+}
+
+print_usage() {
+  cat <<'EOF'
+Usage: ./install.sh [options]
+
+Installs the packages needed to get the most out of NetworkChum on macOS or Linux,
+then runs npm install in the repo root.
+
+Options:
+  --dry-run                     Print the commands without running them
+  --yes, -y                     Non-interactive mode; choose defaults automatically
+  --os=macos|linux              Override detected OS
+  --package-manager=brew|apt|dnf|pacman
+                                Override detected package manager
+  --container-runtime=podman|docker
+                                Linux only; skip the runtime prompt
+  --help, -h                    Show this help text
+EOF
+}
+
+run_cmd() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '[dry-run]'
+    for arg in "$@"; do
+      printf ' %s' "$arg"
+    done
+    printf '\n'
+    return
+  fi
+
+  printf '+'
+  for arg in "$@"; do
+    printf ' %s' "$arg"
+  done
+  printf '\n'
+  "$@"
+}
+
+detect_os() {
+  if [ -n "$OS_OVERRIDE" ]; then
+    printf '%s\n' "$OS_OVERRIDE"
+    return
+  fi
+
+  case "$(uname -s)" in
+    Darwin) printf '%s\n' "macos" ;;
+    Linux) printf '%s\n' "linux" ;;
+    *) die "unsupported operating system: $(uname -s)" ;;
+  esac
+}
+
+detect_package_manager() {
+  os_name=$1
+
+  if [ -n "$PKG_MANAGER_OVERRIDE" ]; then
+    printf '%s\n' "$PKG_MANAGER_OVERRIDE"
+    return
+  fi
+
+  if [ "$os_name" = "macos" ]; then
+    if have_cmd brew; then
+      printf '%s\n' "brew"
+      return
+    fi
+    die "Homebrew is required on macOS"
+  fi
+
+  if have_cmd apt-get; then
+    printf '%s\n' "apt"
+    return
+  fi
+
+  if have_cmd dnf; then
+    printf '%s\n' "dnf"
+    return
+  fi
+
+  if have_cmd pacman; then
+    printf '%s\n' "pacman"
+    return
+  fi
+
+  die "could not detect a supported package manager"
+}
+
+ensure_supported_combo() {
+  os_name=$1
+  pkg_manager=$2
+
+  case "$os_name:$pkg_manager" in
+    macos:brew | linux:apt | linux:dnf | linux:pacman) ;;
+    *) die "unsupported OS/package manager combination: $os_name + $pkg_manager" ;;
+  esac
+}
+
+choose_container_runtime() {
+  pkg_manager=$1
+
+  if [ -n "$CONTAINER_RUNTIME" ]; then
+    printf '%s\n' "$CONTAINER_RUNTIME"
+    return
+  fi
+
+  if have_cmd podman && ! have_cmd docker; then
+    default_runtime="podman"
+  elif have_cmd docker && ! have_cmd podman; then
+    default_runtime="docker"
+  elif [ "$pkg_manager" = "dnf" ]; then
+    default_runtime="podman"
+  else
+    default_runtime="docker"
+  fi
+
+  if [ "$ASSUME_YES" -eq 1 ] || [ ! -t 0 ]; then
+    printf '%s\n' "$default_runtime"
+    return
+  fi
+
+  prompt="Choose Linux container runtime [podman/docker] (default: $default_runtime): "
+  printf '%s' "$prompt" >/dev/tty
+  if ! read -r answer </dev/tty; then
+    answer=""
+  fi
+
+  case "$answer" in
+    "")
+      printf '%s\n' "$default_runtime"
+      ;;
+    podman | docker)
+      printf '%s\n' "$answer"
+      ;;
+    *)
+      die "invalid container runtime choice: $answer"
+      ;;
+  esac
+}
+
+maybe_add_kvm_access() {
+  if [ ! -e /dev/kvm ]; then
+    return
+  fi
+
+  if ! have_cmd getent; then
+    return
+  fi
+
+  if ! getent group kvm >/dev/null 2>&1; then
+    return
+  fi
+
+  user_name=$(current_user)
+  if id -nG "$user_name" | grep -Eq '(^|[[:space:]])kvm($|[[:space:]])'; then
+    return
+  fi
+
+  run_cmd sudo usermod -aG kvm "$user_name"
+}
+
+install_macos() {
+  run_cmd brew install git node qemu socat
+  run_cmd brew install --cask docker
+}
+
+install_linux_apt() {
+  runtime=$1
+  user_name=$(current_user)
+
+  run_cmd sudo apt update
+  run_cmd sudo apt install -y git nodejs npm curl
+  run_cmd sudo apt install -y qemu-system-x86 qemu-utils iproute2 bridge-utils socat xterm
+
+  case "$runtime" in
+    podman)
+      run_cmd sudo apt install -y podman podman-docker
+      ;;
+    docker)
+      run_cmd sudo apt install -y docker.io
+      run_cmd sudo systemctl enable --now docker
+      run_cmd sudo usermod -aG docker "$user_name"
+      ;;
+    *)
+      die "unsupported Linux container runtime: $runtime"
+      ;;
+  esac
+
+  maybe_add_kvm_access
+}
+
+install_linux_dnf() {
+  runtime=$1
+  user_name=$(current_user)
+
+  run_cmd sudo dnf install -y git nodejs npm curl
+  run_cmd sudo dnf install -y qemu-system-x86 qemu-img iproute bridge-utils socat xterm
+
+  case "$runtime" in
+    podman)
+      run_cmd sudo dnf install -y podman podman-docker
+      ;;
+    docker)
+      run_cmd sudo dnf install -y moby-engine docker-cli
+      run_cmd sudo systemctl enable --now docker
+      run_cmd sudo usermod -aG docker "$user_name"
+      ;;
+    *)
+      die "unsupported Linux container runtime: $runtime"
+      ;;
+  esac
+
+  maybe_add_kvm_access
+}
+
+install_linux_pacman() {
+  runtime=$1
+  user_name=$(current_user)
+
+  run_cmd sudo pacman -Syu --noconfirm
+  run_cmd sudo pacman -S --needed git nodejs npm curl
+  run_cmd sudo pacman -S --needed qemu-base qemu-desktop iproute2 bridge-utils socat xterm
+
+  case "$runtime" in
+    podman)
+      run_cmd sudo pacman -S --needed podman podman-docker
+      ;;
+    docker)
+      run_cmd sudo pacman -S --needed docker
+      run_cmd sudo systemctl enable --now docker
+      run_cmd sudo usermod -aG docker "$user_name"
+      ;;
+    *)
+      die "unsupported Linux container runtime: $runtime"
+      ;;
+  esac
+
+  maybe_add_kvm_access
+}
+
+run_npm_install() {
+  cd "$ROOT_DIR"
+  run_cmd npm install
+}
+
+print_summary() {
+  os_name=$1
+  pkg_manager=$2
+  runtime=${3:-}
+
+  say ""
+  say "Install plan complete."
+  say "OS: $os_name"
+  say "Package manager: $pkg_manager"
+  if [ -n "$runtime" ]; then
+    say "Linux container runtime: $runtime"
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    say "Dry run only. No commands were executed."
+    return
+  fi
+
+  say ""
+  say "Recommended verification:"
+  say "  node --version"
+  say "  npm --version"
+  say "  qemu-system-x86_64 --version"
+  if [ "$os_name" = "linux" ]; then
+    if [ "$runtime" = "podman" ]; then
+      say "  podman --version"
+      say "  docker --version"
+    else
+      say "  docker --version"
+    fi
+    say "  ls -l /dev/kvm"
+    say ""
+    say "If docker or kvm group membership changed, log out and back in before using those features."
+  else
+    say "  docker version"
+    say ""
+    say "On macOS, launch Docker Desktop once after installation before using container nodes."
+  fi
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)
+      DRY_RUN=1
+      ;;
+    --yes | -y)
+      ASSUME_YES=1
+      ;;
+    --os=macos | --os=linux)
+      OS_OVERRIDE=${arg#--os=}
+      ;;
+    --package-manager=brew | --package-manager=apt | --package-manager=dnf | --package-manager=pacman)
+      PKG_MANAGER_OVERRIDE=${arg#--package-manager=}
+      ;;
+    --container-runtime=podman | --container-runtime=docker)
+      CONTAINER_RUNTIME=${arg#--container-runtime=}
+      ;;
+    --help | -h)
+      print_usage
+      exit 0
+      ;;
+    *)
+      die "unknown option: $arg"
+      ;;
+  esac
+done
+
+OS_NAME=$(detect_os)
+PKG_MANAGER=$(detect_package_manager "$OS_NAME")
+ensure_supported_combo "$OS_NAME" "$PKG_MANAGER"
+
+if [ "$OS_NAME" = "macos" ] && [ -n "$CONTAINER_RUNTIME" ]; then
+  die "--container-runtime is only supported on Linux"
+fi
+
+if [ "$OS_NAME" = "macos" ]; then
+  install_macos
+  run_npm_install
+  print_summary "$OS_NAME" "$PKG_MANAGER"
+  exit 0
+fi
+
+LINUX_CONTAINER_RUNTIME=$(choose_container_runtime "$PKG_MANAGER")
+
+case "$PKG_MANAGER" in
+  apt)
+    install_linux_apt "$LINUX_CONTAINER_RUNTIME"
+    ;;
+  dnf)
+    install_linux_dnf "$LINUX_CONTAINER_RUNTIME"
+    ;;
+  pacman)
+    install_linux_pacman "$LINUX_CONTAINER_RUNTIME"
+    ;;
+  *)
+    die "unsupported package manager for Linux: $PKG_MANAGER"
+    ;;
+esac
+
+run_npm_install
+print_summary "$OS_NAME" "$PKG_MANAGER" "$LINUX_CONTAINER_RUNTIME"

@@ -101,7 +101,9 @@ export async function injectCsr1000vVfat(
     await rm(tmpConfig, { force: true });
   }
 
-  return ["-drive", `file=${outputPath},if=virtio,format=raw`];
+  // IOS-XE scans IDE/SATA buses for a FAT disk labelled "config-1" containing
+  // iosxe_config.txt. It does not scan virtio drives for day-0 config.
+  return ["-drive", `file=${outputPath},if=ide,format=raw`];
 }
 
 // --- Cisco IOSv vfat ---

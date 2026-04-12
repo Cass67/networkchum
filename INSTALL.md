@@ -31,6 +31,17 @@ Notes:
 - On macOS and most standard Node.js installs, `npm` comes with Node.js.
 - On some Linux distros, `nodejs` and `npm` are packaged separately, so install both when shown below.
 
+If you want the repo to install the supported packages for you, use:
+
+```bash
+./install.sh
+```
+
+Useful installer modes:
+
+- `./install.sh --dry-run` to preview the commands
+- on Linux, the installer asks whether you want `podman` or `docker` unless you pass `--container-runtime=podman` or `--container-runtime=docker`
+
 ```bash
 git clone <your-repo-url>
 cd networkchum
