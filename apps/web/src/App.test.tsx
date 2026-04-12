@@ -316,13 +316,13 @@ describe("App", () => {
         _templateId: string,
         input: { vcpu: number; ramMb: number; interfaceCount: number },
       ) => ({
-        id: "linux-generic-vm",
-        name: "Linux Generic VM",
-        vendor: "Linux",
+        id: "cisco-vios",
+        name: "Cisco vIOS Router",
+        vendor: "Cisco",
         runtime: "qemu",
         configSchema: {
-          ramMb: { default: input.ramMb, min: 1024, max: 16384 },
-          vcpu: { default: input.vcpu, min: 1, max: 8 },
+          ramMb: { default: input.ramMb, min: 512, max: 4096 },
+          vcpu: { default: input.vcpu, min: 1, max: 4 },
           interfaceCount: { default: input.interfaceCount, min: 1, max: 16 },
         },
       }),
@@ -332,15 +332,15 @@ describe("App", () => {
       listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
       listCatalog: async () => [
         {
-          id: "linux-generic-vm",
-          name: "Linux Generic VM",
+          id: "cisco-vios",
+          name: "Cisco vIOS Router",
           source: "built-in",
-          vendor: "Linux",
+          vendor: "Cisco",
           runtime: "qemu",
           configSchema: {
-            ramMb: { default: 2048, min: 1024, max: 16384 },
-            vcpu: { default: 2, min: 1, max: 8 },
-            interfaceCount: { default: 2, min: 1, max: 16 },
+            ramMb: { default: 1024, min: 512, max: 4096 },
+            vcpu: { default: 1, min: 1, max: 4 },
+            interfaceCount: { default: 4, min: 1, max: 16 },
           },
         },
       ],
@@ -369,10 +369,10 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Devices" }));
 
-    await screen.findByText("2 vCPU • 2048 MB RAM • 2 interfaces");
+    await screen.findByText("1 vCPU • 1024 MB RAM • 4 interfaces");
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Edit Linux Generic VM" }),
+      screen.getByRole("button", { name: "Edit Cisco vIOS Router" }),
     );
     fireEvent.change(screen.getByLabelText("vCPU"), { target: { value: "4" } });
     fireEvent.change(screen.getByLabelText("RAM (MB)"), {
@@ -384,7 +384,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save Template" }));
 
     await waitFor(() => {
-      expect(updateTemplate).toHaveBeenCalledWith("linux-generic-vm", {
+      expect(updateTemplate).toHaveBeenCalledWith("cisco-vios", {
         vcpu: 4,
         ramMb: 4096,
         interfaceCount: 6,

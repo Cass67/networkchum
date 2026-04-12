@@ -77,13 +77,13 @@ describe("DeviceCatalog", () => {
       <DeviceCatalog
         entries={[
           {
-            id: "linux-generic-vm",
-            name: "Linux Generic VM",
+            id: "cisco-vios",
+            name: "Cisco vIOS Router",
             source: "built-in",
             configSchema: {
-              ramMb: { default: 2048, min: 1024, max: 16384 },
-              vcpu: { default: 2, min: 1, max: 8 },
-              interfaceCount: { default: 2, min: 1, max: 16 },
+              ramMb: { default: 1024, min: 512, max: 4096 },
+              vcpu: { default: 1, min: 1, max: 4 },
+              interfaceCount: { default: 4, min: 1, max: 16 },
             },
           },
         ]}
@@ -92,8 +92,8 @@ describe("DeviceCatalog", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Edit Linux Generic VM" }),
+      screen.getByRole("button", { name: "Edit Cisco vIOS Router" }),
     );
-    expect(onEditTemplate).toHaveBeenCalledWith("linux-generic-vm");
+    expect(onEditTemplate).toHaveBeenCalledWith("cisco-vios");
   });
 });

@@ -298,6 +298,42 @@ const demoCatalog: CatalogSummary[] = [
     },
   },
   {
+    id: "cisco-vios",
+    name: "Cisco vIOS Router",
+    source: "built-in",
+    vendor: "Cisco",
+    runtime: "qemu",
+    configSchema: {
+      ramMb: { default: 1024, min: 512, max: 4096 },
+      vcpu: { default: 1, min: 1, max: 4 },
+      interfaceCount: { default: 4, min: 1, max: 16 },
+    },
+  },
+  {
+    id: "juniper-vsrx",
+    name: "Juniper vSRX",
+    source: "built-in",
+    vendor: "Juniper",
+    runtime: "qemu",
+    configSchema: {
+      ramMb: { default: 4096, min: 2048, max: 16384 },
+      vcpu: { default: 2, min: 1, max: 8 },
+      interfaceCount: { default: 6, min: 2, max: 16 },
+    },
+  },
+  {
+    id: "fortinet-fortigate",
+    name: "Fortinet FortiGate",
+    source: "built-in",
+    vendor: "Fortinet",
+    runtime: "qemu",
+    configSchema: {
+      ramMb: { default: 1024, min: 512, max: 8192 },
+      vcpu: { default: 1, min: 1, max: 4 },
+      interfaceCount: { default: 4, min: 1, max: 16 },
+    },
+  },
+  {
     id: "linux-alpine-container",
     name: "Alpine Container",
     source: "built-in",
@@ -305,6 +341,18 @@ const demoCatalog: CatalogSummary[] = [
     runtime: "container",
     configSchema: {
       ramMb: { default: 256, min: 128, max: 4096 },
+      vcpu: { default: 1, min: 1, max: 4 },
+      interfaceCount: { default: 1, min: 1, max: 4 },
+    },
+  },
+  {
+    id: "linux-ubuntu-container",
+    name: "Ubuntu Container",
+    source: "built-in",
+    vendor: "Linux",
+    runtime: "container",
+    configSchema: {
+      ramMb: { default: 512, min: 256, max: 8192 },
       vcpu: { default: 1, min: 1, max: 4 },
       interfaceCount: { default: 1, min: 1, max: 4 },
     },
@@ -525,8 +573,8 @@ const defaultApi: ApiClient = browserApi ?? {
     return {
       id: "img-demo",
       name: "demo.qcow2",
-      templateId: "linux-generic-vm",
-      suggestedTemplateId: "linux-generic-vm",
+      templateId: "cisco-vios",
+      suggestedTemplateId: "cisco-vios",
       source: "upload",
       catalogState: "active",
     };
@@ -536,7 +584,7 @@ const defaultApi: ApiClient = browserApi ?? {
       id: "img-demo",
       name: "demo.qcow2",
       templateId: null,
-      suggestedTemplateId: "linux-generic-vm",
+      suggestedTemplateId: "cisco-vios",
       source: "upload",
       catalogState: "active",
     };
@@ -546,7 +594,7 @@ const defaultApi: ApiClient = browserApi ?? {
       id: "img-demo",
       name: "demo.qcow2",
       templateId: null,
-      suggestedTemplateId: "linux-generic-vm",
+      suggestedTemplateId: "cisco-vios",
       source: "upload",
       catalogState: "removed",
     };
@@ -556,7 +604,7 @@ const defaultApi: ApiClient = browserApi ?? {
       id: "img-demo",
       name: "demo.qcow2",
       templateId: null,
-      suggestedTemplateId: "linux-generic-vm",
+      suggestedTemplateId: "cisco-vios",
       source: "upload",
       catalogState: "removed",
     };
@@ -950,8 +998,8 @@ export function App({
     }
 
     const nextLab = await api.addNode(selectedLabId, {
-      templateId: "linux-generic-vm",
-      name: `linux-vm-${(selectedLab?.document.nodes.length ?? 0) + 1}`,
+      templateId: "linux-ubuntu-container",
+      name: `ubuntu-${(selectedLab?.document.nodes.length ?? 0) + 1}`,
       position: { x: 120, y: 80 },
     });
     applyLabUpdate(nextLab);
