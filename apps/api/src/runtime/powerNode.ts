@@ -36,6 +36,7 @@ import {
   injectVeosFlash,
 } from "./configInjectors.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
+import type { LabDocument } from "@networkchum/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -55,6 +56,70 @@ type RuntimeDependencies = {
   ) => Promise<{ ok: boolean; pid: number | null; stderr: string }>;
   findAvailablePort?: (startPort: number) => Promise<number>;
 };
+
+function isAlreadyExistsError(stderr: string): boolean {
+  return /already exists|File exists/i.test(stderr);
+}
+
+function buildNetworkFailureMessage(
+  opKind: string,
+  stderr: string,
+  cmd: string[],
+): string {
+  return `Linux TAP setup failed during '${opKind}' (${cmd.join(" ")}): ${stderr.trim() || "command failed"}. NetworkChum needs permission to manage bridges and TAP devices (CAP_NET_ADMIN/root), and stale TAP devices may need to be recreated.`;
+}
+
+export async function ensureTapNetworking(
+  document: LabDocument,
+  runCommand: (command: string, args: string[]) => Promise<CommandResult>,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const ops = reconcileTopology(document);
+
+  for (const op of ops) {
+    const cmd = buildCommand(op);
+    let result = await runCommand(cmd[0]!, cmd.slice(1));
+
+    if (
+      !result.ok &&
+      op.kind === "create-tap" &&
+      isAlreadyExistsError(result.stderr)
+    ) {
+      const deleteCmd = buildCommand({
+        kind: "delete-tap",
+        tapName: op.tapName,
+      });
+      const deleteResult = await runCommand(deleteCmd[0]!, deleteCmd.slice(1));
+      if (!deleteResult.ok) {
+        return {
+          ok: false,
+          message: buildNetworkFailureMessage(
+            "delete-tap",
+            deleteResult.stderr,
+            deleteCmd,
+          ),
+        };
+      }
+
+      result = await runCommand(cmd[0]!, cmd.slice(1));
+    }
+
+    if (!result.ok) {
+      if (
+        (op.kind === "create-bridge" || op.kind === "attach-to-bridge") &&
+        isAlreadyExistsError(result.stderr)
+      ) {
+        continue;
+      }
+
+      return {
+        ok: false,
+        message: buildNetworkFailureMessage(op.kind, result.stderr, cmd),
+      };
+    }
+  }
+
+  return { ok: true };
+}
 
 async function findRunningQemuForDisk(
   diskPath: string,
@@ -481,15 +546,23 @@ export async function powerOnNode(
   // QEMU tries to open them. Reconcile now; ignore "already exists" errors.
   if (networkBackend === "tap") {
     console.log("[powerNode] setting up TAP networking");
-    const ops = reconcileTopology(lab.document);
-    for (const op of ops) {
-      const cmd = buildCommand(op);
-      const result = await runCommand(cmd[0]!, cmd.slice(1));
-      if (!result.ok) {
-        console.warn(
-          `[powerNode] network op '${op.kind}' (may already exist): ${result.stderr.trim()}`,
-        );
-      }
+    const networkResult = await ensureTapNetworking(lab.document, runCommand);
+    if (!networkResult.ok) {
+      console.error(`[powerNode] ${networkResult.message}`);
+      const state = {
+        labId,
+        nodeId,
+        status: "failed" as const,
+        runtime: node.runtime,
+        accelerationMode: node.config.accelerationMode ?? null,
+        externalId: null,
+        connectCommand: undefined,
+        message: networkResult.message,
+        commandPreview: [],
+        updatedAt: new Date().toISOString(),
+      };
+      await upsertRuntimeState(state);
+      return state;
     }
   }
 

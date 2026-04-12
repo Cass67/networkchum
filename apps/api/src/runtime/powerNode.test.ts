@@ -3,11 +3,16 @@ import os from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
+import type { LabDocument } from "@networkchum/shared";
 
 import { createLab, getLab, updateLabDocument } from "../labs/labStore.js";
 import { addNode } from "../topology/mutations.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
-import { findAvailableQemuPortBase, powerOnNode } from "./powerNode.js";
+import {
+  ensureTapNetworking,
+  findAvailableQemuPortBase,
+  powerOnNode,
+} from "./powerNode.js";
 import { upsertRuntimeState } from "./runtimeStateStore.js";
 
 const tempDirs: string[] = [];
@@ -20,6 +25,115 @@ afterEach(async () => {
 });
 
 describe("powerOnNode", () => {
+  it("recreates a stale tap device before launching qemu", async () => {
+    const document: LabDocument = {
+      id: "lab-abc123",
+      name: "Test Lab",
+      version: 1,
+      canvas: { zoom: 1, backgroundImage: null },
+      annotations: [],
+      startupConfigSets: [],
+      activeConfigSetId: null,
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "node-a",
+          name: "router-1",
+          runtime: "qemu",
+          templateId: "tmpl",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 1024, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-a-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [{ interfaceId: "if-a-0", networkId: "net-1" }],
+    };
+
+    const commands: string[][] = [];
+    let firstTapCreate = true;
+    const result = await ensureTapNetworking(
+      document,
+      async (command, args) => {
+        commands.push([command, ...args]);
+
+        if (
+          firstTapCreate &&
+          command === "ip" &&
+          args[0] === "tuntap" &&
+          args[1] === "add"
+        ) {
+          firstTapCreate = false;
+          return {
+            ok: false,
+            stdout: "",
+            stderr: "ioctl(TUNSETIFF): File exists",
+          };
+        }
+
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(commands).toContainEqual([
+      "ip",
+      "link",
+      "del",
+      "dev",
+      "tap-c123-odea-0",
+    ]);
+    expect(
+      commands.filter(
+        (cmd) => cmd[0] === "ip" && cmd[1] === "tuntap" && cmd[2] === "add",
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("fails fast when tap networking lacks privileges", async () => {
+    const document: LabDocument = {
+      id: "lab-abc123",
+      name: "Test Lab",
+      version: 1,
+      canvas: { zoom: 1, backgroundImage: null },
+      annotations: [],
+      startupConfigSets: [],
+      activeConfigSetId: null,
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "node-a",
+          name: "router-1",
+          runtime: "qemu",
+          templateId: "tmpl",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 1024, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-a-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [{ interfaceId: "if-a-0", networkId: "net-1" }],
+    };
+
+    const result = await ensureTapNetworking(document, async () => ({
+      ok: false,
+      stdout: "",
+      stderr: "RTNETLINK answers: Operation not permitted",
+    }));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("expected tap networking to fail");
+    }
+    expect(result.message).toContain("CAP_NET_ADMIN");
+  });
+
   it("chooses a serial base where both serial and monitor ports are free", async () => {
     const usedPorts = new Set([5000, 5001]);
 
