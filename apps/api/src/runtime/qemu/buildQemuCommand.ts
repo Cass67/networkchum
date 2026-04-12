@@ -44,7 +44,9 @@ export function buildQemuCommand(input: BuildQemuCommandInput): string[] {
     "-smp",
     String(input.config.vcpu),
     "-drive",
-    `file=${input.imagePath},if=virtio,format=qcow2`,
+    `file=${input.imagePath},if=none,id=maindisk,format=qcow2`,
+    "-device",
+    "virtio-blk-pci,drive=maindisk,bootindex=1",
   ];
 
   for (const extraPath of input.extraDrives ?? []) {

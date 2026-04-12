@@ -20,7 +20,7 @@ NetworkChum runs best on Linux. macOS works well for the UI, API, image manageme
 
 If you only want the app running first:
 
-1. Install `git`, Node.js 22+, and npm.
+1. Install `git` and a current Node.js LTS release.
 2. Clone the repo.
 3. Install JavaScript dependencies.
 4. Start the full stack.
@@ -28,8 +28,8 @@ If you only want the app running first:
 Notes:
 
 - `npm` is required because the repo uses `npm install` and `npm run ...` commands.
-- On macOS and most standard Node.js installs, `npm` comes with Node.js.
-- On some Linux distros, `nodejs` and `npm` are packaged separately, so install both when shown below.
+- `npm` comes with the official Node.js installers and archives.
+- On Linux, prefer the official Node.js distribution instead of distro `nodejs` packages if you want a predictable modern runtime.
 
 If you want the repo to install the supported packages for you, use:
 
@@ -41,6 +41,8 @@ Useful installer modes:
 
 - `./install.sh --dry-run` to preview the commands
 - on Linux, the installer asks whether you want `podman` or `docker` unless you pass `--container-runtime=podman` or `--container-runtime=docker`
+- on Linux, the installer downloads Node.js directly from `nodejs.org` instead of using distro `nodejs` packages
+- set `NETWORKCHUM_NODE_MAJOR=22` if you want the Node.js 22.x line instead of the default 24.x line
 - on `dnf`-based Linux, the installer defaults to `podman` and installs `podman-docker` so the app can keep using the `docker` CLI
 
 ```bash
@@ -65,7 +67,7 @@ At this point you can use the UI, create labs, add nodes, manage images, and wor
 Recommended baseline:
 
 - Homebrew
-- Node.js 22+ (includes `npm`)
+- Node.js 24 LTS recommended (`npm` included)
 - Git
 
 Example:
@@ -190,12 +192,13 @@ Even then, Linux remains the better host for serious QEMU lab runtime performanc
 
 Install:
 
-- Node.js 22+
-- npm
 - Git
 - `curl`
+- CA certificates
+- `xz`
+- an official Node.js release from `nodejs.org`
 
-On Linux, many package managers split Node.js and npm into separate packages, so install both as shown in the examples.
+On Linux, the recommended path is to use the official Node.js release archive rather than distro `nodejs` and `npm` packages. That avoids landing on older distro-maintained Node releases.
 
 Examples:
 
@@ -203,20 +206,49 @@ Ubuntu or Debian:
 
 ```bash
 sudo apt update
-sudo apt install -y nodejs npm git curl
+sudo apt install -y git curl ca-certificates xz-utils
 ```
 
-Fedora:
+RHEL, Oracle Linux, Fedora, or other `dnf`-based distros:
 
 ```bash
-sudo dnf install -y nodejs npm git curl
+sudo dnf install -y git curl ca-certificates xz
 ```
 
 Arch:
 
 ```bash
-sudo pacman -S --needed nodejs npm git curl
+sudo pacman -S --needed git curl ca-certificates xz
 ```
+
+Recommended Node.js install on Linux:
+
+```bash
+./install.sh
+```
+
+That installs the latest Node.js 24.x build from `nodejs.org` by default. If you want the 22.x line instead:
+
+```bash
+NETWORKCHUM_NODE_MAJOR=22 ./install.sh
+```
+
+If you want to install Node.js manually from the official archive on Linux `x86_64`, the equivalent flow is:
+
+```bash
+curl -fsSL https://nodejs.org/download/release/latest-v24.x/SHASUMS256.txt -o /tmp/SHASUMS256.txt
+NODE_TAR=$(awk '/linux-x64\.tar\.xz$/ { print $2; exit }' /tmp/SHASUMS256.txt)
+curl -fsSL "https://nodejs.org/download/release/latest-v24.x/${NODE_TAR}" -o "/tmp/${NODE_TAR}"
+grep " ${NODE_TAR}$" /tmp/SHASUMS256.txt | sha256sum -c -
+sudo mkdir -p /usr/local/lib/nodejs
+sudo tar -xJf "/tmp/${NODE_TAR}" -C /usr/local/lib/nodejs
+sudo ln -sf "/usr/local/lib/nodejs/${NODE_TAR%.tar.xz}/bin/node" /usr/local/bin/node
+sudo ln -sf "/usr/local/lib/nodejs/${NODE_TAR%.tar.xz}/bin/npm" /usr/local/bin/npm
+sudo ln -sf "/usr/local/lib/nodejs/${NODE_TAR%.tar.xz}/bin/npx" /usr/local/bin/npx
+sudo ln -sf "/usr/local/lib/nodejs/${NODE_TAR%.tar.xz}/bin/corepack" /usr/local/bin/corepack
+```
+
+On Linux `arm64`, change the archive match from `linux-x64` to `linux-arm64`.
 
 Verify:
 
@@ -291,7 +323,9 @@ Why this matters:
 
 ### Install Docker for container nodes
 
-Install Docker Engine or Docker Desktop for Linux.
+Install a Linux container runtime.
+
+On `dnf`-based systems, Podman is usually the better default. NetworkChum can use it through `podman-docker`, which keeps the `docker` CLI name available for the app.
 
 Ubuntu or Debian example:
 
@@ -304,7 +338,20 @@ sudo usermod -aG docker "$USER"
 Fedora example:
 
 ```bash
-sudo dnf install -y docker
+sudo dnf install -y podman podman-docker
+```
+
+Verify:
+
+```bash
+podman --version
+docker --version
+```
+
+If you specifically want Docker Engine on `dnf`-based Linux:
+
+```bash
+sudo dnf install -y moby-engine docker-cli
 sudo systemctl enable --now docker
 sudo usermod -aG docker "$USER"
 ```

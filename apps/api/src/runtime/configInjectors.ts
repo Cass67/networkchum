@@ -101,9 +101,14 @@ export async function injectCsr1000vVfat(
     await rm(tmpConfig, { force: true });
   }
 
-  // IOS-XE scans IDE/SATA buses for a FAT disk labelled "config-1" containing
-  // iosxe_config.txt. It does not scan virtio drives for day-0 config.
-  return ["-drive", `file=${outputPath},if=ide,format=raw`];
+  // IOS-XE scans IDE drives for a FAT disk containing iosxe_config.txt.
+  // bootindex=99 keeps SeaBIOS from trying to boot from this disk before the OS disk.
+  return [
+    "-drive",
+    `file=${outputPath},if=none,id=cfgdisk,format=raw`,
+    "-device",
+    "ide-hd,drive=cfgdisk,bootindex=99",
+  ];
 }
 
 // --- Cisco IOSv vfat ---
