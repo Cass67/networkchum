@@ -138,21 +138,6 @@ export const defaultTemplates: Template[] = [
     },
   },
   {
-    id: "linux-nettools-container",
-    runtime: "container",
-    displayName: "Nettools Container",
-    vendor: "Linux",
-    boot: {
-      console: "serial",
-      acceleration: "n/a",
-    },
-    configSchema: {
-      ramMb: { default: 512, min: 256, max: 8192 },
-      vcpu: { default: 1, min: 1, max: 4 },
-      interfaceCount: { default: 2, min: 1, max: 8 },
-    },
-  },
-  {
     id: "cisco-vios",
     runtime: "qemu",
     displayName: "Cisco vIOS Router",
