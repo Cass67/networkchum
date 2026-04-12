@@ -14,7 +14,11 @@ import { SelectionPanel } from "./components/SelectionPanel.js";
 import { StartupConfigDialog } from "./components/StartupConfigDialog.js";
 import { TemplateEditorDialog } from "./components/TemplateEditorDialog.js";
 import { TopologyCanvas } from "./components/TopologyCanvas.js";
-import { resolveApiBaseUrl, resolveBridgeBaseUrl } from "./runtimeUrls.js";
+import {
+  isLocalPageHost,
+  resolveApiBaseUrl,
+  resolveBridgeBaseUrl,
+} from "./runtimeUrls.js";
 
 const NodeConsole = lazy(async () => {
   const module = await import("./components/NodeConsole.js");
@@ -317,6 +321,10 @@ type ThemeMode = "dark" | "light";
 type NativeConsolePreference = "web-console" | "copy-command" | "iterm-helper";
 type MacOsTerminalPreference = string;
 type MacOsTerminalEntry = { id: string; label: string; template?: string };
+type LocationLike = {
+  protocol: string;
+  hostname: string;
+};
 
 function readStoredTheme(): ThemeMode {
   if (typeof window === "undefined") {
@@ -598,7 +606,13 @@ const defaultApi: ApiClient = browserApi ?? {
   },
 };
 
-export function App({ api = defaultApi }: { api?: ApiClient }) {
+export function App({
+  api = defaultApi,
+  locationLike = window.location,
+}: {
+  api?: ApiClient;
+  locationLike?: LocationLike;
+}) {
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const initialTheme = readStoredTheme();
 
@@ -741,7 +755,7 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
 
   useEffect(() => {
     let cancelled = false;
-    const bridgeBaseUrl = resolveBridgeBaseUrl(window.location);
+    const bridgeBaseUrl = resolveBridgeBaseUrl(locationLike);
 
     if (!bridgeBaseUrl) {
       setBridgeStatus("offline");
@@ -768,7 +782,7 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locationLike]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1039,6 +1053,19 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
     };
   }
 
+  function buildNativeConsoleCommand(command: string[]) {
+    if (command[0] !== "telnet" || !command[1] || !command[2]) {
+      return null;
+    }
+
+    const localCommand = `/usr/bin/nc ${command[1]} ${command[2]}`;
+    if (isLocalPageHost(locationLike.hostname)) {
+      return localCommand;
+    }
+
+    return `ssh -t ${locationLike.hostname} '${localCommand}'`;
+  }
+
   function openWebConsole(nodeId: string) {
     const node = selectedLab?.document.nodes.find((n) => n.id === nodeId);
     setConsoleNode({ nodeId, nodeName: node?.name ?? nodeId });
@@ -1067,12 +1094,11 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
 
     const helperRequest = buildItermHelperUrl(command);
     if (helperRequest) {
-      const bridgeBaseUrl = resolveBridgeBaseUrl(window.location);
+      const bridgeBaseUrl = resolveBridgeBaseUrl(locationLike);
       if (!bridgeBaseUrl) {
         setBridgeStatus("offline");
-        setNativeConsoleError(
-          "Native console bridge is only available when using NetworkChum locally.",
-        );
+        await handleCopyNativeCommand(nodeId);
+        setNativeConsoleError(null);
         return;
       }
 
@@ -1097,18 +1123,16 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
 
   async function handleCopyNativeCommand(nodeId: string) {
     const command = nodeConnectCommands[nodeId];
-    if (
-      !command?.length ||
-      command[0] !== "telnet" ||
-      !command[1] ||
-      !command[2]
-    ) {
+    if (!command?.length) {
       return;
     }
 
-    await navigator.clipboard.writeText(
-      `/usr/bin/nc ${command[1]} ${command[2]}`,
-    );
+    const nativeCommand = buildNativeConsoleCommand(command);
+    if (!nativeCommand) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(nativeCommand);
   }
 
   async function handleDisconnectNativeConsole(nodeId: string) {
@@ -1116,7 +1140,7 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
       return;
     }
 
-    const apiBaseUrl = resolveApiBaseUrl(window.location);
+    const apiBaseUrl = resolveApiBaseUrl(locationLike);
     await fetch(
       `${apiBaseUrl}/labs/${selectedLabId}/nodes/${nodeId}/disconnect-console`,
       {
