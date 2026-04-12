@@ -59,6 +59,7 @@ log/
 /.repo-guard/reports/
 
 # OS and editor workspace noise.
+.worktrees/
 .DS_Store
 .AppleDouble
 .LSOverride

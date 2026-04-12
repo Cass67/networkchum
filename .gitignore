@@ -4,6 +4,7 @@ dist/
 coverage/
 apps/api/data/
 .superpowers/
+.worktrees/
 apps/web/.playwright-cli/
 packages/shared/src/*.js
 packages/shared/src/*.d.ts
