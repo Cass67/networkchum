@@ -9,6 +9,8 @@ ASSUME_YES=0
 OS_OVERRIDE=""
 PKG_MANAGER_OVERRIDE=""
 CONTAINER_RUNTIME=""
+FIREWALL_OVERRIDE="auto"
+FIREWALL_ACTION=""
 NODE_MAJOR=${NETWORKCHUM_NODE_MAJOR:-24}
 
 say() {
@@ -53,6 +55,10 @@ Options:
                                 Override detected package manager
   --container-runtime=podman|docker
                                 Linux only; skip the runtime prompt
+  --firewall=auto|firewalld|ufw|none
+                                Linux only; override firewall detection
+  --open-firewall               Linux only; open 4000/tcp and 5173/tcp
+  --skip-firewall               Linux only; leave firewall rules unchanged
   --help, -h                    Show this help text
 
 Environment:
@@ -174,6 +180,94 @@ choose_container_runtime() {
       ;;
     *)
       die "invalid container runtime choice: $answer"
+      ;;
+  esac
+}
+
+detect_firewall() {
+  case "$FIREWALL_OVERRIDE" in
+    auto) ;;
+    none)
+      printf '%s\n' ""
+      return
+      ;;
+    firewalld | ufw)
+      printf '%s\n' "$FIREWALL_OVERRIDE"
+      return
+      ;;
+    *)
+      die "unsupported firewall override: $FIREWALL_OVERRIDE"
+      ;;
+  esac
+
+  if have_cmd firewall-cmd; then
+    printf '%s\n' "firewalld"
+    return
+  fi
+
+  if have_cmd ufw; then
+    printf '%s\n' "ufw"
+    return
+  fi
+
+  printf '%s\n' ""
+}
+
+choose_firewall_action() {
+  firewall_name=$1
+
+  if [ -z "$firewall_name" ]; then
+    if [ "$FIREWALL_ACTION" = "open" ]; then
+      die "--open-firewall requires firewalld or ufw"
+    fi
+    printf '%s\n' "skip"
+    return
+  fi
+
+  if [ -n "$FIREWALL_ACTION" ]; then
+    printf '%s\n' "$FIREWALL_ACTION"
+    return
+  fi
+
+  if [ "$ASSUME_YES" -eq 1 ] || [ ! -t 0 ]; then
+    printf '%s\n' "skip"
+    return
+  fi
+
+  prompt="Detected $firewall_name. Open NetworkChum LAN ports 4000/tcp (API) and 5173/tcp (Web UI)? [y/N]: "
+  printf '%s' "$prompt" >/dev/tty
+  if ! read -r answer </dev/tty; then
+    answer=""
+  fi
+
+  case "$answer" in
+    y | Y | yes | YES)
+      printf '%s\n' "open"
+      ;;
+    "" | n | N | no | NO)
+      printf '%s\n' "skip"
+      ;;
+    *)
+      die "invalid firewall choice: $answer"
+      ;;
+  esac
+}
+
+open_firewall_ports() {
+  firewall_name=$1
+
+  case "$firewall_name" in
+    firewalld)
+      run_cmd sudo firewall-cmd --permanent --add-port=4000/tcp
+      run_cmd sudo firewall-cmd --permanent --add-port=5173/tcp
+      run_cmd sudo firewall-cmd --reload
+      ;;
+    ufw)
+      run_cmd sudo ufw allow 4000/tcp
+      run_cmd sudo ufw allow 5173/tcp
+      ;;
+    *)
+      die "unsupported firewall: $firewall_name"
       ;;
   esac
 }
@@ -356,6 +450,8 @@ print_summary() {
   os_name=$1
   pkg_manager=$2
   runtime=${3:-}
+  firewall_name=${4:-}
+  firewall_action=${5:-skip}
 
   say ""
   say "Install plan complete."
@@ -364,9 +460,20 @@ print_summary() {
   if [ -n "$runtime" ]; then
     say "Linux container runtime: $runtime"
   fi
+  if [ -n "$firewall_name" ]; then
+    say "Firewall: $firewall_name"
+    if [ "$firewall_action" = "open" ]; then
+      say "LAN firewall rules: open 4000/tcp, 5173/tcp"
+    else
+      say "LAN firewall rules: unchanged"
+    fi
+  fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
     say "Dry run only. No commands were executed."
+    if [ -n "$firewall_name" ] && [ "$firewall_action" != "open" ]; then
+      say "Firewall detected. If you plan to use ./start.sh lan, rerun with --open-firewall or open 4000/tcp and 5173/tcp manually."
+    fi
     return
   fi
 
@@ -374,7 +481,7 @@ print_summary() {
   say "Recommended verification:"
   say "  node --version"
   say "  npm --version"
-  say "  qemu-system-x86_64 --version"
+  say "  qemu-system-x86_64 --version || qemu-kvm --version || /usr/libexec/qemu-kvm --version"
   if [ "$os_name" = "linux" ]; then
     if [ "$runtime" = "podman" ]; then
       say "  podman --version"
@@ -382,9 +489,19 @@ print_summary() {
     else
       say "  docker --version"
     fi
+    if [ -n "$firewall_name" ]; then
+      if [ "$firewall_name" = "firewalld" ]; then
+        say "  sudo firewall-cmd --list-ports"
+      else
+        say "  sudo ufw status"
+      fi
+    fi
     say "  ls -l /dev/kvm"
     say ""
     say "If docker or kvm group membership changed, log out and back in before using those features."
+    if [ -n "$firewall_name" ] && [ "$firewall_action" != "open" ]; then
+      say "If you plan to use ./start.sh lan, rerun with --open-firewall or open 4000/tcp and 5173/tcp manually."
+    fi
   else
     say "  docker version"
     say ""
@@ -409,6 +526,15 @@ for arg in "$@"; do
     --container-runtime=podman | --container-runtime=docker)
       CONTAINER_RUNTIME=${arg#--container-runtime=}
       ;;
+    --firewall=auto | --firewall=firewalld | --firewall=ufw | --firewall=none)
+      FIREWALL_OVERRIDE=${arg#--firewall=}
+      ;;
+    --open-firewall)
+      FIREWALL_ACTION="open"
+      ;;
+    --skip-firewall)
+      FIREWALL_ACTION="skip"
+      ;;
     --help | -h)
       print_usage
       exit 0
@@ -423,11 +549,13 @@ OS_NAME=$(detect_os)
 PKG_MANAGER=$(detect_package_manager "$OS_NAME")
 ensure_supported_combo "$OS_NAME" "$PKG_MANAGER"
 
-if [ "$OS_NAME" = "macos" ] && [ -n "$CONTAINER_RUNTIME" ]; then
-  die "--container-runtime is only supported on Linux"
-fi
-
 if [ "$OS_NAME" = "macos" ]; then
+  if [ -n "$CONTAINER_RUNTIME" ]; then
+    die "--container-runtime is only supported on Linux"
+  fi
+  if [ "$FIREWALL_OVERRIDE" != "auto" ] || [ -n "$FIREWALL_ACTION" ]; then
+    die "firewall options are only supported on Linux"
+  fi
   install_macos
   run_npm_install
   print_summary "$OS_NAME" "$PKG_MANAGER"
@@ -435,6 +563,8 @@ if [ "$OS_NAME" = "macos" ]; then
 fi
 
 LINUX_CONTAINER_RUNTIME=$(choose_container_runtime "$PKG_MANAGER")
+LINUX_FIREWALL=$(detect_firewall)
+LINUX_FIREWALL_ACTION=$(choose_firewall_action "$LINUX_FIREWALL")
 
 case "$PKG_MANAGER" in
   apt)
@@ -452,4 +582,8 @@ case "$PKG_MANAGER" in
 esac
 
 run_npm_install
-print_summary "$OS_NAME" "$PKG_MANAGER" "$LINUX_CONTAINER_RUNTIME"
+if [ "$LINUX_FIREWALL_ACTION" = "open" ]; then
+  open_firewall_ports "$LINUX_FIREWALL"
+fi
+
+print_summary "$OS_NAME" "$PKG_MANAGER" "$LINUX_CONTAINER_RUNTIME" "$LINUX_FIREWALL" "$LINUX_FIREWALL_ACTION"

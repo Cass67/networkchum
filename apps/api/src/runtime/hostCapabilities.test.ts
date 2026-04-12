@@ -33,6 +33,7 @@ describe("detectAccelerationMode", () => {
         stdout: "Accelerators supported: tcg hvf\n",
         stderr: "",
       }),
+      async () => "qemu-system-x86_64",
     );
 
     expect(result.mode).toBe("hvf");
@@ -49,11 +50,29 @@ describe("detectAccelerationMode", () => {
         stdout: "Accelerators supported: tcg\n",
         stderr: "",
       }),
+      async () => "qemu-system-x86_64",
     );
 
     expect(result.mode).toBe("tcg");
     expect(result.available).toBe(true);
     expect(result.message).toContain("Apple Silicon");
+  });
+
+  it("reports none on macos when no qemu binary is available", async () => {
+    const result = await detectAccelerationMode(
+      async () => false,
+      "macos",
+      async () => ({
+        ok: false,
+        stdout: "",
+        stderr: "not found",
+      }),
+      async () => null,
+    );
+
+    expect(result.mode).toBe("none");
+    expect(result.available).toBe(false);
+    expect(result.message).toContain("QEMU");
   });
 });
 

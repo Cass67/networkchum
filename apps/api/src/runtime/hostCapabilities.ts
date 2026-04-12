@@ -2,6 +2,8 @@ import { access } from "node:fs/promises";
 import { constants } from "node:fs";
 import os from "node:os";
 
+import { resolveQemuBinary } from "./qemu/resolveQemuBinary.js";
+
 type AccessCheck = (devicePath: string) => Promise<boolean>;
 type RunCommand = (
   command: string,
@@ -28,12 +30,23 @@ export async function detectAccelerationMode(
   accessCheck: AccessCheck = defaultAccessCheck,
   platform: "linux" | "macos" | "other" = getPlatform(),
   runCommand?: RunCommand,
+  resolveBinary: () => Promise<string | null> = resolveQemuBinary,
 ) {
   if (platform === "linux" && (await accessCheck("/dev/kvm"))) {
     return { mode: "kvm", available: true, message: null };
   }
 
   if (platform === "macos") {
+    const qemuBinary = await resolveBinary();
+    if (!qemuBinary) {
+      return {
+        mode: "none",
+        available: false,
+        message:
+          "QEMU is not installed on this host. Install QEMU before starting VM nodes.",
+      };
+    }
+
     const exec =
       runCommand ??
       (async (cmd, args) => {
@@ -46,7 +59,7 @@ export async function detectAccelerationMode(
           return { ok: false, stdout: "", stderr: "" };
         }
       });
-    const result = await exec("qemu-system-x86_64", ["-accel", "help"]);
+    const result = await exec(qemuBinary, ["-accel", "help"]);
     const output = result.stdout + result.stderr;
     if (output.includes("hvf")) {
       return {

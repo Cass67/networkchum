@@ -131,6 +131,42 @@ describe("powerOnNode", () => {
     expect(state?.connectCommand).toEqual(["telnet", "127.0.0.1", "5000"]);
   });
 
+  it("falls back to the distro qemu binary when qemu-system-x86_64 is unavailable", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const registry = new TemplateRegistry();
+    const lab = await createLab("Qemu Fallback Binary Lab");
+    const template = registry.get("linux-generic-vm")!;
+    const document = addNode(lab.document, {
+      template,
+      name: "vm-fallback",
+      position: { x: 10, y: 10 },
+      imageId: "/tmp/vm.qcow2",
+    });
+    await updateLabDocument(lab.id, document);
+    const savedLab = await getLab(lab.id);
+    const nodeId = savedLab!.document.nodes[0]!.id;
+
+    let launchedBinary = "";
+    const state = await powerOnNode(lab.id, nodeId, {
+      runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+      hasBinary: async (command) => command === "/usr/libexec/qemu-kvm",
+      findAvailablePort: async (port) => port,
+      launchQemu: async (command) => {
+        launchedBinary = command[0] ?? "";
+        return { ok: true, pid: 12345, stderr: "" };
+      },
+    });
+
+    expect(state?.status).toBe("running");
+    expect(launchedBinary).toBe("/usr/libexec/qemu-kvm");
+    expect(state?.commandPreview[0]).toBe("/usr/libexec/qemu-kvm");
+  });
+
   it("returns failed state when qemu launch fails", async () => {
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), "networkchum-runtime-"),

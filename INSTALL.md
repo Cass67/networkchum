@@ -6,15 +6,15 @@ NetworkChum runs best on Linux. macOS works well for the UI, API, image manageme
 
 ## What You Get
 
-| Capability                        | Required installs                                             |
-| --------------------------------- | ------------------------------------------------------------- |
-| Run the web UI and API            | Node.js, npm                                                  |
-| Use VM nodes                      | QEMU (`qemu-system-x86_64`)                                   |
-| Use container nodes               | Docker                                                        |
-| Faster QEMU on Linux              | `/dev/kvm` access                                             |
-| Native console launch from the UI | Native console bridge prerequisites plus a supported terminal |
-| Better native console transport   | `socat` preferred, `nc` fallback                              |
-| macOS URL-scheme helper           | AppleScript helper install                                    |
+| Capability                        | Required installs                                                   |
+| --------------------------------- | ------------------------------------------------------------------- |
+| Run the web UI and API            | Node.js, npm                                                        |
+| Use VM nodes                      | QEMU (`qemu-system-x86_64`, `qemu-kvm`, or `/usr/libexec/qemu-kvm`) |
+| Use container nodes               | Docker                                                              |
+| Faster QEMU on Linux              | `/dev/kvm` access                                                   |
+| Native console launch from the UI | Native console bridge prerequisites plus a supported terminal       |
+| Better native console transport   | `socat` preferred, `nc` fallback                                    |
+| macOS URL-scheme helper           | AppleScript helper install                                          |
 
 ## Quick Start
 
@@ -42,6 +42,8 @@ Useful installer modes:
 - `./install.sh --dry-run` to preview the commands
 - on Linux, the installer asks whether you want `podman` or `docker` unless you pass `--container-runtime=podman` or `--container-runtime=docker`
 - on Linux, the installer downloads Node.js directly from `nodejs.org` instead of using distro `nodejs` packages
+- on Linux, if `firewalld` or `ufw` is detected, the installer can prompt to open `4000/tcp` and `5173/tcp` for `./start.sh lan`
+- use `--open-firewall` or `--skip-firewall` to answer that firewall step non-interactively
 - set `NETWORKCHUM_NODE_MAJOR=22` if you want the Node.js 22.x line instead of the default 24.x line
 - on `dnf`-based Linux, the installer defaults to `podman` and installs `podman-docker` so the app can keep using the `docker` CLI
 
@@ -63,6 +65,8 @@ For LAN access on Linux:
 ```bash
 ./start.sh lan
 ```
+
+If the host has `firewalld` or `ufw`, either let `./install.sh` open `4000/tcp` and `5173/tcp` for you or add those rules yourself.
 
 That starts:
 
@@ -100,7 +104,7 @@ git --version
 
 ### Install QEMU for VM nodes
 
-NetworkChum expects `qemu-system-x86_64` for VM-backed devices.
+On macOS, the Homebrew QEMU install provides `qemu-system-x86_64`.
 
 ```bash
 brew install qemu
@@ -211,6 +215,7 @@ Install:
 - CA certificates
 - `xz`
 - an official Node.js release from `nodejs.org`
+- QEMU for x86 VMs (`qemu-system-x86_64`, `qemu-kvm`, or `/usr/libexec/qemu-kvm`)
 
 On Linux, the recommended path is to use the official Node.js release archive rather than distro `nodejs` and `npm` packages. That avoids landing on older distro-maintained Node releases.
 
@@ -302,7 +307,7 @@ NetworkChum uses the `ip` command for bridge and TAP setup, so `bridge-utils`/`b
 Verify:
 
 ```bash
-qemu-system-x86_64 --version
+qemu-system-x86_64 --version || qemu-kvm --version || /usr/libexec/qemu-kvm --version
 ip -V
 ```
 
@@ -588,9 +593,9 @@ Check:
 
 ## Troubleshooting
 
-### `qemu-system-x86_64` not found
+### No supported QEMU binary found
 
-Install QEMU. VM nodes will not start without it.
+Install QEMU. On Linux, NetworkChum auto-detects `qemu-system-x86_64`, `qemu-kvm`, and `/usr/libexec/qemu-kvm`.
 
 ### Docker nodes do not start
 

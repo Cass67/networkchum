@@ -108,8 +108,9 @@ export async function injectCsr1000vVfat(
     await rm(tmpConfig, { force: true });
   }
 
-  // Cisco KVM guide: day-0 config disk must be virtio
-  return ["-drive", `file=${outputPath},if=virtio,format=raw`];
+  // Both main disk and config disk are IDE (like GNS3's CSR template).
+  // BIOS boots from hda (OS), IOS-XE reads day-0 iosxe_config.txt from hdb.
+  return ["-drive", `file=${outputPath},if=ide,format=raw`];
 }
 
 // --- Cisco IOSv vfat ---

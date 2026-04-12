@@ -71,6 +71,49 @@ test("linux docker mode installs docker engine packages and service setup", () =
   assert.match(result.stdout, /sudo usermod -aG docker/);
 });
 
+test("linux firewalld detection leaves ports unchanged in non-interactive mode", () => {
+  const result = runInstaller([
+    "--os=linux",
+    "--package-manager=dnf",
+    "--container-runtime=podman",
+    "--firewall=firewalld",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Firewall: firewalld/);
+  assert.match(result.stdout, /LAN firewall rules: unchanged/);
+  assert.match(
+    result.stdout,
+    /rerun with --open-firewall or open 4000\/tcp and 5173\/tcp manually/,
+  );
+  assert.doesNotMatch(
+    result.stdout,
+    /sudo firewall-cmd --permanent --add-port=4000\/tcp/,
+  );
+});
+
+test("linux firewalld mode can plan opening NetworkChum LAN ports", () => {
+  const result = runInstaller([
+    "--os=linux",
+    "--package-manager=dnf",
+    "--container-runtime=podman",
+    "--firewall=firewalld",
+    "--open-firewall",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /sudo firewall-cmd --permanent --add-port=4000\/tcp/,
+  );
+  assert.match(
+    result.stdout,
+    /sudo firewall-cmd --permanent --add-port=5173\/tcp/,
+  );
+  assert.match(result.stdout, /sudo firewall-cmd --reload/);
+  assert.match(result.stdout, /LAN firewall rules: open 4000\/tcp, 5173\/tcp/);
+});
+
 test("macOS mode plans the baseline, qemu, and docker desktop installs", () => {
   const result = runInstaller(["--os=macos", "--package-manager=brew"]);
 

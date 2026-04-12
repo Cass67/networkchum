@@ -11,11 +11,13 @@ export function tapName(labId: string, nodeId: string, index: number): string {
 }
 
 type BuildQemuCommandInput = {
+  qemuBinary?: string;
   labId: string;
   nodeId: string;
   imagePath: string;
   extraDrives?: string[]; // additional disk/cdrom paths, attached as ide drives
   extraArgs?: string[]; // raw QEMU args appended after all drives (for config injectors)
+  mainDiskInterface?: "virtio" | "ide"; // default: virtio
   machineType: string;
   config: {
     ramMb: number;
@@ -34,7 +36,7 @@ type BuildQemuCommandInput = {
 export function buildQemuCommand(input: BuildQemuCommandInput): string[] {
   const backend = input.networkBackend ?? "tap";
   const command = [
-    "qemu-system-x86_64",
+    input.qemuBinary ?? "qemu-system-x86_64",
     "-machine",
     input.machineType,
     "-cpu",
@@ -44,7 +46,7 @@ export function buildQemuCommand(input: BuildQemuCommandInput): string[] {
     "-smp",
     String(input.config.vcpu),
     "-drive",
-    `file=${input.imagePath},if=virtio,format=qcow2`,
+    `file=${input.imagePath},if=${input.mainDiskInterface ?? "virtio"},format=qcow2`,
   ];
 
   for (const extraPath of input.extraDrives ?? []) {

@@ -16,6 +16,10 @@ import { reconcileTopology } from "../network/reconcileTopology.js";
 import { buildContainerSpec } from "./container/buildContainerSpec.js";
 import { resolveNodeImagePath } from "../images/resolveNodeImage.js";
 import { buildQemuCommand, tapName } from "./qemu/buildQemuCommand.js";
+import {
+  isQemuProcessCommandLine,
+  resolveQemuBinary,
+} from "./qemu/resolveQemuBinary.js";
 import { syncSocketTopology } from "./syncSocketTopology.js";
 import { virtualSwitch } from "./virtualSwitch.js";
 import { getNetworkBackend, getPlatform } from "./hostCapabilities.js";
@@ -44,6 +48,7 @@ type CommandResult = {
 type RuntimeDependencies = {
   runCommand?: (command: string, args: string[]) => Promise<CommandResult>;
   hasBinary?: (command: string) => Promise<boolean>;
+  resolveQemuBinary?: () => Promise<string | null>;
   launchQemu?: (
     command: string[],
     serialPort: number,
@@ -67,7 +72,7 @@ async function findRunningQemuForDisk(
 
   const psResult = await runCommand("ps", ["-p", pid, "-o", "command="]);
   const commandLine = `${psResult.stdout} ${psResult.stderr}`;
-  if (!commandLine.includes("qemu-system-x86_64")) {
+  if (!isQemuProcessCommandLine(commandLine)) {
     return null;
   }
 
@@ -101,6 +106,15 @@ async function defaultRunCommand(
 }
 
 async function defaultHasBinary(command: string): Promise<boolean> {
+  if (command.startsWith("/")) {
+    try {
+      await access(command);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   const result = await defaultRunCommand("which", [command]);
   return result.ok && result.stdout.trim().length > 0;
 }
@@ -240,6 +254,8 @@ export async function powerOnNode(
 
   const runCommand = dependencies.runCommand ?? defaultRunCommand;
   const hasBinary = dependencies.hasBinary ?? defaultHasBinary;
+  const resolveBinary =
+    dependencies.resolveQemuBinary ?? (() => resolveQemuBinary(hasBinary));
   const existingState = (await listRuntimeStates(labId)).find(
     (state) => state.nodeId === nodeId,
   );
@@ -312,10 +328,10 @@ export async function powerOnNode(
     return state;
   }
 
-  const qemuBinary = await hasBinary("qemu-system-x86_64");
+  const qemuBinary = await resolveBinary();
 
   if (!qemuBinary) {
-    console.error("[powerNode] qemu-system-x86_64 not found");
+    console.error("[powerNode] no supported qemu binary found");
     const state = {
       labId,
       nodeId,
@@ -324,7 +340,8 @@ export async function powerOnNode(
       accelerationMode: node.config.accelerationMode ?? null,
       externalId: null,
       connectCommand: undefined,
-      message: "qemu-system-x86_64 is not installed on this host.",
+      message:
+        "No supported QEMU binary is installed on this host. Tried qemu-system-x86_64, qemu-kvm, and /usr/libexec/qemu-kvm.",
       commandPreview: [],
       updatedAt: new Date().toISOString(),
     };
@@ -546,12 +563,16 @@ export async function powerOnNode(
   }
 
   const qemuCommand = buildQemuCommand({
+    qemuBinary,
     labId,
     nodeId,
     imagePath: effectiveImagePath,
     extraDrives,
     extraArgs: configExtraArgs,
     machineType: "q35",
+    // CSR1000v day-0 config requires both disks on IDE (hda=OS, hdb=config)
+    mainDiskInterface:
+      configInjectMethod === "csr1000v-vfat" ? "ide" : "virtio",
     config: {
       ramMb: node.config.ramMb,
       vcpu: node.config.vcpu,
