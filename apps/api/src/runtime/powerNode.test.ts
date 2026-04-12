@@ -364,7 +364,7 @@ describe("powerOnNode", () => {
 
     const registry = new TemplateRegistry();
     const lab = await createLab("Qemu Lab");
-    const template = registry.get("linux-generic-vm")!;
+    const template = registry.get("cisco-iosv")!;
     const document = addNode(lab.document, {
       template,
       name: "vm-1",
@@ -565,7 +565,7 @@ describe("powerOnNode", () => {
 
     const registry = new TemplateRegistry();
     const lab = await createLab("Qemu Live Lab");
-    const template = registry.get("linux-generic-vm")!;
+    const template = registry.get("cisco-iosv")!;
     const document = addNode(lab.document, {
       template,
       name: "vm-live",
@@ -597,7 +597,7 @@ describe("powerOnNode", () => {
 
     const registry = new TemplateRegistry();
     const lab = await createLab("Qemu Fallback Binary Lab");
-    const template = registry.get("linux-generic-vm")!;
+    const template = registry.get("cisco-iosv")!;
     const document = addNode(lab.document, {
       template,
       name: "vm-fallback",
@@ -633,7 +633,7 @@ describe("powerOnNode", () => {
 
     const registry = new TemplateRegistry();
     const lab = await createLab("Qemu Fail Lab");
-    const template = registry.get("linux-generic-vm")!;
+    const template = registry.get("cisco-iosv")!;
     const document = addNode(lab.document, {
       template,
       name: "vm-fail",
@@ -669,7 +669,7 @@ describe("powerOnNode", () => {
 
     const registry = new TemplateRegistry();
     const lab = await createLab("Qemu Missing Fallback Lab");
-    const template = registry.get("linux-generic-vm")!;
+    const template = registry.get("cisco-iosv")!;
     const document = addNode(lab.document, {
       template,
       name: "vm-no-image",

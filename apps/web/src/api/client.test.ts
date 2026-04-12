@@ -110,7 +110,7 @@ describe("createApiClient", () => {
 
     const client = createApiClient(fetcher as unknown as typeof fetch);
     const lab = await client.addNode("lab-1", {
-      templateId: "linux-generic-vm",
+      templateId: "cisco-iosv",
       name: "linux-vm-1",
       position: { x: 120, y: 90 },
     });
@@ -193,7 +193,7 @@ describe("createApiClient", () => {
       ok: true,
       json: async () => ({
         template: {
-          id: "linux-generic-vm",
+          id: "cisco-iosv",
           displayName: "Linux Generic VM",
           vendor: "Linux",
           runtime: "qemu",
@@ -207,14 +207,14 @@ describe("createApiClient", () => {
     }));
 
     const client = createApiClient(fetcher as unknown as typeof fetch);
-    const template = await client.updateTemplate("linux-generic-vm", {
+    const template = await client.updateTemplate("cisco-iosv", {
       vcpu: 4,
       ramMb: 4096,
       interfaceCount: 6,
     });
 
     expect(fetcher).toHaveBeenCalledWith(
-      "/api/templates/linux-generic-vm",
+      "/api/templates/cisco-iosv",
       expect.objectContaining({ method: "PATCH" }),
     );
     expect(template.configSchema.vcpu.default).toBe(4);

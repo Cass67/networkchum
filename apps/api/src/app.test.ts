@@ -212,7 +212,7 @@ describe("api", () => {
       method: "POST",
       url: `/labs/${createdLab.lab.id}/nodes`,
       payload: {
-        templateId: "linux-generic-vm",
+        templateId: "cisco-iosv",
         name: "host-1",
         position: { x: 120, y: 80 },
       },
@@ -251,7 +251,7 @@ describe("api", () => {
       method: "POST",
       url: `/labs/${labId}/nodes`,
       payload: {
-        templateId: "linux-generic-vm",
+        templateId: "cisco-iosv",
         name: "host-1",
         position: { x: 120, y: 80 },
       },
@@ -308,7 +308,7 @@ describe("api", () => {
       method: "POST",
       url: `/labs/${labId}/nodes`,
       payload: {
-        templateId: "linux-generic-vm",
+        templateId: "cisco-iosv",
         name: "host-1",
         position: { x: 120, y: 80 },
       },
@@ -338,7 +338,7 @@ describe("api", () => {
       method: "POST",
       url: `/labs/${labId}/nodes`,
       payload: {
-        templateId: "linux-generic-vm",
+        templateId: "cisco-iosv",
         name: "host-1",
         position: { x: 120, y: 80 },
       },
@@ -383,7 +383,7 @@ describe("api", () => {
       method: "POST",
       url: `/labs/${createdLab.lab.id}/nodes`,
       payload: {
-        templateId: "linux-generic-vm",
+        templateId: "cisco-iosv",
         name: "host-1",
         position: { x: 10, y: 10 },
       },
@@ -402,7 +402,7 @@ describe("api", () => {
       method: "POST",
       url: `/labs/${createdLab.lab.id}/nodes`,
       payload: {
-        templateId: "linux-generic-vm",
+        templateId: "cisco-iosv",
         name: "host-2",
         position: { x: 200, y: 10 },
       },
