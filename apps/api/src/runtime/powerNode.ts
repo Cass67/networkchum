@@ -72,6 +72,14 @@ function buildNetworkFailureMessage(
 export async function ensureTapNetworking(
   document: LabDocument,
   runCommand: (command: string, args: string[]) => Promise<CommandResult>,
+  tapExists: (tapName: string) => Promise<boolean> = async (tapName) => {
+    try {
+      await access(`/sys/class/net/${tapName}`);
+      return true;
+    } catch {
+      return false;
+    }
+  },
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   const ops = reconcileTopology(document);
 
@@ -114,6 +122,22 @@ export async function ensureTapNetworking(
       return {
         ok: false,
         message: buildNetworkFailureMessage(op.kind, result.stderr, cmd),
+      };
+    }
+  }
+
+  const expectedTaps = ops
+    .filter(
+      (op): op is Extract<typeof op, { kind: "create-tap" }> =>
+        op.kind === "create-tap",
+    )
+    .map((op) => op.tapName);
+
+  for (const tapName of expectedTaps) {
+    if (!(await tapExists(tapName))) {
+      return {
+        ok: false,
+        message: `Linux TAP setup reported success, but expected TAP device '${tapName}' is missing. The API process may not have permission to create persistent TAP devices on this host.`,
       };
     }
   }

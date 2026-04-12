@@ -76,6 +76,7 @@ describe("powerOnNode", () => {
 
         return { ok: true, stdout: "", stderr: "" };
       },
+      async () => true,
     );
 
     expect(result.ok).toBe(true);
@@ -144,6 +145,7 @@ describe("powerOnNode", () => {
 
         return { ok: true, stdout: "", stderr: "" };
       },
+      async () => true,
     );
 
     expect(result.ok).toBe(true);
@@ -195,6 +197,47 @@ describe("powerOnNode", () => {
       throw new Error("expected tap networking to fail");
     }
     expect(result.message).toContain("CAP_NET_ADMIN");
+  });
+
+  it("fails when tap setup reports success but the tap is still missing", async () => {
+    const document: LabDocument = {
+      id: "lab-abc123",
+      name: "Test Lab",
+      version: 1,
+      canvas: { zoom: 1, backgroundImage: null },
+      annotations: [],
+      startupConfigSets: [],
+      activeConfigSetId: null,
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "node-a",
+          name: "router-1",
+          runtime: "qemu",
+          templateId: "tmpl",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 1024, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-a-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [{ interfaceId: "if-a-0", networkId: "net-1" }],
+    };
+
+    const result = await ensureTapNetworking(
+      document,
+      async () => ({ ok: true, stdout: "", stderr: "" }),
+      async () => false,
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("expected missing tap validation to fail");
+    }
+    expect(result.message).toContain("expected TAP device");
   });
 
   it("chooses a serial base where both serial and monitor ports are free", async () => {

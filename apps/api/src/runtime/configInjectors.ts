@@ -83,15 +83,14 @@ export async function injectCsr1000vVfat(
   const tmpConfig = path.join(os.tmpdir(), `nc-csr-cfg-${Date.now()}.txt`);
   try {
     await writeFile(tmpConfig, config, "utf8");
-    // 8MB forces FAT16 — IOS-XE doesn't recognise FAT12 for day-0 config
+    // 1 MB → FAT12 (EVE-NG default). IOS-XE day-0 scanner accepts FAT12.
     await execFileAsync("dd", [
       "if=/dev/zero",
       `of=${outputPath}`,
       "bs=1024",
-      "count=8192",
+      "count=1024",
     ]);
     await execFileAsync("mformat", ["-i", outputPath, "-v", "config-1", "::"]);
-
     await execFileAsync("mcopy", [
       "-i",
       outputPath,
@@ -102,8 +101,8 @@ export async function injectCsr1000vVfat(
     await rm(tmpConfig, { force: true });
   }
 
-  // Config disk on virtio (matches EVE-NG) — FAT16 so IOS-XE can read it.
-  // SeaBIOS will boot from the IDE main disk; the virtio config disk is not bootable.
+  // EVE-NG approach: config disk on virtio so SeaBIOS ignores it as a boot
+  // target; main disk is IDE so BIOS boots from it first.
   return ["-drive", `file=${outputPath},if=virtio,format=raw`];
 }
 
