@@ -17,6 +17,10 @@ function runStart(args) {
   });
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 test("start.sh defaults to localhost mode", () => {
   const result = runStart([]);
 
@@ -57,6 +61,23 @@ test("start.sh supports sudo-api for the full stack", () => {
   assert.match(result.stdout, /\[dry-run\] .*sudo env PATH=.*npm run dev:api/);
   assert.match(result.stdout, /npm run dev:web/);
   assert.match(result.stdout, /npm run dev:bridge/);
+});
+
+test("start.sh includes the npm directory in sudo PATH", () => {
+  const result = runStart(["lan", "--sudo-api"]);
+
+  assert.equal(result.status, 0, result.stderr);
+
+  const npmMatch = result.stdout.match(
+    /"sudo env PATH=([^ ]+) .*? (\/[^ ]+\/npm) run dev:api"/,
+  );
+  assert.ok(npmMatch, result.stdout);
+
+  const sudoPath = npmMatch[1];
+  const npmPath = npmMatch[2];
+  const npmDir = npmPath.slice(0, npmPath.lastIndexOf("/"));
+
+  assert.match(sudoPath, new RegExp(`(^|:)${escapeRegExp(npmDir)}(:|$)`));
 });
 
 test("start.sh supports sudo-api for dev:api", () => {

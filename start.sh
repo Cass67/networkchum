@@ -50,8 +50,40 @@ resolve_npm() {
   die "npm not found"
 }
 
+resolve_node() {
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return
+  fi
+
+  npm_path=$1
+  npm_dir=$(dirname "$npm_path")
+  if [ -x "$npm_dir/node" ]; then
+    printf '%s\n' "$npm_dir/node"
+    return
+  fi
+
+  die "node not found"
+}
+
 resolve_root_path() {
-  printf '%s\n' "/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  npm_path=$1
+  node_path=$2
+  root_path="/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  npm_dir=$(dirname "$npm_path")
+  node_dir=$(dirname "$node_path")
+
+  case ":$root_path:" in
+    *":$node_dir:"*) ;;
+    *) root_path="$node_dir:$root_path" ;;
+  esac
+
+  case ":$root_path:" in
+    *":$npm_dir:"*) ;;
+    *) root_path="$npm_dir:$root_path" ;;
+  esac
+
+  printf '%s\n' "$root_path"
 }
 
 build_env_prefix() {
@@ -168,7 +200,8 @@ done
 TARGET_PORT=$(resolve_target_port)
 TARGET_LABEL=$(resolve_target_label)
 NPM_PATH=$(resolve_npm)
-ROOT_PATH=$(resolve_root_path)
+NODE_PATH=$(resolve_node "$NPM_PATH")
+ROOT_PATH=$(resolve_root_path "$NPM_PATH" "$NODE_PATH")
 ENV_PREFIX=$(build_env_prefix)
 
 if [ "$MODE" = "lan" ]; then
