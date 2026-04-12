@@ -17,6 +17,18 @@ function runInstaller(args) {
   });
 }
 
+function assertLinuxUsesOfficialNode(output) {
+  assert.match(
+    output,
+    /curl -fsSL https:\/\/nodejs\.org\/download\/release\/latest-v24\.x\/SHASUMS256\.txt -o/,
+  );
+  assert.match(output, /sudo ln -sf .*\/bin\/node \/usr\/local\/bin\/node/);
+  assert.match(output, /sudo ln -sf .*\/bin\/npm \/usr\/local\/bin\/npm/);
+  assert.match(output, /sudo ln -sf .*\/bin\/npx \/usr\/local\/bin\/npx/);
+  assert.doesNotMatch(output, /sudo (apt|dnf|pacman) .* \bnodejs\b/);
+  assert.doesNotMatch(output, /sudo (apt|dnf|pacman) .* \bnpm\b/);
+}
+
 test("linux podman mode installs podman with docker compatibility", () => {
   const result = runInstaller([
     "--os=linux",
@@ -25,6 +37,11 @@ test("linux podman mode installs podman with docker compatibility", () => {
   ]);
 
   assert.equal(result.status, 0, result.stderr);
+  assertLinuxUsesOfficialNode(result.stdout);
+  assert.match(
+    result.stdout,
+    /sudo dnf install -y .*git.*curl.*ca-certificates.*xz/,
+  );
   assert.match(
     result.stdout,
     /sudo dnf install -y .*qemu-kvm.*qemu-img.*iproute/,
@@ -43,6 +60,12 @@ test("linux docker mode installs docker engine packages and service setup", () =
   ]);
 
   assert.equal(result.status, 0, result.stderr);
+  assertLinuxUsesOfficialNode(result.stdout);
+  assert.match(
+    result.stdout,
+    /sudo apt install -y .*git.*curl.*ca-certificates.*xz-utils/,
+  );
+  assert.doesNotMatch(result.stdout, /\bbridge-utils\b/);
   assert.match(result.stdout, /sudo apt install -y .*docker\.io/);
   assert.match(result.stdout, /sudo systemctl enable --now docker/);
   assert.match(result.stdout, /sudo usermod -aG docker/);

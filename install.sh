@@ -2,12 +2,14 @@
 set -eu
 
 ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
+export PATH="/usr/local/bin:$PATH"
 
 DRY_RUN=0
 ASSUME_YES=0
 OS_OVERRIDE=""
 PKG_MANAGER_OVERRIDE=""
 CONTAINER_RUNTIME=""
+NODE_MAJOR=${NETWORKCHUM_NODE_MAJOR:-24}
 
 say() {
   printf '%s\n' "$*"
@@ -52,6 +54,10 @@ Options:
   --container-runtime=podman|docker
                                 Linux only; skip the runtime prompt
   --help, -h                    Show this help text
+
+Environment:
+  NETWORKCHUM_NODE_MAJOR        Linux only; Node.js release line to install
+                                directly from nodejs.org (default: 24)
 EOF
 }
 
@@ -193,6 +199,55 @@ maybe_add_kvm_access() {
   run_cmd sudo usermod -aG kvm "$user_name"
 }
 
+detect_linux_node_arch() {
+  case "$(uname -m)" in
+    x86_64 | amd64) printf '%s\n' "x64" ;;
+    aarch64 | arm64) printf '%s\n' "arm64" ;;
+    *) die "unsupported Linux architecture for direct Node.js install: $(uname -m)" ;;
+  esac
+}
+
+install_linux_nodejs() {
+  node_arch=$(detect_linux_node_arch)
+  node_base_url="https://nodejs.org/download/release/latest-v${NODE_MAJOR}.x"
+  temp_dir="/tmp/networkchum-nodejs"
+
+  if [ "$DRY_RUN" -eq 0 ]; then
+    temp_dir=$(mktemp -d)
+  fi
+
+  shasums_file="$temp_dir/SHASUMS256.txt"
+
+  run_cmd mkdir -p "$temp_dir"
+  run_cmd curl -fsSL "$node_base_url/SHASUMS256.txt" -o "$shasums_file"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    archive_name="node-v${NODE_MAJOR}.x-linux-${node_arch}.tar.xz"
+  else
+    archive_name=$(awk "/linux-${node_arch}\\.tar\\.xz$/ { print \$2; exit }" "$shasums_file")
+    if [ -z "$archive_name" ]; then
+      die "could not resolve a Linux Node.js archive for architecture: $node_arch"
+    fi
+  fi
+
+  archive_path="$temp_dir/$archive_name"
+  install_dir="/usr/local/lib/nodejs/${archive_name%.tar.xz}"
+
+  run_cmd curl -fsSL "$node_base_url/$archive_name" -o "$archive_path"
+  run_cmd sh -c "cd '$temp_dir' && grep -F ' $archive_name' SHASUMS256.txt | sha256sum -c -"
+  run_cmd sudo mkdir -p /usr/local/lib/nodejs
+  run_cmd sudo rm -rf "$install_dir"
+  run_cmd sudo tar -xJf "$archive_path" -C /usr/local/lib/nodejs
+  run_cmd sudo ln -sf "$install_dir/bin/node" /usr/local/bin/node
+  run_cmd sudo ln -sf "$install_dir/bin/npm" /usr/local/bin/npm
+  run_cmd sudo ln -sf "$install_dir/bin/npx" /usr/local/bin/npx
+  run_cmd sudo ln -sf "$install_dir/bin/corepack" /usr/local/bin/corepack
+
+  if [ "$DRY_RUN" -eq 0 ]; then
+    rm -rf "$temp_dir"
+  fi
+}
+
 install_macos() {
   run_cmd brew install git node qemu socat
   run_cmd brew install --cask docker
@@ -203,8 +258,9 @@ install_linux_apt() {
   user_name=$(current_user)
 
   run_cmd sudo apt update
-  run_cmd sudo apt install -y git nodejs npm curl
-  run_cmd sudo apt install -y qemu-system-x86 qemu-utils iproute2 bridge-utils socat xterm
+  run_cmd sudo apt install -y git curl ca-certificates xz-utils
+  install_linux_nodejs
+  run_cmd sudo apt install -y qemu-system-x86 qemu-utils iproute2 socat xterm
 
   case "$runtime" in
     podman)
@@ -244,7 +300,8 @@ install_linux_dnf() {
   user_name=$(current_user)
   qemu_package=$(resolve_dnf_qemu_package)
 
-  run_cmd sudo dnf install -y git nodejs npm curl
+  run_cmd sudo dnf install -y git curl ca-certificates xz
+  install_linux_nodejs
   run_cmd sudo dnf install -y "$qemu_package" qemu-img iproute socat xterm
 
   case "$runtime" in
@@ -269,8 +326,9 @@ install_linux_pacman() {
   user_name=$(current_user)
 
   run_cmd sudo pacman -Syu --noconfirm
-  run_cmd sudo pacman -S --needed git nodejs npm curl
-  run_cmd sudo pacman -S --needed qemu-base qemu-desktop iproute2 bridge-utils socat xterm
+  run_cmd sudo pacman -S --needed git curl ca-certificates xz
+  install_linux_nodejs
+  run_cmd sudo pacman -S --needed qemu-base qemu-desktop iproute2 socat xterm
 
   case "$runtime" in
     podman)
