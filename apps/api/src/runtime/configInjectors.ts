@@ -74,10 +74,15 @@ export async function injectCloudInit(
 
 // --- Cisco CSR1000v (IOS-XE) vfat ---
 // Same mechanism as IOSv but IOS-XE looks for `iosxe_config.txt` not `startup-config`.
-export async function injectCsr1000vVfat(
+export async function injectCsr1000vConfigDrive(
   config: string,
   outputPath: string,
-): Promise<string[]> {
+): Promise<{
+  layout: "csr1000v-vfat";
+  outputPath: string;
+  payloadFile: "iosxe_config.txt";
+  qemuArgs: ["-drive", string];
+}> {
   await mkdir(path.dirname(outputPath), { recursive: true });
 
   const tmpConfig = path.join(os.tmpdir(), `nc-csr-cfg-${Date.now()}.txt`);
@@ -103,7 +108,20 @@ export async function injectCsr1000vVfat(
 
   // EVE-NG approach: config disk on virtio so SeaBIOS ignores it as a boot
   // target; main disk is IDE so BIOS boots from it first.
-  return ["-drive", `file=${outputPath},if=virtio,format=raw`];
+  return {
+    layout: "csr1000v-vfat",
+    outputPath,
+    payloadFile: "iosxe_config.txt",
+    qemuArgs: ["-drive", `file=${outputPath},if=virtio,format=raw`],
+  };
+}
+
+export async function injectCsr1000vVfat(
+  config: string,
+  outputPath: string,
+): Promise<string[]> {
+  const configDrive = await injectCsr1000vConfigDrive(config, outputPath);
+  return [...configDrive.qemuArgs];
 }
 
 // --- Cisco IOSv vfat ---
