@@ -90,14 +90,8 @@ export async function injectCsr1000vVfat(
       "bs=1024",
       "count=8192",
     ]);
-    await execFileAsync("mformat", [
-      "-i",
-      outputPath,
-      "-v",
-      "config-1",
-      "-F",
-      "::",
-    ]);
+    await execFileAsync("mformat", ["-i", outputPath, "-v", "config-1", "::"]);
+
     await execFileAsync("mcopy", [
       "-i",
       outputPath,
@@ -108,9 +102,9 @@ export async function injectCsr1000vVfat(
     await rm(tmpConfig, { force: true });
   }
 
-  // Both main disk and config disk are IDE (like GNS3's CSR template).
-  // BIOS boots from hda (OS), IOS-XE reads day-0 iosxe_config.txt from hdb.
-  return ["-drive", `file=${outputPath},if=ide,format=raw`];
+  // Config disk on virtio (matches EVE-NG) — FAT16 so IOS-XE can read it.
+  // SeaBIOS will boot from the IDE main disk; the virtio config disk is not bootable.
+  return ["-drive", `file=${outputPath},if=virtio,format=raw`];
 }
 
 // --- Cisco IOSv vfat ---

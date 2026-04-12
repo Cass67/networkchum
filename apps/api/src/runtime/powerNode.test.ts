@@ -93,6 +93,69 @@ describe("powerOnNode", () => {
     ).toHaveLength(2);
   });
 
+  it("recreates a busy tap device before launching qemu", async () => {
+    const document: LabDocument = {
+      id: "lab-abc123",
+      name: "Test Lab",
+      version: 1,
+      canvas: { zoom: 1, backgroundImage: null },
+      annotations: [],
+      startupConfigSets: [],
+      activeConfigSetId: null,
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "node-a",
+          name: "router-1",
+          runtime: "qemu",
+          templateId: "tmpl",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 1024, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-a-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [{ interfaceId: "if-a-0", networkId: "net-1" }],
+    };
+
+    const commands: string[][] = [];
+    let firstTapCreate = true;
+    const result = await ensureTapNetworking(
+      document,
+      async (command, args) => {
+        commands.push([command, ...args]);
+
+        if (
+          firstTapCreate &&
+          command === "ip" &&
+          args[0] === "tuntap" &&
+          args[1] === "add"
+        ) {
+          firstTapCreate = false;
+          return {
+            ok: false,
+            stdout: "",
+            stderr: "ioctl(TUNSETIFF): Device or resource busy",
+          };
+        }
+
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(commands).toContainEqual([
+      "ip",
+      "link",
+      "del",
+      "dev",
+      "tap-c123-odea-0",
+    ]);
+  });
+
   it("fails fast when tap networking lacks privileges", async () => {
     const document: LabDocument = {
       id: "lab-abc123",

@@ -58,7 +58,7 @@ type RuntimeDependencies = {
 };
 
 function isAlreadyExistsError(stderr: string): boolean {
-  return /already exists|File exists/i.test(stderr);
+  return /already exists|File exists|Device or resource busy/i.test(stderr);
 }
 
 function buildNetworkFailureMessage(
@@ -643,9 +643,6 @@ export async function powerOnNode(
     extraDrives,
     extraArgs: configExtraArgs,
     machineType: "q35",
-    // CSR1000v day-0 config requires both disks on IDE (hda=OS, hdb=config)
-    mainDiskInterface:
-      configInjectMethod === "csr1000v-vfat" ? "ide" : "virtio",
     config: {
       ramMb: node.config.ramMb,
       vcpu: node.config.vcpu,
