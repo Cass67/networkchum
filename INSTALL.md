@@ -51,6 +51,7 @@ Useful start modes:
 
 - `./start.sh` keeps the app on localhost
 - `./start.sh lan` binds the web UI and API for LAN access
+- `./start.sh lan --sudo-api` runs the API with `sudo` on Linux so TAP/bridge labs can start while keeping the web UI on LAN
 - `NETWORKCHUM_BIND_MODE=lan npm run dev` is the direct env-based equivalent
 
 ```bash
@@ -67,6 +68,14 @@ For LAN access on Linux:
 ```
 
 If the host has `firewalld` or `ufw`, either let `./install.sh` open `4000/tcp` and `5173/tcp` for you or add those rules yourself.
+
+If you want Linux VM labs that use TAP networking, start with:
+
+```bash
+./start.sh lan --sudo-api --data-dir ~/networkchum-data
+```
+
+That keeps the web UI and native console bridge unprivileged, but starts the API with the privileges needed for bridge and TAP device management.
 
 That starts:
 
@@ -339,6 +348,8 @@ Why this matters:
 
 - with `/dev/kvm`, NetworkChum can use hardware acceleration
 - Linux also uses TAP networking rather than the socket-based fallback used on macOS and other non-Linux hosts
+
+For Linux TAP labs, the API process also needs permission to create and delete bridge/TAP devices. The supported development path is `./start.sh lan --sudo-api ...`, which runs only the API under `sudo`.
 
 ### Install Docker for container nodes
 

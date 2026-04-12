@@ -7,6 +7,7 @@ DRY_RUN=0
 MODE="localhost"
 SCRIPT_NAME="dev"
 DATA_DIR=""
+SUDO_API=0
 
 die() {
   printf 'error: %s\n' "$*" >&2
@@ -15,7 +16,7 @@ die() {
 
 print_usage() {
   cat <<'EOF'
-Usage: ./start.sh [--dry-run] [localhost|lan|interface] [dev|dev:api|dev:web|dev:bridge] [--data-dir PATH]
+Usage: ./start.sh [--dry-run] [--sudo-api] [localhost|lan|interface] [dev|dev:api|dev:web|dev:bridge] [--data-dir PATH]
 
 Starts NetworkChum in localhost mode by default.
 
@@ -29,7 +30,49 @@ Scripts:
   dev:api     Start the API only
   dev:web     Start the web UI only
   dev:bridge  Start the native console bridge only
+
+Options:
+  --sudo-api  On Linux, run the API with sudo so TAP/bridge setup can work
 EOF
+}
+
+resolve_npm() {
+  if command -v npm >/dev/null 2>&1; then
+    command -v npm
+    return
+  fi
+
+  if [ -x /usr/local/bin/npm ]; then
+    printf '%s\n' /usr/local/bin/npm
+    return
+  fi
+
+  die "npm not found"
+}
+
+resolve_root_path() {
+  printf '%s\n' "/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+}
+
+build_env_prefix() {
+  if [ -n "$DATA_DIR" ]; then
+    printf 'NETWORKCHUM_BIND_MODE=%s NETWORKCHUM_DATA_DIR=%s' "$MODE" "$DATA_DIR"
+  else
+    printf 'NETWORKCHUM_BIND_MODE=%s' "$MODE"
+  fi
+}
+
+build_sudo_api_command() {
+  npm_path=$1
+  root_path=$2
+
+  if [ -n "$DATA_DIR" ]; then
+    printf 'sudo env PATH=%s NETWORKCHUM_BIND_MODE=%s NETWORKCHUM_DATA_DIR=%s %s run dev:api' \
+      "$root_path" "$MODE" "$DATA_DIR" "$npm_path"
+  else
+    printf 'sudo env PATH=%s NETWORKCHUM_BIND_MODE=%s %s run dev:api' \
+      "$root_path" "$MODE" "$npm_path"
+  fi
 }
 
 resolve_lan_ip() {
@@ -105,6 +148,9 @@ while [ "$#" -gt 0 ]; do
     --data-dir=*)
       DATA_DIR=${1#--data-dir=}
       ;;
+    --sudo-api)
+      SUDO_API=1
+      ;;
     dev | dev:api | dev:web | dev:bridge)
       SCRIPT_NAME=$1
       ;;
@@ -121,6 +167,9 @@ done
 
 TARGET_PORT=$(resolve_target_port)
 TARGET_LABEL=$(resolve_target_label)
+NPM_PATH=$(resolve_npm)
+ROOT_PATH=$(resolve_root_path)
+ENV_PREFIX=$(build_env_prefix)
 
 if [ "$MODE" = "lan" ]; then
   LAN_IP=$(resolve_lan_ip || true)
@@ -134,17 +183,28 @@ else
 fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
-  if [ -n "$DATA_DIR" ]; then
-    printf '[dry-run] NETWORKCHUM_BIND_MODE=%s NETWORKCHUM_DATA_DIR=%s npm run %s\n' "$MODE" "$DATA_DIR" "$SCRIPT_NAME"
+  if [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev" ]; then
+    printf '[dry-run] npm exec concurrently -- -k -n api,web,bridge "%s" "%s %s run dev:web" "%s %s run dev:bridge"\n' \
+      "$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH")" \
+      "$ENV_PREFIX" "$NPM_PATH" \
+      "$ENV_PREFIX" "$NPM_PATH"
+  elif [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev:api" ]; then
+    printf '[dry-run] %s\n' "$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH")"
   else
-    printf '[dry-run] NETWORKCHUM_BIND_MODE=%s npm run %s\n' "$MODE" "$SCRIPT_NAME"
+    printf '[dry-run] %s %s run %s\n' "$ENV_PREFIX" "$NPM_PATH" "$SCRIPT_NAME"
   fi
   exit 0
 fi
 
 cd "$ROOT_DIR"
-if [ -n "$DATA_DIR" ]; then
-  NETWORKCHUM_BIND_MODE="$MODE" NETWORKCHUM_DATA_DIR="$DATA_DIR" npm run "$SCRIPT_NAME"
+
+if [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev" ]; then
+  API_CMD=$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH")
+  WEB_CMD="$ENV_PREFIX $NPM_PATH run dev:web"
+  BRIDGE_CMD="$ENV_PREFIX $NPM_PATH run dev:bridge"
+  sh -c "$ENV_PREFIX $NPM_PATH exec concurrently -- -k -n api,web,bridge \"$API_CMD\" \"$WEB_CMD\" \"$BRIDGE_CMD\""
+elif [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev:api" ]; then
+  sh -c "$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH")"
 else
-  NETWORKCHUM_BIND_MODE="$MODE" npm run "$SCRIPT_NAME"
+  sh -c "$ENV_PREFIX $NPM_PATH run $SCRIPT_NAME"
 fi
