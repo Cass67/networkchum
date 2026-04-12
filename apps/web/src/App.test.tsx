@@ -1162,6 +1162,155 @@ describe("App", () => {
     );
   });
 
+  it("falls back to a prompt when clipboard write is blocked on a remote page", async () => {
+    const writeText = vi.fn(async () => {
+      throw new Error("clipboard blocked");
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "arista-veos", name: "Arista vEOS", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "Arista-Veos-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["telnet", "127.0.0.1", "5004"],
+          message: null,
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["telnet", "127.0.0.1", "5004"],
+        message: null,
+      }),
+    };
+
+    render(
+      <App
+        api={api}
+        locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
+      />,
+    );
+
+    await screen.findByRole("button", { name: "Copy Native Command" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy Native Command" }),
+    );
+
+    expect(writeText).toHaveBeenCalledWith(
+      "ssh -t 192.168.2.57 '/usr/bin/nc 127.0.0.1 5004'",
+    );
+    await waitFor(() => {
+      expect(promptSpy).toHaveBeenCalledWith(
+        "Clipboard access is unavailable. Copy this command manually:",
+        "ssh -t 192.168.2.57 '/usr/bin/nc 127.0.0.1 5004'",
+      );
+    });
+  });
+
+  it("falls back to a prompt when remote open-in-terminal cannot use the clipboard", async () => {
+    const fetchSpy = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true }),
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const writeText = vi.fn(async () => {
+      throw new Error("clipboard blocked");
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        { id: "arista-veos", name: "Arista vEOS", source: "image-bound" },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "Arista-Veos-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["telnet", "127.0.0.1", "5004"],
+          message: null,
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["telnet", "127.0.0.1", "5004"],
+        message: null,
+      }),
+    };
+
+    render(
+      <App
+        api={api}
+        locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
+      />,
+    );
+
+    await screen.findByRole("button", { name: "Open Console" });
+    fireEvent.change(screen.getByLabelText("Native Console Preference"), {
+      target: { value: "iterm-helper" },
+    });
+    fireEvent.doubleClick(screen.getByTestId("node-node-1"));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(promptSpy).toHaveBeenCalledWith(
+        "Clipboard access is unavailable. Copy this command manually:",
+        "ssh -t 192.168.2.57 '/usr/bin/nc 127.0.0.1 5004'",
+      );
+    });
+  });
+
   it("remembers the selected theme across remounts", async () => {
     const api = {
       listLabs: async () => [],

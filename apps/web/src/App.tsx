@@ -1066,6 +1066,13 @@ export function App({
     return `ssh -t ${locationLike.hostname} '${localCommand}'`;
   }
 
+  function promptForNativeConsoleCommand(nativeCommand: string) {
+    window.prompt(
+      "Clipboard access is unavailable. Copy this command manually:",
+      nativeCommand,
+    );
+  }
+
   function openWebConsole(nodeId: string) {
     const node = selectedLab?.document.nodes.find((n) => n.id === nodeId);
     setConsoleNode({ nodeId, nodeName: node?.name ?? nodeId });
@@ -1132,7 +1139,15 @@ export function App({
       return;
     }
 
-    await navigator.clipboard.writeText(nativeCommand);
+    try {
+      await navigator.clipboard.writeText(nativeCommand);
+      setNativeConsoleError(null);
+    } catch {
+      promptForNativeConsoleCommand(nativeCommand);
+      setNativeConsoleError(
+        "Clipboard access is unavailable on this page. Copy the command from the prompt.",
+      );
+    }
   }
 
   async function handleDisconnectNativeConsole(nodeId: string) {
