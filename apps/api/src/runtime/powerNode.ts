@@ -12,6 +12,7 @@ import {
   getNodeAttachmentsForContainer,
 } from "../network/dockerNetworking.js";
 import { buildCommand } from "../network/buildCommands.js";
+import { ensureManagementBridgeUplink } from "../network/managementUplink.js";
 import { reconcileTopology, bridgeName } from "../network/reconcileTopology.js";
 import {
   buildBridgeTargetByNetworkId,
@@ -187,6 +188,14 @@ export async function ensureTapNetworking(
         message: buildNetworkFailureMessage(op.kind, result.stderr, cmd),
       };
     }
+  }
+
+  const managementUplinkResult = await ensureManagementBridgeUplink(
+    runCommand,
+    bridgeTargets,
+  );
+  if (!managementUplinkResult.ok) {
+    return managementUplinkResult;
   }
 
   const expectedTaps = ops

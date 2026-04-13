@@ -85,6 +85,8 @@ esac
 
 afterEach(async () => {
   delete process.env.NETWORKCHUM_DATA_DIR;
+  delete process.env.NETWORKCHUM_BIND_MODE;
+  delete process.env.NETWORKCHUM_MANAGEMENT_UPLINK;
   await Promise.all(
     tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
   );
@@ -407,6 +409,160 @@ describe("powerOnNode", () => {
       "nc-mgmt",
       "master",
       "nc-br-net1",
+    ]);
+  });
+
+  it("bridges the host uplink into nc-mgmt in lan mode for management clouds", async () => {
+    process.env.NETWORKCHUM_BIND_MODE = "lan";
+    process.env.NETWORKCHUM_MANAGEMENT_UPLINK = "eno1";
+
+    const document: LabDocument = {
+      id: "lab-abc123",
+      name: "Test Lab",
+      version: 1,
+      canvas: { zoom: 1, backgroundImage: null },
+      annotations: [],
+      startupConfigSets: [],
+      nodeBootActions: [],
+      activeConfigSetId: null,
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "cloud-a",
+          name: "mgmt",
+          runtime: "cloud",
+          templateId: "cloud",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 1,
+            cloudRole: "management",
+            bridgeGroup: "management",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+        },
+        {
+          id: "node-a",
+          name: "router-1",
+          runtime: "qemu",
+          templateId: "tmpl",
+          imageId: null,
+          position: { x: 100, y: 0 },
+          config: { vcpu: 1, ramMb: 1024, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-a-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [
+        { interfaceId: "if-cloud-0", networkId: "net-1" },
+        { interfaceId: "if-a-0", networkId: "net-1" },
+      ],
+    };
+
+    const commands: string[][] = [];
+    const result = await ensureTapNetworking(
+      document,
+      async (command, args) => {
+        commands.push([command, ...args]);
+
+        if (
+          command === "ip" &&
+          args.join(" ") === "-json link show dev nc-mgmt"
+        ) {
+          return {
+            ok: true,
+            stdout: JSON.stringify([
+              { ifname: "nc-mgmt", address: "02:00:00:00:00:01" },
+            ]),
+            stderr: "",
+          };
+        }
+        if (
+          command === "ip" &&
+          args.join(" ") === "-json addr show dev nc-mgmt"
+        ) {
+          return {
+            ok: true,
+            stdout: JSON.stringify([{ addr_info: [] }]),
+            stderr: "",
+          };
+        }
+        if (command === "ip" && args.join(" ") === "-json link show dev eno1") {
+          return {
+            ok: true,
+            stdout: JSON.stringify([
+              { ifname: "eno1", address: "aa:bb:cc:dd:ee:ff" },
+            ]),
+            stderr: "",
+          };
+        }
+        if (command === "ip" && args.join(" ") === "-json addr show dev eno1") {
+          return {
+            ok: true,
+            stdout: JSON.stringify([
+              {
+                addr_info: [
+                  {
+                    family: "inet",
+                    local: "192.168.2.57",
+                    prefixlen: 24,
+                    scope: "global",
+                  },
+                ],
+              },
+            ]),
+            stderr: "",
+          };
+        }
+        if (command === "ip" && args.join(" ") === "-json route show default") {
+          return {
+            ok: true,
+            stdout: JSON.stringify([
+              { dst: "default", gateway: "192.168.2.254", dev: "eno1" },
+            ]),
+            stderr: "",
+          };
+        }
+
+        return { ok: true, stdout: "", stderr: "" };
+      },
+      async () => true,
+      undefined,
+      async () => false,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(commands).toContainEqual([
+      "ip",
+      "link",
+      "set",
+      "dev",
+      "eno1",
+      "master",
+      "nc-mgmt",
+    ]);
+    expect(commands).toContainEqual([
+      "ip",
+      "addr",
+      "add",
+      "192.168.2.57/24",
+      "dev",
+      "nc-mgmt",
+    ]);
+    expect(commands).toContainEqual([
+      "ip",
+      "route",
+      "replace",
+      "default",
+      "via",
+      "192.168.2.254",
+      "dev",
+      "nc-mgmt",
     ]);
   });
 
