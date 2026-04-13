@@ -187,4 +187,76 @@ describe("LabDocumentSchema", () => {
     expect(result.nodes[0]?.config.cloudRole).toBe("management");
     expect(result.nodes[0]?.config.bridgeGroup).toBe("management");
   });
+
+  it("normalizes managed bridge prefixes produced by the current runtime", () => {
+    const result = LabDocumentSchema.parse({
+      id: "lab-1",
+      name: "demo",
+      version: 1,
+      canvas: { zoom: 1, backgroundImage: null },
+      nodes: [
+        {
+          id: "node-mgmt",
+          name: "mgmt-cloud",
+          runtime: "cloud",
+          templateId: "cloud",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 10,
+            bridgeInterface: "nc-mg-management",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-mgmt", name: "eth0", slot: 0 }],
+        },
+        {
+          id: "node-private",
+          name: "private-cloud",
+          runtime: "cloud",
+          templateId: "cloud",
+          imageId: null,
+          position: { x: 120, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 10,
+            bridgeInterface: "nc-pv-mpls-core",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-private", name: "eth0", slot: 0 }],
+        },
+        {
+          id: "node-carrier",
+          name: "carrier-cloud",
+          runtime: "cloud",
+          templateId: "cloud",
+          imageId: null,
+          position: { x: 240, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 10,
+            bridgeInterface: "nc-is-isp-a",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-carrier", name: "eth0", slot: 0 }],
+        },
+      ],
+      networks: [],
+      attachments: [],
+      annotations: [],
+      startupConfigSets: [],
+      nodeBootActions: [],
+      activeConfigSetId: null,
+    });
+
+    expect(result.nodes[0]?.config.cloudRole).toBe("management");
+    expect(result.nodes[0]?.config.bridgeGroup).toBe("management");
+    expect(result.nodes[1]?.config.cloudRole).toBe("private-circuit");
+    expect(result.nodes[1]?.config.bridgeGroup).toBe("mpls-core");
+    expect(result.nodes[2]?.config.cloudRole).toBe("isp-carrier");
+    expect(result.nodes[2]?.config.bridgeGroup).toBe("isp-a");
+  });
 });

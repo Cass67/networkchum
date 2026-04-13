@@ -63,7 +63,7 @@ function normalizeLegacyBridgeInterface(
     };
   }
 
-  const managementMatch = bridgeInterface.match(/^nc-mg-(.+)$/);
+  const managementMatch = bridgeInterface.match(/^nc-(?:mgmt|mg)-(.+)$/);
   if (managementMatch?.[1]) {
     return {
       cloudRole: "management",
@@ -71,7 +71,7 @@ function normalizeLegacyBridgeInterface(
     };
   }
 
-  const privateMatch = bridgeInterface.match(/^nc-pv-(.+)$/);
+  const privateMatch = bridgeInterface.match(/^nc-(?:priv|pv)-(.+)$/);
   if (privateMatch?.[1]) {
     return {
       cloudRole: "private-circuit",
@@ -79,7 +79,7 @@ function normalizeLegacyBridgeInterface(
     };
   }
 
-  const carrierMatch = bridgeInterface.match(/^nc-is-(.+)$/);
+  const carrierMatch = bridgeInterface.match(/^nc-(?:isp|is)-(.+)$/);
   if (carrierMatch?.[1]) {
     return {
       cloudRole: "isp-carrier",
@@ -125,8 +125,8 @@ export function resolveCloudBridge(
   const cloudRole = node.config.cloudRole ?? legacy?.cloudRole;
   const bridgeGroup =
     node.config.bridgeGroup ??
-    (cloudRole === "management" ? "management" : undefined) ??
-    legacy?.bridgeGroup;
+    legacy?.bridgeGroup ??
+    (cloudRole === "management" ? "management" : undefined);
 
   if (!cloudRole || !bridgeGroup) {
     return null;

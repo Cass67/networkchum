@@ -26,7 +26,7 @@ function normalizeLegacyCloudBridge(
     return { cloudRole: "management", bridgeGroup: "management" };
   }
 
-  const managedManagementMatch = bridgeInterface.match(/^nc-mgmt-(.+)$/);
+  const managedManagementMatch = bridgeInterface.match(/^nc-(?:mgmt|mg)-(.+)$/);
   if (managedManagementMatch?.[1]) {
     return {
       cloudRole: "management",
@@ -34,7 +34,7 @@ function normalizeLegacyCloudBridge(
     };
   }
 
-  const privateMatch = bridgeInterface.match(/^nc-priv-(.+)$/);
+  const privateMatch = bridgeInterface.match(/^nc-(?:priv|pv)-(.+)$/);
   if (privateMatch?.[1]) {
     return {
       cloudRole: "private-circuit",
@@ -42,7 +42,7 @@ function normalizeLegacyCloudBridge(
     };
   }
 
-  const carrierMatch = bridgeInterface.match(/^nc-isp-(.+)$/);
+  const carrierMatch = bridgeInterface.match(/^nc-(?:isp|is)-(.+)$/);
   if (carrierMatch?.[1]) {
     return {
       cloudRole: "isp-carrier",
