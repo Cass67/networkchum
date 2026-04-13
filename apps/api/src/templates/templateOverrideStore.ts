@@ -1,11 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
+import type { Template } from "@networkchum/shared";
+
 import { getDataDir, getDataFile } from "../storagePaths.js";
 
 export type TemplateDefaultsOverride = Partial<{
   ramMb: number;
   vcpu: number;
   interfaceCount: number;
+  deviceRoleIcon: Template["deviceRoleIcon"];
 }>;
 
 type TemplateOverrideMap = Record<string, TemplateDefaultsOverride>;

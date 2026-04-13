@@ -1,6 +1,7 @@
 import type { Template } from "@networkchum/shared";
 
 import { defaultTemplates } from "./defaultTemplates.js";
+import { guessDeviceRoleIcon } from "./deviceRoleIcon.js";
 import {
   listTemplateOverrides,
   saveTemplateOverrides,
@@ -17,9 +18,20 @@ function applyTemplateOverride(
   template: Template,
   override?: TemplateDefaultsOverride,
 ): Template {
+  const deviceRoleIcon =
+    override?.deviceRoleIcon ??
+    template.deviceRoleIcon ??
+    guessDeviceRoleIcon({
+      runtime: template.runtime,
+      vendor: template.vendor,
+      name: template.displayName,
+      templateId: template.id,
+    });
+
   if (!override) {
     return {
       ...template,
+      deviceRoleIcon,
       configSchema: {
         ...template.configSchema,
         ramMb: { ...template.configSchema.ramMb },
@@ -34,6 +46,7 @@ function applyTemplateOverride(
 
   return {
     ...template,
+    deviceRoleIcon,
     configSchema: {
       ...template.configSchema,
       ramMb: {
@@ -86,7 +99,14 @@ export class TemplateRegistry {
       return undefined;
     }
 
+    const overrides = listTemplateOverrides();
+    const existingOverride = overrides[templateId];
     const nextOverride: TemplateDefaultsOverride = {};
+
+    if (existingOverride?.deviceRoleIcon) {
+      nextOverride.deviceRoleIcon = existingOverride.deviceRoleIcon;
+    }
+
     if (defaults.ramMb !== baseTemplate.configSchema.ramMb.default) {
       nextOverride.ramMb = defaults.ramMb;
     }
@@ -99,8 +119,6 @@ export class TemplateRegistry {
     ) {
       nextOverride.interfaceCount = defaults.interfaceCount;
     }
-
-    const overrides = listTemplateOverrides();
     if (Object.keys(nextOverride).length === 0) {
       delete overrides[templateId];
     } else {
