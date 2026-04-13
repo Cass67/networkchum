@@ -1,11 +1,22 @@
 import { useState } from "react";
 
+const roleIconOptions = [
+  "router",
+  "switch",
+  "firewall",
+  "cloud",
+  "host",
+  "client",
+] as const;
+export type DeviceRoleIcon = (typeof roleIconOptions)[number];
+
 type TemplateSummary = {
   id: string;
   name: string;
   source: string;
   vendor?: string;
   runtime?: string;
+  deviceRoleIcon?: DeviceRoleIcon;
   configSchema: {
     ramMb: { default: number; min: number; max: number };
     vcpu: { default: number; min: number; max: number };
@@ -19,6 +30,7 @@ type TemplateEditorDialogProps = {
     vcpu: number;
     ramMb: number;
     interfaceCount: number;
+    deviceRoleIcon: DeviceRoleIcon;
   }) => Promise<void>;
   onCancel: () => void;
 };
@@ -35,6 +47,9 @@ export function TemplateEditorDialog({
   const [interfaceCount, setInterfaceCount] = useState(
     String(template.configSchema.interfaceCount.default),
   );
+  const [deviceRoleIcon, setDeviceRoleIcon] = useState<DeviceRoleIcon>(
+    template.deviceRoleIcon ?? roleIconOptions[0],
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,6 +60,7 @@ export function TemplateEditorDialog({
       vcpu: Number.parseInt(vcpu, 10),
       ramMb: Number.parseInt(ramMb, 10),
       interfaceCount: Number.parseInt(interfaceCount, 10),
+      deviceRoleIcon,
     };
 
     if (
@@ -82,6 +98,29 @@ export function TemplateEditorDialog({
         </div>
 
         <form onSubmit={handleSubmit}>
+          <div className="field">
+            <label>
+              <span className="field-label">Role Icon</span>
+              <select
+                value={deviceRoleIcon}
+                onChange={(event) =>
+                  setDeviceRoleIcon(event.target.value as DeviceRoleIcon)
+                }
+                className="field-input"
+                disabled={saving}
+              >
+                {roleIconOptions.map((role) => (
+                  <option key={role} value={role}>
+                    {role[0].toUpperCase() + role.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="field-hint">
+              Options: Router, Switch, Firewall, Cloud, Host, Client
+            </p>
+          </div>
+
           <div className="field">
             <label>
               <span className="field-label">vCPU</span>

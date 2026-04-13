@@ -25,6 +25,7 @@ type CatalogSummary = {
   source: string;
   vendor?: string;
   runtime?: string;
+  deviceRoleIcon?: DeviceRoleIcon;
   configSchema?: {
     ramMb: { default: number; min: number; max: number };
     vcpu: { default: number; min: number; max: number };
@@ -82,11 +83,20 @@ type RuntimeState = {
 
 type Fetcher = typeof fetch;
 
+type DeviceRoleIcon =
+  | "router"
+  | "switch"
+  | "firewall"
+  | "cloud"
+  | "host"
+  | "client";
+
 type TemplatePayload = {
   id: string;
   displayName: string;
   vendor: string;
   runtime: string;
+  deviceRoleIcon?: DeviceRoleIcon;
   configSchema: {
     ramMb: { default: number; min: number; max: number };
     vcpu: { default: number; min: number; max: number };
@@ -108,6 +118,7 @@ function mapTemplateSummary(template: TemplatePayload) {
     name: template.displayName,
     vendor: template.vendor,
     runtime: template.runtime,
+    deviceRoleIcon: template.deviceRoleIcon,
     configSchema: template.configSchema,
   };
 }
@@ -402,7 +413,12 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
 
     async updateTemplate(
       templateId: string,
-      input: { vcpu: number; ramMb: number; interfaceCount: number },
+      input: {
+        vcpu: number;
+        ramMb: number;
+        interfaceCount: number;
+        deviceRoleIcon?: DeviceRoleIcon;
+      },
     ): Promise<ReturnType<typeof mapTemplateSummary>> {
       const response = await fetcher(`${baseUrl}/templates/${templateId}`, {
         method: "PATCH",

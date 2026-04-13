@@ -34,12 +34,21 @@ type LabSummary = {
   autoBackup?: boolean;
 };
 
+type DeviceRoleIcon =
+  | "router"
+  | "switch"
+  | "firewall"
+  | "cloud"
+  | "host"
+  | "client";
+
 type CatalogSummary = {
   id: string;
   name: string;
   source: string;
   vendor?: string;
   runtime?: string;
+  deviceRoleIcon?: DeviceRoleIcon;
   configSchema?: {
     ramMb: { default: number; min: number; max: number };
     vcpu: { default: number; min: number; max: number };
@@ -301,12 +310,18 @@ type ApiClient = {
   }>;
   updateTemplate?: (
     templateId: string,
-    input: { vcpu: number; ramMb: number; interfaceCount: number },
+    input: {
+      vcpu: number;
+      ramMb: number;
+      interfaceCount: number;
+      deviceRoleIcon?: DeviceRoleIcon;
+    },
   ) => Promise<{
     id: string;
     name: string;
     vendor?: string;
     runtime?: string;
+    deviceRoleIcon?: DeviceRoleIcon;
     configSchema: {
       ramMb: { default: number; min: number; max: number };
       vcpu: { default: number; min: number; max: number };
@@ -712,7 +727,12 @@ const defaultApi: ApiClient = browserApi ?? {
   },
   async updateTemplate(
     templateId: string,
-    input: { vcpu: number; ramMb: number; interfaceCount: number },
+    input: {
+      vcpu: number;
+      ramMb: number;
+      interfaceCount: number;
+      deviceRoleIcon?: DeviceRoleIcon;
+    },
   ) {
     return {
       id: templateId,
@@ -721,6 +741,7 @@ const defaultApi: ApiClient = browserApi ?? {
         templateId,
       vendor: demoCatalog.find((entry) => entry.id === templateId)?.vendor,
       runtime: demoCatalog.find((entry) => entry.id === templateId)?.runtime,
+      deviceRoleIcon: input.deviceRoleIcon,
       configSchema: {
         ramMb: { default: input.ramMb, min: 128, max: 16384 },
         vcpu: { default: input.vcpu, min: 1, max: 8 },
@@ -1525,6 +1546,7 @@ export function App({
     name: string;
     vendor?: string;
     runtime?: string;
+    deviceRoleIcon?: DeviceRoleIcon;
     configSchema: {
       ramMb: { default: number; min: number; max: number };
       vcpu: { default: number; min: number; max: number };
@@ -1540,6 +1562,7 @@ export function App({
               vendor: nextTemplate.vendor,
               runtime: nextTemplate.runtime,
               configSchema: nextTemplate.configSchema,
+              deviceRoleIcon: nextTemplate.deviceRoleIcon,
             }
           : entry,
       ),

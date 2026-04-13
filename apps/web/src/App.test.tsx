@@ -10,6 +10,14 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { NodeBootActionState } from "@networkchum/shared";
+
+type DeviceRoleIcon =
+  | "router"
+  | "switch"
+  | "firewall"
+  | "cloud"
+  | "host"
+  | "client";
 import { App } from "./App.js";
 afterEach(() => {
   cleanup();
@@ -390,12 +398,18 @@ describe("App", () => {
     const updateTemplate = vi.fn(
       async (
         _templateId: string,
-        input: { vcpu: number; ramMb: number; interfaceCount: number },
+        input: {
+          vcpu: number;
+          ramMb: number;
+          interfaceCount: number;
+          deviceRoleIcon?: DeviceRoleIcon;
+        },
       ) => ({
         id: "cisco-vios",
         name: "Cisco vIOS Router",
         vendor: "Cisco",
         runtime: "qemu",
+        deviceRoleIcon: input.deviceRoleIcon,
         configSchema: {
           ramMb: { default: input.ramMb, min: 512, max: 4096 },
           vcpu: { default: input.vcpu, min: 1, max: 4 },
@@ -457,6 +471,9 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("Interfaces"), {
       target: { value: "6" },
     });
+    fireEvent.change(screen.getByLabelText("Role Icon"), {
+      target: { value: "firewall" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save Template" }));
 
     await waitFor(() => {
@@ -464,11 +481,18 @@ describe("App", () => {
         vcpu: 4,
         ramMb: 4096,
         interfaceCount: 6,
+        deviceRoleIcon: "firewall",
       });
       expect(
         screen.getByText("4 vCPU • 4096 MB RAM • 6 interfaces"),
       ).toBeInTheDocument();
     });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit Cisco vIOS Router" }),
+    );
+    const roleSelect = await screen.findByLabelText("Role Icon");
+    expect(roleSelect).toHaveValue("firewall");
   });
 
   it("does not request the hardcoded demo lab when the backend starts with no labs", async () => {
