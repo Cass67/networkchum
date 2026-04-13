@@ -53,6 +53,9 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Labs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Devices" })).toBeInTheDocument();
     expect(
+      screen.getByRole("button", { name: "Containers" }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("button", { name: "Switch to day mode" }),
     ).toBeInTheDocument();
   });
@@ -177,6 +180,91 @@ describe("App", () => {
     expect(
       screen.getByRole("button", { name: "Connect alpine-2" }),
     ).toBeInTheDocument();
+  });
+
+  it("saves a reusable container template from the containers tab", async () => {
+    let catalog: Array<{
+      id: string;
+      name: string;
+      source: string;
+      vendor?: string;
+      runtime?: string;
+    }> = [{ id: "entry-1", name: "Fetched Device", source: "image-bound" }];
+    const saveContainerTemplate = vi.fn(async () => {
+      catalog = [
+        ...catalog,
+        {
+          id: "user-container-oracle-linux-9",
+          name: "Oracle Linux 9",
+          source: "built-in",
+          vendor: "Oraclelinux",
+          runtime: "container",
+        },
+      ];
+      return catalog[catalog.length - 1]!;
+    });
+
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => catalog,
+      getContainerRuntime: async () => ({
+        engine: "podman" as const,
+        available: true,
+        message: null,
+      }),
+      listContainerImages: async () => ({
+        engine: "podman" as const,
+        images: [
+          {
+            id: "img-1",
+            imageRef: "oraclelinux:9-slim",
+            repository: "oraclelinux",
+            tag: "9-slim",
+            size: "72MB",
+          },
+        ],
+        message: null,
+      }),
+      saveContainerTemplate,
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-2",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-2",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Containers" }));
+    await screen.findByText("oraclelinux:9-slim");
+    fireEvent.click(screen.getByRole("button", { name: "Use..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Template" }));
+
+    await waitFor(() => {
+      expect(saveContainerTemplate).toHaveBeenCalledWith({
+        displayName: "Oraclelinux 9-slim",
+        imageRef: "oraclelinux:9-slim",
+        registry: "docker-hub",
+        shell: "bash",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+    await waitFor(() => {
+      expect(screen.getByText("Oracle Linux 9")).toBeInTheDocument();
+    });
   });
 
   it("shows a newly created lab on the canvas", async () => {
@@ -2204,7 +2292,7 @@ describe("App", () => {
                 vcpu: 0,
                 ramMb: 0,
                 interfaceCount: 1,
-                cloudRole: "management",
+                cloudRole: "management" as const,
                 bridgeGroup: "management",
               },
               interfaces: [{ id: "if-1", name: "eth0", slot: 0 }],
@@ -2227,7 +2315,7 @@ describe("App", () => {
               ...lab.document.nodes[0],
               config: {
                 ...lab.document.nodes[0].config,
-                cloudRole: "private-circuit",
+                cloudRole: "private-circuit" as const,
                 bridgeGroup: "mpls-core",
               },
             },
@@ -2289,7 +2377,7 @@ describe("App", () => {
           name: string;
           position: { x: number; y: number };
           interfaceCount?: number;
-          cloudRole?: string;
+          cloudRole?: "management" | "private-circuit" | "isp-carrier";
           bridgeGroup?: string | null;
         },
       ) => ({

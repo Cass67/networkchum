@@ -5,6 +5,7 @@ import Fastify from "fastify";
 
 import { catalogRoutes } from "./routes/catalog.js";
 import { consoleRoutes } from "./routes/console.js";
+import { containerRoutes } from "./routes/containers.js";
 import { healthRoutes } from "./routes/health.js";
 import { imageRoutes } from "./routes/images.js";
 import { labRoutes } from "./routes/labs.js";
@@ -17,6 +18,7 @@ export type AppDependencies = {
       args: string[],
     ) => Promise<{ ok: boolean; stdout: string; stderr: string }>;
     hasBinary?: (command: string) => Promise<boolean>;
+    fetcher?: typeof fetch;
     isBridgeInterface?: (interfaceName: string) => Promise<boolean>;
     listHostInterfaces?: () => Promise<string[]>;
   };
@@ -36,6 +38,7 @@ export function buildApp(dependencies: AppDependencies = {}) {
   app.register(templateRoutes);
   app.register(imageRoutes);
   app.register(catalogRoutes);
+  app.register(containerRoutes, dependencies);
   app.register(labRoutes, dependencies);
 
   return app;

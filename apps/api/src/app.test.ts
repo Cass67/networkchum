@@ -90,10 +90,27 @@ beforeAll(async () => {
         if (command === "docker" && args[0] === "run") {
           return { ok: true, stdout: "container-id-from-test", stderr: "" };
         }
+        if (command === "docker" && args[0] === "image" && args[1] === "ls") {
+          return {
+            ok: true,
+            stdout: [
+              JSON.stringify({
+                Repository: "docker.io/library/alpine",
+                Tag: "latest",
+                ID: "sha256:alpine123",
+                Size: "7MB",
+              }),
+            ].join("\n"),
+            stderr: "",
+          };
+        }
+        if (command === "docker" && args[0] === "pull") {
+          return { ok: true, stdout: "pulled", stderr: "" };
+        }
 
         return { ok: true, stdout: "", stderr: "" };
       },
-      hasBinary: async () => false,
+      hasBinary: async (command) => command === "docker",
       isBridgeInterface: async (interfaceName) =>
         interfaceName === "br-mgmt" || interfaceName === "br-lab",
       listHostInterfaces: async () => ["br-lab", "br-mgmt"],
@@ -130,6 +147,143 @@ describe("api", () => {
     expect(
       payload.templates.some((template) => template.id === "cisco-asr"),
     ).toBe(true);
+  });
+
+  it("reports the detected container runtime and local images", async () => {
+    const runtimeResponse = await app.inject({
+      method: "GET",
+      url: "/containers/runtime",
+    });
+    expect(runtimeResponse.statusCode).toBe(200);
+    expect(runtimeResponse.json()).toEqual({
+      engine: "docker",
+      available: true,
+      message: null,
+    });
+
+    const imagesResponse = await app.inject({
+      method: "GET",
+      url: "/containers/images",
+    });
+    expect(imagesResponse.statusCode).toBe(200);
+    expect(imagesResponse.json()).toEqual({
+      engine: "docker",
+      images: [
+        {
+          id: "sha256:alpine123",
+          imageRef: "docker.io/library/alpine:latest",
+          repository: "docker.io/library/alpine",
+          tag: "latest",
+          size: "7MB",
+        },
+      ],
+      message: null,
+    });
+  });
+
+  it("searches Docker Hub for container images", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          results: [
+            {
+              repo_name: "library/oraclelinux",
+              short_description: "Oracle Linux base image",
+              star_count: 42,
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      )) as typeof fetch;
+
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/containers/search?registry=docker-hub&query=oraclelinux%3A9-slim",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        registry: "docker-hub",
+        results: [
+          {
+            registry: "docker-hub",
+            imageRef: "library/oraclelinux:9-slim",
+            repository: "library/oraclelinux",
+            description: "Oracle Linux base image",
+            stars: 42,
+          },
+        ],
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("pulls a container image and saves a reusable template", async () => {
+    const pullResponse = await app.inject({
+      method: "POST",
+      url: "/containers/pull",
+      payload: {
+        registry: "docker-hub",
+        imageRef: "oraclelinux:9-slim",
+      },
+    });
+
+    expect(pullResponse.statusCode).toBe(200);
+    expect(pullResponse.json()).toEqual({
+      engine: "docker",
+      imageRef: "oraclelinux:9-slim",
+      image: null,
+    });
+
+    const saveResponse = await app.inject({
+      method: "POST",
+      url: "/containers/templates",
+      payload: {
+        displayName: "Oracle Linux 9",
+        imageRef: "oraclelinux:9-slim",
+        registry: "docker-hub",
+        shell: "sh",
+      },
+    });
+
+    expect(saveResponse.statusCode).toBe(201);
+    expect(saveResponse.json()).toEqual({
+      template: expect.objectContaining({
+        id: "user-container-oracle-linux-9",
+        runtime: "container",
+        displayName: "Oracle Linux 9",
+        vendor: "Oraclelinux",
+        container: expect.objectContaining({
+          imageRef: "oraclelinux:9-slim",
+          registry: "docker-hub",
+          engine: "docker",
+          defaultShell: "sh",
+        }),
+      }),
+    });
+
+    const catalogResponse = await app.inject({
+      method: "GET",
+      url: "/catalog",
+    });
+    expect(catalogResponse.statusCode).toBe(200);
+    expect(catalogResponse.json()).toEqual({
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          template: expect.objectContaining({
+            id: "user-container-oracle-linux-9",
+            displayName: "Oracle Linux 9",
+            runtime: "container",
+          }),
+        }),
+      ]),
+    });
   });
 
   it("returns Arista vEOS with reduced CPU but full memory for emulated hosts", async () => {
@@ -363,6 +517,48 @@ describe("api", () => {
 
     expect(payload.lab.document.nodes).toHaveLength(1);
     expect(payload.lab.document.nodes[0]?.name).toBe("host-1");
+  });
+
+  it("creates a one-off container node in the current lab", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "One-Off Container Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/container-nodes`,
+      payload: {
+        displayName: "oraclelinux-1",
+        imageRef: "oraclelinux:9-slim",
+        registry: "docker-hub",
+        engine: "docker",
+        shell: "sh",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({
+      lab: expect.objectContaining({
+        document: expect.objectContaining({
+          nodes: expect.arrayContaining([
+            expect.objectContaining({
+              name: "oraclelinux-1",
+              runtime: "container",
+              templateId: "linux-alpine-container",
+              config: expect.objectContaining({
+                containerImageRef: "oraclelinux:9-slim",
+                containerRegistry: "docker-hub",
+                containerEngine: "docker",
+                containerShell: "sh",
+              }),
+            }),
+          ]),
+        }),
+      }),
+    });
   });
 
   it("returns the updated lab when setting a boot action", async () => {

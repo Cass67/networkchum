@@ -13,6 +13,7 @@ The project is aimed at an EVE-NG / PNETLab style workflow, but with a JSON-nati
 - Power nodes on and off
 - Open serial console sessions for running QEMU nodes
 - Upload VM images, bind them to built-in templates, unbind them, or remove them from the active catalog
+- Browse local container images, search registries, pull images, and turn them into reusable templates or one-off lab nodes
 - Persist labs, runtime state, and image metadata in local JSON files
 - Toggle between day and night themes in the web UI
 
@@ -68,7 +69,7 @@ For development:
 For runtime features:
 
 - `qemu-system-x86_64` for VM nodes
-- Docker for container nodes
+- Podman or Docker for container nodes
 - Linux `ip` tooling for TAP/bridge networking on Linux hosts
 - a pre-existing Linux bridge such as `br-mgmt` for cloud-node uplinks
 
@@ -194,6 +195,16 @@ Catalog behavior today:
 - unbound VM templates still appear so you can target them during image upload/binding
 - removed images stay visible in the image library, but not in the add-node catalog
 
+## Container Workflow
+
+Use the `Containers` tab when you want to work with OCI images instead of QCOW2 disks.
+
+- NetworkChum auto-detects the local container runtime and prefers `podman` when both `podman` and `docker` are installed
+- local runtime images appear in the `Containers` tab immediately
+- registry search defaults to Docker Hub, but the UI also accepts direct refs such as `oraclelinux:9-slim`
+- after selecting or pulling an image, you can either save it as a reusable template or create a one-off node in the active lab
+- saved reusable container templates also appear in `Devices`
+
 ## Useful Scripts
 
 From the repo root:
@@ -222,11 +233,17 @@ Key endpoints:
 - `GET /health`
 - `GET /templates`
 - `GET /catalog`
+- `GET /containers/runtime`
+- `GET /containers/images`
+- `GET /containers/search`
+- `POST /containers/pull`
+- `POST /containers/templates`
 - `GET /labs`
 - `POST /labs`
 - `GET /labs/:labId`
 - `DELETE /labs/:labId`
 - `POST /labs/:labId/nodes`
+- `POST /labs/:labId/container-nodes`
 - `DELETE /labs/:labId/nodes/:nodeId`
 - `POST /labs/:labId/networks`
 - `DELETE /labs/:labId/networks/:networkId`

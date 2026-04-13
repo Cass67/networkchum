@@ -640,7 +640,7 @@ describe("powerOnNode", () => {
     expect(basePort).toBe(5002);
   });
 
-  it("returns a real docker-backed runtime state for container nodes", async () => {
+  it("returns a real container-backed runtime state for container nodes", async () => {
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), "networkchum-runtime-"),
     );
@@ -665,7 +665,7 @@ describe("powerOnNode", () => {
         expect(args).toContain("run");
         return { ok: true, stdout: "container-id-123", stderr: "" };
       },
-      hasBinary: async () => true,
+      hasBinary: async (command) => command === "docker",
     });
 
     expect(state?.status).toBe("running");
@@ -707,7 +707,7 @@ describe("powerOnNode", () => {
         expect(args).toContain("run");
         return { ok: true, stdout: "container-id-123", stderr: "" };
       },
-      hasBinary: async () => true,
+      hasBinary: async (command) => command === "docker",
     });
 
     expect(state?.status).toBe("running");
@@ -875,7 +875,7 @@ describe("powerOnNode", () => {
         expect(args).toContain("run");
         return { ok: true, stdout: "container-id-123", stderr: "" };
       },
-      hasBinary: async () => true,
+      hasBinary: async (command) => command === "docker",
     });
 
     expect(state?.status).toBe("running");

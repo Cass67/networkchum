@@ -111,6 +111,47 @@ describe("LabDocumentSchema", () => {
     expect(result.nodes[0]?.config.bridgeGroup).toBe("mpls-core");
   });
 
+  it("accepts container nodes with resolved image and runtime metadata", () => {
+    const result = LabDocumentSchema.parse({
+      id: "lab-1",
+      name: "demo",
+      version: 1,
+      canvas: { zoom: 1, backgroundImage: null },
+      nodes: [
+        {
+          id: "node-1",
+          name: "container-1",
+          runtime: "container",
+          templateId: "container-oraclelinux",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 1,
+            ramMb: 512,
+            interfaceCount: 1,
+            containerImageRef: "oraclelinux:9-slim",
+            containerRegistry: "docker-hub",
+            containerEngine: "podman",
+            containerShell: "sh",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-1", name: "eth0", slot: 0 }],
+        },
+      ],
+      networks: [],
+      attachments: [],
+      annotations: [],
+      startupConfigSets: [],
+      nodeBootActions: [],
+      activeConfigSetId: null,
+    });
+
+    expect(result.nodes[0]?.config.containerImageRef).toBe(
+      "oraclelinux:9-slim",
+    );
+    expect(result.nodes[0]?.config.containerEngine).toBe("podman");
+  });
+
   it("normalizes legacy management bridge configs into role and group", () => {
     const result = LabDocumentSchema.parse({
       id: "lab-1",

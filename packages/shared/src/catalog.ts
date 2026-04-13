@@ -1,6 +1,13 @@
 import { z } from "zod";
 
-import { RuntimeKindSchema } from "./topology.js";
+import { ContainerEngineSchema, RuntimeKindSchema } from "./topology.js";
+
+export const ContainerTemplateConfigSchema = z.object({
+  imageRef: z.string().min(1),
+  registry: z.string().min(1),
+  engine: ContainerEngineSchema.optional(),
+  defaultShell: z.string().min(1).optional(),
+});
 
 export const DeviceRoleIconSchema = z.enum([
   "router",
@@ -38,6 +45,7 @@ export const TemplateSchema = z.object({
     interfaceCount: NumberLimitSchema,
   }),
   interfaceNames: z.array(z.string()).optional(),
+  container: ContainerTemplateConfigSchema.optional(),
 });
 
 export const ImageRecordSchema = z.object({
@@ -63,3 +71,7 @@ export const CatalogEntrySchema = z.object({
 export type Template = z.infer<typeof TemplateSchema>;
 export type ImageRecord = z.infer<typeof ImageRecordSchema>;
 export type CatalogEntry = z.infer<typeof CatalogEntrySchema>;
+export type ContainerEngine = z.infer<typeof ContainerEngineSchema>;
+export type ContainerTemplateConfig = z.infer<
+  typeof ContainerTemplateConfigSchema
+>;

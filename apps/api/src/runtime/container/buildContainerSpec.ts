@@ -1,12 +1,14 @@
 export function buildContainerSpec(input: {
+  engine?: "docker" | "podman";
   nodeName: string;
   image: string;
   cpu: number;
   memoryMb: number;
   network?: string;
+  shell?: string;
 }) {
   const command = [
-    "docker",
+    input.engine ?? "docker",
     "run",
     "-d",
     "--name",
@@ -21,7 +23,7 @@ export function buildContainerSpec(input: {
     command.push("--network", input.network);
   }
 
-  command.push(input.image, "sleep", "infinity");
+  command.push(input.image, input.shell ?? "sh", "-lc", "sleep infinity");
 
   return {
     runtime: "container" as const,

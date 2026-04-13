@@ -29,6 +29,17 @@ describe("dockerNetworking", () => {
         "nc-net-net-1",
       ]);
     });
+
+    it("builds podman network create command", () => {
+      expect(buildDockerNetworkCreateCommand("net-1", "podman")).toEqual([
+        "podman",
+        "network",
+        "create",
+        "--driver",
+        "bridge",
+        "nc-net-net-1",
+      ]);
+    });
   });
 
   describe("buildDockerNetworkConnectCommand", () => {

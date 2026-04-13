@@ -67,6 +67,34 @@ describe("TemplateSchema", () => {
 
     expect(result.deviceRoleIcon).toBe("router");
   });
+
+  it("accepts a container template with image metadata", () => {
+    const result = TemplateSchema.parse({
+      id: "container-oraclelinux",
+      runtime: "container",
+      displayName: "Oracle Linux 9",
+      vendor: "Oracle",
+      boot: {
+        console: "serial",
+        acceleration: "n/a",
+      },
+      configSchema: {
+        ramMb: { default: 512, min: 128, max: 8192 },
+        vcpu: { default: 1, min: 1, max: 4 },
+        interfaceCount: { default: 1, min: 1, max: 4 },
+      },
+      deviceRoleIcon: "host",
+      container: {
+        imageRef: "oraclelinux:9-slim",
+        registry: "docker-hub",
+        engine: "podman",
+        defaultShell: "sh",
+      },
+    });
+
+    expect(result.container?.imageRef).toBe("oraclelinux:9-slim");
+    expect(result.container?.engine).toBe("podman");
+  });
 });
 
 describe("ImageRecordSchema", () => {

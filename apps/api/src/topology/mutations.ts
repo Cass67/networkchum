@@ -18,6 +18,10 @@ type AddNodeInput = {
   bridgeInterface?: string | null;
   cloudRole?: CloudRole;
   bridgeGroup?: string;
+  containerImageRef?: string;
+  containerRegistry?: string;
+  containerEngine?: "docker" | "podman";
+  containerShell?: string;
 };
 
 export function addNode(
@@ -51,6 +55,14 @@ export function addNode(
       bridgeInterface: input.bridgeInterface ?? null,
       cloudRole: input.cloudRole,
       bridgeGroup: input.bridgeGroup,
+      containerImageRef:
+        input.containerImageRef ?? input.template.container?.imageRef,
+      containerRegistry:
+        input.containerRegistry ?? input.template.container?.registry,
+      containerEngine:
+        input.containerEngine ?? input.template.container?.engine,
+      containerShell:
+        input.containerShell ?? input.template.container?.defaultShell,
     },
     state: {
       desiredPower: "off",

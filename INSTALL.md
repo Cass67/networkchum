@@ -10,7 +10,7 @@ NetworkChum runs best on Linux. macOS works well for the UI, API, image manageme
 | --------------------------------- | ------------------------------------------------------------------- |
 | Run the web UI and API            | Node.js, npm                                                        |
 | Use VM nodes                      | QEMU (`qemu-system-x86_64`, `qemu-kvm`, or `/usr/libexec/qemu-kvm`) |
-| Use container nodes               | Docker                                                              |
+| Use container nodes               | Podman or Docker                                                    |
 | Faster QEMU on Linux              | `/dev/kvm` access                                                   |
 | Native console launch from the UI | Native console bridge prerequisites plus a supported terminal       |
 | Better native console transport   | `socat` preferred, `nc` fallback                                    |
@@ -93,7 +93,12 @@ That starts:
 
 In `lan` mode, the web UI and API bind for LAN access and the script prints the server URL to open from another machine.
 
-At this point you can use the UI, create labs, add nodes, manage images, and work with whatever runtime features your host supports. To get the most out of the app, continue with the platform-specific setup below.
+At this point you can use the UI, create labs, add nodes, manage VM images,
+and work with whatever runtime features your host supports. The `Containers`
+tab lets you inspect local OCI images, search Docker Hub by default, pull
+direct refs such as `oraclelinux:9-slim`, save reusable container templates,
+and create one-off container nodes in the active lab. To get the most out of
+the app, continue with the platform-specific setup below.
 
 ## macOS Setup
 
@@ -140,18 +145,21 @@ What to expect:
 - If `hvf` is unavailable, the app falls back to software emulation (`tcg`), which is usable for experimentation but slow for heavier VM workloads.
 - Non-Linux hosts use socket-backed networking rather than TAP devices.
 
-### Install Docker for container nodes
+### Install a container runtime for container nodes
 
-Container templates need Docker.
+NetworkChum prefers `podman` when both runtimes are installed and falls back to
+`docker` otherwise.
 
-Install Docker Desktop and verify:
+Install either runtime and verify the CLI works:
 
 ```bash
+podman version
+# or
 docker version
-docker info
 ```
 
-If Docker is not installed or not running, container nodes will not power on.
+If neither runtime is installed or running, the `Containers` tab will show the
+runtime as unavailable and container nodes will not power on.
 
 ### Install native console helpers
 
@@ -382,7 +390,7 @@ Guidelines:
 - keep the approved data directory fixed if you want the narrowest rule
 - always edit sudoers with `visudo`
 
-### Install Docker for container nodes
+### Install a container runtime for container nodes
 
 Install a Linux container runtime.
 

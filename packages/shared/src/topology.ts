@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const RuntimeKindSchema = z.enum(["qemu", "container", "cloud"]);
 export const DesiredPowerSchema = z.enum(["on", "off"]);
+export const ContainerEngineSchema = z.enum(["docker", "podman"]);
 export const CloudRoleSchema = z.enum([
   "management",
   "private-circuit",
@@ -89,6 +90,10 @@ export const NodeConfigSchema = z.object({
   bridgeInterface: z.string().min(1).nullable().optional(),
   cloudRole: CloudRoleSchema.optional(),
   bridgeGroup: z.string().min(1).optional(),
+  containerImageRef: z.string().min(1).optional(),
+  containerRegistry: z.string().min(1).optional(),
+  containerEngine: ContainerEngineSchema.optional(),
+  containerShell: z.string().min(1).optional(),
 });
 
 export const LabNodeSchema = z

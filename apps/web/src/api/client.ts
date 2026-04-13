@@ -10,6 +10,24 @@ type LabSummary = {
   autoBackup?: boolean;
 };
 
+export type ContainerEngine = "docker" | "podman";
+
+export type LocalContainerImageSummary = {
+  id: string;
+  imageRef: string;
+  repository: string;
+  tag: string;
+  size?: string;
+};
+
+export type ContainerSearchResultSummary = {
+  registry: string;
+  imageRef: string;
+  repository: string;
+  description?: string;
+  stars?: number;
+};
+
 type LabBackupSummary = {
   fileName: string;
 };
@@ -154,6 +172,75 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
       }));
     },
 
+    async getContainerRuntime(): Promise<{
+      engine: ContainerEngine | null;
+      available: boolean;
+      message: string | null;
+    }> {
+      const response = await fetcher(`${baseUrl}/containers/runtime`);
+      return parseResponse(response as Response);
+    },
+
+    async listContainerImages(): Promise<{
+      engine: ContainerEngine | null;
+      images: LocalContainerImageSummary[];
+      message: string | null;
+    }> {
+      const response = await fetcher(`${baseUrl}/containers/images`);
+      return parseResponse(response as Response);
+    },
+
+    async searchContainerImages(
+      registry: string,
+      query: string,
+    ): Promise<ContainerSearchResultSummary[]> {
+      const url = new URL(`${baseUrl}/containers/search`, "http://localhost");
+      url.searchParams.set("registry", registry);
+      url.searchParams.set("query", query);
+      const response = await fetcher(`${url.pathname}${url.search}`);
+      const payload = await parseResponse<{
+        registry: string;
+        results: ContainerSearchResultSummary[];
+      }>(response as Response);
+      return payload.results;
+    },
+
+    async pullContainerImage(
+      registry: string,
+      imageRef: string,
+    ): Promise<{
+      engine: ContainerEngine;
+      imageRef: string;
+      image: LocalContainerImageSummary | null;
+    }> {
+      const response = await fetcher(`${baseUrl}/containers/pull`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ registry, imageRef }),
+      });
+      return parseResponse(response as Response);
+    },
+
+    async saveContainerTemplate(input: {
+      displayName: string;
+      imageRef: string;
+      registry: string;
+      shell?: string;
+    }): Promise<CatalogSummary> {
+      const response = await fetcher(`${baseUrl}/containers/templates`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const payload = await parseResponse<{ template: TemplatePayload }>(
+        response as Response,
+      );
+      return {
+        ...mapTemplateSummary(payload.template),
+        source: "built-in",
+      };
+    },
+
     async createLab(name: string): Promise<LabSummary> {
       const response = await fetcher(`${baseUrl}/labs`, {
         method: "POST",
@@ -282,6 +369,29 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
         },
         body: JSON.stringify(input),
       });
+      const payload = await parseResponse<{ lab: LabDetails }>(
+        response as Response,
+      );
+      return payload.lab;
+    },
+
+    async createContainerNode(
+      labId: string,
+      input: {
+        displayName: string;
+        imageRef: string;
+        registry: string;
+        shell?: string;
+      },
+    ): Promise<LabDetails> {
+      const response = await fetcher(
+        `${baseUrl}/labs/${labId}/container-nodes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
       const payload = await parseResponse<{ lab: LabDetails }>(
         response as Response,
       );

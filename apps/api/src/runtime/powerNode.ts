@@ -22,6 +22,7 @@ import {
   validateCloudBridgeTargets,
 } from "../network/cloudUplink.js";
 import { buildContainerSpec } from "./container/buildContainerSpec.js";
+import { detectContainerEngine } from "./container/containerRuntimeService.js";
 import { resolveNodeImagePath } from "../images/resolveNodeImage.js";
 import { buildQemuCommand, tapName } from "./qemu/buildQemuCommand.js";
 import {
@@ -284,6 +285,17 @@ function runtimeName(labId: string, nodeId: string): string {
   return `networkchum-${labId}-${nodeId}`.replace(/[^a-zA-Z0-9_.-]/g, "-");
 }
 
+async function resolveContainerEngine(
+  preferred: "docker" | "podman" | undefined,
+  hasBinary: (command: string) => Promise<boolean>,
+): Promise<"docker" | "podman"> {
+  return preferred ?? (await detectContainerEngine(hasBinary)) ?? "docker";
+}
+
+function commandPreviewEngine(commandPreview?: string[]): "docker" | "podman" {
+  return commandPreview?.[0] === "podman" ? "podman" : "docker";
+}
+
 async function findAvailablePort(startPort: number): Promise<number> {
   const { createServer } = await import("node:net");
   return new Promise((resolve) => {
@@ -421,6 +433,7 @@ export async function powerOnNode(
     ? await reconcileRuntimeStates(labId, runCommand)
     : await listRuntimeStates(labId);
   const existingState = existingStates.find((state) => state.nodeId === nodeId);
+  const templateRegistry = new TemplateRegistry();
 
   const bootActions = lab.document.nodeBootActions ?? [];
   const nodeBootSettings = resolveNodeBootSettings(bootActions, nodeId);
@@ -507,10 +520,36 @@ export async function powerOnNode(
     const containerName = runtimeName(labId, nodeId);
     console.log(`[powerNode] starting container ${containerName}`);
     const attachments = getNodeAttachmentsForContainer(lab.document, nodeId);
+    const template = templateRegistry.get(node.templateId);
+    const engine = await resolveContainerEngine(
+      node.config.containerEngine ?? template?.container?.engine,
+      hasBinary,
+    );
+    const imageRef =
+      node.config.containerImageRef ?? template?.container?.imageRef;
+    const shell =
+      node.config.containerShell ?? template?.container?.defaultShell ?? "sh";
+
+    if (!imageRef) {
+      const state = {
+        labId,
+        nodeId,
+        status: "failed" as const,
+        runtime: node.runtime,
+        accelerationMode: node.config.accelerationMode ?? null,
+        externalId: null,
+        connectCommand: undefined,
+        message: "Container image reference is missing for this node.",
+        commandPreview: [],
+        updatedAt: new Date().toISOString(),
+      };
+      await upsertRuntimeState(state);
+      return state;
+    }
 
     const networkIds = [...new Set(attachments.map((a) => a.networkId))];
     for (const networkId of networkIds) {
-      const createCmd = buildDockerNetworkCreateCommand(networkId);
+      const createCmd = buildDockerNetworkCreateCommand(networkId, engine);
       await runCommand(createCmd[0]!, createCmd.slice(1));
     }
 
@@ -519,13 +558,15 @@ export async function powerOnNode(
       : undefined;
 
     const spec = buildContainerSpec({
+      engine,
       nodeName: containerName,
-      image: "alpine:latest",
+      image: imageRef,
       cpu: node.config.vcpu,
       memoryMb: node.config.ramMb,
       network: primaryNetwork,
+      shell,
     });
-    console.log("[powerNode] docker command:", spec.command.join(" "));
+    console.log("[powerNode] container command:", spec.command.join(" "));
     const result = await runCommand(spec.command[0]!, spec.command.slice(1));
 
     if (result.ok) {
@@ -535,6 +576,7 @@ export async function powerOnNode(
         const connectCmd = buildDockerNetworkConnectCommand(
           attachments[i]!.networkId,
           containerId,
+          engine,
         );
         await runCommand(connectCmd[0]!, connectCmd.slice(1));
       }
@@ -550,7 +592,7 @@ export async function powerOnNode(
       accelerationMode: node.config.accelerationMode ?? null,
       externalId: result.ok ? result.stdout.trim() || containerName : null,
       connectCommand: result.ok
-        ? ["docker", "exec", "-it", result.stdout.trim() || containerName, "sh"]
+        ? [engine, "exec", "-it", result.stdout.trim() || containerName, shell]
         : undefined,
       message: result.ok ? null : result.stderr,
       commandPreview: spec.command,
@@ -599,10 +641,11 @@ export async function powerOnNode(
 
     const containerName = runtimeName(labId, nodeId);
     const attachments = getNodeAttachmentsForContainer(lab.document, nodeId);
+    const engine = await resolveContainerEngine(undefined, hasBinary);
 
     const networkIds = [...new Set(attachments.map((a) => a.networkId))];
     for (const networkId of networkIds) {
-      const createCmd = buildDockerNetworkCreateCommand(networkId);
+      const createCmd = buildDockerNetworkCreateCommand(networkId, engine);
       await runCommand(createCmd[0]!, createCmd.slice(1));
     }
 
@@ -611,6 +654,7 @@ export async function powerOnNode(
       : undefined;
 
     const spec = buildContainerSpec({
+      engine,
       nodeName: containerName,
       image: "alpine:latest",
       cpu: 1,
@@ -624,7 +668,7 @@ export async function powerOnNode(
       const containerId = result.stdout.trim() || containerName;
       const natCommands = [
         [
-          "docker",
+          engine,
           "exec",
           containerId,
           "sh",
@@ -632,7 +676,7 @@ export async function powerOnNode(
           "apk add --no-cache iptables",
         ],
         [
-          "docker",
+          engine,
           "exec",
           containerId,
           "sh",
@@ -640,7 +684,7 @@ export async function powerOnNode(
           "sysctl -w net.ipv4.ip_forward=1",
         ],
         [
-          "docker",
+          engine,
           "exec",
           containerId,
           "sh",
@@ -648,7 +692,7 @@ export async function powerOnNode(
           "iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
         ],
         [
-          "docker",
+          engine,
           "exec",
           containerId,
           "sh",
@@ -656,7 +700,7 @@ export async function powerOnNode(
           "iptables -A FORWARD -i eth0 -o eth1 -j ACCEPT",
         ],
         [
-          "docker",
+          engine,
           "exec",
           containerId,
           "sh",
@@ -672,6 +716,7 @@ export async function powerOnNode(
         const connectCmd = buildDockerNetworkConnectCommand(
           attachments[i]!.networkId,
           containerId,
+          engine,
         );
         await runCommand(connectCmd[0]!, connectCmd.slice(1));
       }
@@ -753,8 +798,7 @@ export async function powerOnNode(
   );
 
   // Determine inject method early so we know whether to reset the overlay.
-  const registry = new TemplateRegistry();
-  const template = registry.get(node.templateId);
+  const template = templateRegistry.get(node.templateId);
   const configInjectMethod = template?.boot.configInjectMethod;
 
   const activeSet = lab.document.activeConfigSetId
@@ -1025,17 +1069,22 @@ export async function powerOffNode(
     if (lab) {
       const attachments = getNodeAttachmentsForContainer(lab.document, nodeId);
       const containerId = previous.externalId;
+      const node = lab.document.nodes.find((entry) => entry.id === nodeId);
+      const engine =
+        node?.config.containerEngine ??
+        commandPreviewEngine(previous.commandPreview);
 
       for (const attachment of attachments) {
         const disconnectCmd = buildDockerNetworkDisconnectCommand(
           attachment.networkId,
           containerId,
+          engine,
         );
         await runCommand(disconnectCmd[0]!, disconnectCmd.slice(1));
       }
 
-      await runCommand("docker", ["stop", containerId]);
-      await runCommand("docker", ["rm", "-f", containerId]);
+      await runCommand(engine, ["stop", containerId]);
+      await runCommand(engine, ["rm", "-f", containerId]);
     }
   }
 
@@ -1068,8 +1117,9 @@ export async function powerOffNode(
       }
     } else {
       if (previous.externalId) {
-        await runCommand("docker", ["stop", previous.externalId]);
-        await runCommand("docker", ["rm", "-f", previous.externalId]);
+        const engine = commandPreviewEngine(previous.commandPreview);
+        await runCommand(engine, ["stop", previous.externalId]);
+        await runCommand(engine, ["rm", "-f", previous.externalId]);
       }
     }
   }

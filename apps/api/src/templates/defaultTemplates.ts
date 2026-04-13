@@ -127,6 +127,11 @@ export const defaultTemplates: Template[] = [
       vcpu: { default: 1, min: 1, max: 4 },
       interfaceCount: { default: 1, min: 1, max: 4 },
     },
+    container: {
+      imageRef: "alpine:latest",
+      registry: "docker-hub",
+      defaultShell: "sh",
+    },
   },
   {
     id: "linux-ubuntu-container",
@@ -142,6 +147,11 @@ export const defaultTemplates: Template[] = [
       ramMb: { default: 512, min: 256, max: 8192 },
       vcpu: { default: 1, min: 1, max: 4 },
       interfaceCount: { default: 1, min: 1, max: 4 },
+    },
+    container: {
+      imageRef: "ubuntu:latest",
+      registry: "docker-hub",
+      defaultShell: "bash",
     },
   },
   {

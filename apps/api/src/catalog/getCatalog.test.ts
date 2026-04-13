@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { saveImages } from "../images/imageStore.js";
+import { saveUserContainerTemplate } from "../runtime/container/userContainerTemplateStore.js";
 import { getCatalog } from "./getCatalog.js";
 
 let tempDataDir = "";
@@ -71,6 +72,42 @@ describe("getCatalog", () => {
           entry.source === "built-in" &&
           entry.image === null &&
           entry.template.configSchema.interfaceCount.default === 10,
+      ),
+    ).toBe(true);
+  });
+
+  it("includes saved user container templates in the devices catalog", async () => {
+    await saveUserContainerTemplate({
+      id: "user-container-oracle-linux-9",
+      runtime: "container",
+      displayName: "Oracle Linux 9",
+      vendor: "Oraclelinux",
+      deviceRoleIcon: "host",
+      boot: {
+        console: "serial",
+        acceleration: "n/a",
+      },
+      configSchema: {
+        ramMb: { default: 512, min: 128, max: 8192 },
+        vcpu: { default: 1, min: 1, max: 4 },
+        interfaceCount: { default: 1, min: 1, max: 8 },
+      },
+      container: {
+        imageRef: "oraclelinux:9-slim",
+        registry: "docker-hub",
+        engine: "docker",
+        defaultShell: "sh",
+      },
+    });
+
+    const entries = await getCatalog();
+
+    expect(
+      entries.some(
+        (entry) =>
+          entry.template.id === "user-container-oracle-linux-9" &&
+          entry.source === "built-in" &&
+          entry.image === null,
       ),
     ).toBe(true);
   });

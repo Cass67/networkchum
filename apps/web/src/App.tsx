@@ -8,11 +8,15 @@ import type {
 import "./theme.css";
 
 import { createApiClient } from "./api/client.js";
-import type { RunningConfigBackupRecord } from "./api/client.js";
+import type {
+  ContainerEngine,
+  RunningConfigBackupRecord,
+} from "./api/client.js";
 import { AddNodeDialog } from "./components/AddNodeDialog.js";
 import { CloudNodeSettingsDialog } from "./components/CloudNodeSettingsDialog.js";
 import { ConfirmDialog } from "./components/ConfirmDialog.js";
 import { ContextMenu } from "./components/ContextMenu.js";
+import { ContainersTab } from "./components/ContainersTab.js";
 import { DeviceCatalog } from "./components/DeviceCatalog.js";
 import { ImageLibrary } from "./components/ImageLibrary.js";
 import { LabBrowser } from "./components/LabBrowser.js";
@@ -101,6 +105,54 @@ type LabDocumentData = {
 type ApiClient = {
   listLabs: () => Promise<LabSummary[]>;
   listCatalog: () => Promise<CatalogSummary[]>;
+  getContainerRuntime?: () => Promise<{
+    engine: ContainerEngine | null;
+    available: boolean;
+    message: string | null;
+  }>;
+  listContainerImages?: () => Promise<{
+    engine: ContainerEngine | null;
+    images: Array<{
+      id: string;
+      imageRef: string;
+      repository: string;
+      tag: string;
+      size?: string;
+    }>;
+    message: string | null;
+  }>;
+  searchContainerImages?: (
+    registry: string,
+    query: string,
+  ) => Promise<
+    Array<{
+      registry: string;
+      imageRef: string;
+      repository: string;
+      description?: string;
+      stars?: number;
+    }>
+  >;
+  pullContainerImage?: (
+    registry: string,
+    imageRef: string,
+  ) => Promise<{
+    engine: ContainerEngine;
+    imageRef: string;
+    image: {
+      id: string;
+      imageRef: string;
+      repository: string;
+      tag: string;
+      size?: string;
+    } | null;
+  }>;
+  saveContainerTemplate?: (input: {
+    displayName: string;
+    imageRef: string;
+    registry: string;
+    shell?: string;
+  }) => Promise<CatalogSummary>;
   createLab: (name: string) => Promise<LabSummary>;
   renameLab?: (
     labId: string,
@@ -146,6 +198,20 @@ type ApiClient = {
       interfaceCount?: number;
       cloudRole?: CloudRole;
       bridgeGroup?: string | null;
+    },
+  ) => Promise<{
+    id: string;
+    name: string;
+    autoBackup?: boolean;
+    document: LabDocumentData;
+  }>;
+  createContainerNode?: (
+    labId: string,
+    input: {
+      displayName: string;
+      imageRef: string;
+      registry: string;
+      shell?: string;
     },
   ) => Promise<{
     id: string;
@@ -567,6 +633,72 @@ const defaultApi: ApiClient = browserApi ?? {
   async listCatalog() {
     return demoCatalog;
   },
+  async getContainerRuntime() {
+    return {
+      engine: "docker" as const,
+      available: true,
+      message: null,
+    };
+  },
+  async listContainerImages() {
+    return {
+      engine: "docker" as const,
+      images: [
+        {
+          id: "img-container-demo",
+          imageRef: "oraclelinux:9-slim",
+          repository: "oraclelinux",
+          tag: "9-slim",
+          size: "72MB",
+        },
+      ],
+      message: null,
+    };
+  },
+  async searchContainerImages(_registry: string, query: string) {
+    return [
+      {
+        registry: "docker-hub",
+        imageRef: query || "oraclelinux:9-slim",
+        repository: (query || "oraclelinux").split(":")[0] ?? "oraclelinux",
+        description: "Demo search result",
+        stars: 1,
+      },
+    ];
+  },
+  async pullContainerImage(_registry: string, imageRef: string) {
+    return {
+      engine: "docker" as const,
+      imageRef,
+      image: {
+        id: "img-container-demo",
+        imageRef,
+        repository: imageRef.split(":")[0] ?? imageRef,
+        tag: imageRef.split(":")[1] ?? "latest",
+        size: "72MB",
+      },
+    };
+  },
+  async saveContainerTemplate(input: {
+    displayName: string;
+    imageRef: string;
+    registry: string;
+    shell?: string;
+  }) {
+    return {
+      id: `user-container-${input.displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      name: input.displayName,
+      source: "built-in",
+      vendor: "Container",
+      runtime: "container",
+      deviceRoleIcon: "host" as const,
+      configSchema: {
+        ramMb: { default: 512, min: 128, max: 8192 },
+        vcpu: { default: 1, min: 1, max: 4 },
+        interfaceCount: { default: 1, min: 1, max: 8 },
+      },
+    };
+  },
   async createLab(name: string) {
     return { id: `lab-${Date.now()}`, name };
   },
@@ -612,6 +744,34 @@ const defaultApi: ApiClient = browserApi ?? {
       document: {
         nodes: [
           { id: "node-demo", name: input.name, position: input.position },
+        ],
+        networks: [],
+        attachments: [],
+      },
+    };
+  },
+  async createContainerNode(
+    labId: string,
+    input: {
+      displayName: string;
+      imageRef: string;
+      registry: string;
+      shell?: string;
+    },
+  ) {
+    return {
+      id: labId,
+      name: demoLabs[0]?.name ?? "Demo Lab",
+      autoBackup: false,
+      document: {
+        nodes: [
+          {
+            id: "node-demo",
+            name: input.displayName,
+            runtime: "container",
+            templateId: "linux-alpine-container",
+            position: { x: 120, y: 80 },
+          },
         ],
         networks: [],
         attachments: [],
@@ -906,7 +1066,9 @@ export function App({
     labName: string;
     fileName: string;
   }>(null);
-  const [leftTab, setLeftTab] = useState<"labs" | "devices" | "images">("labs");
+  const [leftTab, setLeftTab] = useState<
+    "labs" | "devices" | "containers" | "images"
+  >("labs");
   const [startupConfigDialog, setStartupConfigDialog] = useState<{
     nodeId: string;
     nodeName: string;
@@ -1558,6 +1720,11 @@ export function App({
     );
   }
 
+  async function refreshCatalog() {
+    const nextCatalog = await api.listCatalog();
+    setCatalog(nextCatalog);
+  }
+
   async function handleDeleteImageFile(imageId: string) {
     if (!api.deleteImageFile) {
       return;
@@ -1724,13 +1891,21 @@ export function App({
   }
 
   const leftPanelTitle =
-    leftTab === "labs" ? "Labs" : leftTab === "devices" ? "Devices" : "Images";
+    leftTab === "labs"
+      ? "Labs"
+      : leftTab === "devices"
+        ? "Devices"
+        : leftTab === "containers"
+          ? "Containers"
+          : "Images";
   const leftPanelDescription =
     leftTab === "labs"
       ? "Create labs, reopen saved topologies, and keep your active workspace in view."
       : leftTab === "devices"
         ? "Drop templates into the current lab without leaving the canvas."
-        : "Manage uploaded disk images and bind them to reusable templates.";
+        : leftTab === "containers"
+          ? "Discover container images, pull from registries, and turn them into reusable templates or one-off nodes."
+          : "Manage uploaded disk images and bind them to reusable templates.";
   const themeToggleLabel =
     themeMode === "dark" ? "Switch to day mode" : "Switch to night mode";
   const themeToggleText = themeMode === "dark" ? "Day Mode" : "Night Mode";
@@ -1919,7 +2094,7 @@ export function App({
         style={{ display: "flex", flexDirection: "column", minHeight: "0px" }}
       >
         <div className="sidebar-tabs">
-          {(["labs", "devices", "images"] as const).map((tab) => (
+          {(["labs", "devices", "containers", "images"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -1930,7 +2105,9 @@ export function App({
                 ? "Labs"
                 : tab === "devices"
                   ? "Devices"
-                  : "Images"}
+                  : tab === "containers"
+                    ? "Containers"
+                    : "Images"}
             </button>
           ))}
         </div>
@@ -2056,6 +2233,22 @@ export function App({
                 await refreshImages();
               }}
               onDeleteImageFile={handleDeleteImageFile}
+            />
+          )}
+          {leftTab === "containers" && (
+            <ContainersTab
+              api={api}
+              activeLabId={selectedLabId}
+              onTemplateSaved={refreshCatalog}
+              onNodeCreated={(lab) => {
+                applyLabUpdate(
+                  lab as {
+                    id: string;
+                    name: string;
+                    document: LabDocumentData;
+                  },
+                );
+              }}
             />
           )}
         </div>

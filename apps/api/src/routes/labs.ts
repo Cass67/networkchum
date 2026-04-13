@@ -71,6 +71,16 @@ const addNodeSchema = z.object({
   bridgeGroup: z.string().trim().min(1).nullable().optional(),
 });
 
+const createContainerNodeSchema = z.object({
+  imageRef: z.string().trim().min(1),
+  registry: z.string().trim().min(1).default("docker-hub"),
+  engine: z.enum(["docker", "podman"]).optional(),
+  shell: z.string().trim().min(1).optional(),
+  displayName: z.string().trim().min(1).optional(),
+  vendor: z.string().trim().min(1).optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
+});
+
 const addNetworkSchema = z.object({
   name: z.string().min(1),
   visible: z.boolean().default(false),
@@ -333,6 +343,49 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
         template.runtime === "qemu"
           ? acceleration.mode
           : template.boot.acceleration,
+    });
+    const updatedLab = await updateLabDocument(params.labId, document);
+    if (updatedLab) {
+      await writeLabBackup(updatedLab);
+    }
+
+    return reply.code(201).send({ lab: updatedLab });
+  });
+
+  app.post("/labs/:labId/container-nodes", async (request, reply) => {
+    const params = z.object({ labId: z.string().min(1) }).parse(request.params);
+    const body = createContainerNodeSchema.parse(request.body);
+    const lab = await getManagedLab(params.labId);
+    if (!lab) {
+      return reply.code(404).send({ message: "Lab not found" });
+    }
+
+    const template =
+      registry.get("linux-alpine-container") ??
+      registry.get("linux-ubuntu-container");
+    if (!template || template.runtime !== "container") {
+      return reply
+        .code(500)
+        .send({ message: "Container base template is not available" });
+    }
+
+    const position = body.position ?? {
+      x: 120 + lab.document.nodes.length * 36,
+      y: 100 + lab.document.nodes.length * 24,
+    };
+    const displayName =
+      body.displayName?.trim() ||
+      body.imageRef.split("/").filter(Boolean).at(-1)?.split(":")[0] ||
+      "container";
+
+    const document = addNode(lab.document, {
+      template,
+      name: displayName,
+      position,
+      containerImageRef: body.imageRef,
+      containerRegistry: body.registry,
+      containerEngine: body.engine,
+      containerShell: body.shell,
     });
     const updatedLab = await updateLabDocument(params.labId, document);
     if (updatedLab) {

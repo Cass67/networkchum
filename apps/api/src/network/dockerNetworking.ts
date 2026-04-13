@@ -4,9 +4,12 @@ export function dockerNetworkName(networkId: string): string {
   return `nc-net-${networkId}`.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
 
-export function buildDockerNetworkCreateCommand(networkId: string): string[] {
+export function buildDockerNetworkCreateCommand(
+  networkId: string,
+  engine: "docker" | "podman" = "docker",
+): string[] {
   return [
-    "docker",
+    engine,
     "network",
     "create",
     "--driver",
@@ -18,9 +21,10 @@ export function buildDockerNetworkCreateCommand(networkId: string): string[] {
 export function buildDockerNetworkConnectCommand(
   networkId: string,
   containerName: string,
+  engine: "docker" | "podman" = "docker",
 ): string[] {
   return [
-    "docker",
+    engine,
     "network",
     "connect",
     dockerNetworkName(networkId),
@@ -31,9 +35,10 @@ export function buildDockerNetworkConnectCommand(
 export function buildDockerNetworkDisconnectCommand(
   networkId: string,
   containerName: string,
+  engine: "docker" | "podman" = "docker",
 ): string[] {
   return [
-    "docker",
+    engine,
     "network",
     "disconnect",
     dockerNetworkName(networkId),
@@ -42,8 +47,11 @@ export function buildDockerNetworkDisconnectCommand(
   ];
 }
 
-export function buildDockerNetworkRemoveCommand(networkId: string): string[] {
-  return ["docker", "network", "rm", dockerNetworkName(networkId)];
+export function buildDockerNetworkRemoveCommand(
+  networkId: string,
+  engine: "docker" | "podman" = "docker",
+): string[] {
+  return [engine, "network", "rm", dockerNetworkName(networkId)];
 }
 
 export function getNodeAttachmentsForContainer(

@@ -7,6 +7,10 @@ import {
   saveTemplateOverrides,
   type TemplateDefaultsOverride,
 } from "./templateOverrideStore.js";
+import {
+  listUserContainerTemplates,
+  updateUserContainerTemplate,
+} from "../runtime/container/userContainerTemplateStore.js";
 
 type TemplateDefaults = {
   ramMb: number;
@@ -74,19 +78,22 @@ function applyTemplateOverride(
 export class TemplateRegistry {
   list(): Template[] {
     const overrides = listTemplateOverrides();
-    return defaultTemplates.map((template) =>
+    const builtIns = defaultTemplates.map((template) =>
       applyTemplateOverride(template, overrides[template.id]),
     );
+    return [...builtIns, ...listUserContainerTemplates()];
   }
 
   get(templateId: string): Template | undefined {
     const template = defaultTemplates.find((entry) => entry.id === templateId);
-    if (!template) {
-      return undefined;
+    if (template) {
+      const overrides = listTemplateOverrides();
+      return applyTemplateOverride(template, overrides[templateId]);
     }
 
-    const overrides = listTemplateOverrides();
-    return applyTemplateOverride(template, overrides[templateId]);
+    return listUserContainerTemplates().find(
+      (entry) => entry.id === templateId,
+    );
   }
 
   updateDefaults(
@@ -97,7 +104,27 @@ export class TemplateRegistry {
       (template) => template.id === templateId,
     );
     if (!baseTemplate) {
-      return undefined;
+      return (
+        updateUserContainerTemplate(templateId, (template) => ({
+          ...template,
+          deviceRoleIcon: defaults.deviceRoleIcon ?? template.deviceRoleIcon,
+          configSchema: {
+            ...template.configSchema,
+            ramMb: {
+              ...template.configSchema.ramMb,
+              default: defaults.ramMb,
+            },
+            vcpu: {
+              ...template.configSchema.vcpu,
+              default: defaults.vcpu,
+            },
+            interfaceCount: {
+              ...template.configSchema.interfaceCount,
+              default: defaults.interfaceCount,
+            },
+          },
+        })) ?? undefined
+      );
     }
 
     const baseDeviceRoleIcon =

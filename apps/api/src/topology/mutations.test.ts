@@ -186,6 +186,42 @@ describe("addNode", () => {
     expect(result.nodes[0]?.config.cloudRole).toBe("isp-carrier");
     expect(result.nodes[0]?.config.bridgeGroup).toBe("carrier-a");
   });
+
+  it("copies container image metadata from the template onto new container nodes", () => {
+    const result = addNode(makeDocument(), {
+      template: {
+        id: "container-oraclelinux",
+        runtime: "container",
+        displayName: "Oracle Linux 9",
+        vendor: "Oracle",
+        deviceRoleIcon: "host",
+        boot: {
+          console: "serial",
+          acceleration: "n/a",
+        },
+        configSchema: {
+          ramMb: { default: 512, min: 128, max: 8192 },
+          vcpu: { default: 1, min: 1, max: 4 },
+          interfaceCount: { default: 1, min: 1, max: 4 },
+        },
+        container: {
+          imageRef: "oraclelinux:9-slim",
+          registry: "docker-hub",
+          engine: "podman",
+          defaultShell: "sh",
+        },
+      },
+      name: "oraclelinux-1",
+      position: { x: 0, y: 0 },
+    });
+
+    expect(result.nodes[0]?.config.containerImageRef).toBe(
+      "oraclelinux:9-slim",
+    );
+    expect(result.nodes[0]?.config.containerRegistry).toBe("docker-hub");
+    expect(result.nodes[0]?.config.containerEngine).toBe("podman");
+    expect(result.nodes[0]?.config.containerShell).toBe("sh");
+  });
 });
 
 describe("removeNode", () => {
