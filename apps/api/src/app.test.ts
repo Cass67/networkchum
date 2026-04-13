@@ -1208,7 +1208,7 @@ describe("api", () => {
         }),
         expect.objectContaining({
           nodeId: "node-cloud-stale",
-          status: "stopped",
+          status: "running",
         }),
       ]),
     });
@@ -1225,7 +1225,7 @@ describe("api", () => {
         (state: { nodeId: string; status: string }) =>
           state.nodeId === "node-cloud-stale",
       )?.status,
-    ).toBe("stopped");
+    ).toBe("running");
 
     await reconcileApp.close();
   });

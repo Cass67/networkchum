@@ -92,6 +92,10 @@ async function reconcileRuntimeState(
     return state;
   }
 
+  if (state.externalId === "cloud-tap") {
+    return state;
+  }
+
   if (state.externalId && state.externalId !== "cloud-tap") {
     const isRunning = await isContainerRunning(state.externalId, runCommand);
     if (isRunning !== false) {
