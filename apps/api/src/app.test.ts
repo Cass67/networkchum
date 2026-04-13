@@ -130,7 +130,11 @@ describe("api", () => {
   it("returns 200 from health endpoint", async () => {
     const response = await app.inject({ method: "GET", url: "/health" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true });
+    const payload = response.json();
+    expect(payload.ok).toBe(true);
+    expect(
+      payload.capabilities.cloudManagement.managementCloudMode,
+    ).toBeDefined();
   });
 
   it("returns built-in templates", async () => {

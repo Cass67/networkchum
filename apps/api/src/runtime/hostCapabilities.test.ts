@@ -4,6 +4,7 @@ import {
   detectAccelerationMode,
   getNetworkBackend,
   getPlatform,
+  getCloudManagementCapability,
 } from "./hostCapabilities.js";
 
 describe("detectAccelerationMode", () => {
@@ -87,5 +88,23 @@ describe("getNetworkBackend", () => {
   it("returns tap or socket", () => {
     const backend = getNetworkBackend();
     expect(["tap", "socket"]).toContain(backend);
+  });
+});
+
+describe("getCloudManagementCapability", () => {
+  it("reports linux management values", () => {
+    expect(getCloudManagementCapability("linux" as const)).toEqual({
+      platform: "linux",
+      networkBackend: "tap",
+      managementCloudMode: "linux-bridge",
+    });
+  });
+
+  it("reports macos management values", () => {
+    expect(getCloudManagementCapability("macos" as const)).toEqual({
+      platform: "macos",
+      networkBackend: "socket",
+      managementCloudMode: "macos-host-only",
+    });
   });
 });

@@ -26,6 +26,32 @@ export function getPlatform(): "linux" | "macos" | "other" {
   return "other";
 }
 
+export function getCloudManagementCapability(
+  platform: "linux" | "macos" | "other" = getPlatform(),
+) {
+  if (platform === "linux") {
+    return {
+      platform,
+      networkBackend: "tap" as const,
+      managementCloudMode: "linux-bridge" as const,
+    };
+  }
+
+  if (platform === "macos") {
+    return {
+      platform,
+      networkBackend: "socket" as const,
+      managementCloudMode: "macos-host-only" as const,
+    };
+  }
+
+  return {
+    platform,
+    networkBackend: "socket" as const,
+    managementCloudMode: "unsupported" as const,
+  };
+}
+
 export async function detectAccelerationMode(
   accessCheck: AccessCheck = defaultAccessCheck,
   platform: "linux" | "macos" | "other" = getPlatform(),
