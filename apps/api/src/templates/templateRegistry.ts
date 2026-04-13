@@ -21,7 +21,6 @@ function applyTemplateOverride(
 ): Template {
   const deviceRoleIcon =
     override?.deviceRoleIcon ??
-    template.deviceRoleIcon ??
     guessDeviceRoleIcon({
       runtime: template.runtime,
       vendor: template.vendor,
@@ -100,14 +99,12 @@ export class TemplateRegistry {
       return undefined;
     }
 
-    const baseDeviceRoleIcon =
-      baseTemplate.deviceRoleIcon ??
-      guessDeviceRoleIcon({
-        runtime: baseTemplate.runtime,
-        vendor: baseTemplate.vendor,
-        name: baseTemplate.displayName,
-        templateId: baseTemplate.id,
-      });
+    const baseDeviceRoleIcon = guessDeviceRoleIcon({
+      runtime: baseTemplate.runtime,
+      vendor: baseTemplate.vendor,
+      name: baseTemplate.displayName,
+      templateId: baseTemplate.id,
+    });
 
     const overrides = listTemplateOverrides();
     const existingOverride = overrides[templateId];

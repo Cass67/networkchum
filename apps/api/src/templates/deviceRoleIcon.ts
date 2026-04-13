@@ -123,12 +123,5 @@ export function guessDeviceRoleIcon(
     return "client";
   }
 
-  if (
-    runtime === "container" ||
-    matchesKeywords(nameNormalized, nameCompact, HOST_KEYWORDS)
-  ) {
-    return "host";
-  }
-
   return "router";
 }
