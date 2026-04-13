@@ -34,6 +34,21 @@ function mockSvgPoint(svgElement: HTMLElement) {
   });
 }
 
+function parseViewportTransform(transform: string | null) {
+  const match = transform?.match(
+    /^translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)$/,
+  );
+  if (!match) {
+    return null;
+  }
+
+  return {
+    x: Number(match[1]),
+    y: Number(match[2]),
+    scale: Number(match[3]),
+  };
+}
+
 afterEach(() => {
   cleanup();
 });
@@ -496,13 +511,63 @@ describe("TopologyCanvas", () => {
 
       expect(screen.getByTestId("viewport-layer")).toHaveAttribute(
         "transform",
-        "translate(60 40)",
+        "translate(60 40) scale(1)",
       );
 
       fireEvent.mouseUp(svg);
       fireEvent.keyUp(svg, { key: " " });
 
       expect(onMoveNode).not.toHaveBeenCalled();
+    });
+
+    it("zooms the canvas when the mouse wheel is used over the svg", () => {
+      render(
+        <TopologyCanvas labName="Lab" labId="lab-1" nodes={nodesWithIface} />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.wheel(svg, { deltaY: -100, clientX: 100, clientY: 75 });
+
+      const transform = parseViewportTransform(
+        screen.getByTestId("viewport-layer").getAttribute("transform"),
+      );
+      expect(transform).not.toBeNull();
+      expect(transform?.scale).toBeCloseTo(1.1, 5);
+      expect(transform?.x).toBeCloseTo(-10, 5);
+      expect(transform?.y).toBeCloseTo(-7.5, 5);
+    });
+
+    it("keeps drag coordinates correct after zooming", () => {
+      const onMoveNode = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodesWithIface}
+          onMoveNode={onMoveNode}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.wheel(svg, { deltaY: -100, clientX: 100, clientY: 75 });
+      fireEvent.mouseDown(screen.getByTestId("node-n1"), {
+        clientX: 100,
+        clientY: 74,
+      });
+      fireEvent.mouseMove(svg, { clientX: 111, clientY: 85 });
+      fireEvent.mouseUp(svg);
+
+      expect(onMoveNode).toHaveBeenCalledWith(
+        "n1",
+        expect.objectContaining({
+          x: expect.closeTo(60, 5),
+          y: expect.closeTo(60, 5),
+        }),
+      );
     });
   });
 

@@ -66,6 +66,9 @@ const NODE_STATUS_GAP = 14;
 const NODE_ICON_BASE_SIZE = 16;
 const NODE_CABLE_ANCHOR_GAP = 12;
 const CABLE_LABEL_OFFSET = 16;
+const MIN_VIEWPORT_SCALE = 0.5;
+const MAX_VIEWPORT_SCALE = 2.5;
+const VIEWPORT_ZOOM_STEP = 1.1;
 function getNodeCenter(node: CanvasNode): { x: number; y: number } {
   return {
     x: (node.position?.x ?? 32) + NODE_WIDTH / 2,
@@ -297,6 +300,20 @@ function getSvgPoint(
   return { x: svgPt.x, y: svgPt.y };
 }
 
+function getCanvasPoint(
+  svg: SVGSVGElement,
+  clientX: number,
+  clientY: number,
+  viewportOffset: { x: number; y: number },
+  viewportScale: number,
+): { x: number; y: number } {
+  const svgPt = getSvgPoint(svg, clientX, clientY);
+  return {
+    x: (svgPt.x - viewportOffset.x) / viewportScale,
+    y: (svgPt.y - viewportOffset.y) / viewportScale,
+  };
+}
+
 export function TopologyCanvas({
   labName,
   labId,
@@ -340,6 +357,7 @@ export function TopologyCanvas({
     selectedNodeId ? [selectedNodeId] : [],
   );
   const [viewportOffset, setViewportOffset] = useState({ x: 0, y: 0 });
+  const [viewportScale, setViewportScale] = useState(1);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [panState, setPanState] = useState<PanState | null>(null);
   const [cableState, setCableState] = useState<CableState>({
@@ -415,7 +433,13 @@ export function TopologyCanvas({
         if (cableState.mode !== "drawing" && node && onMoveNode) {
           const svg = svgRef.current;
           if (!svg) return;
-          const svgPt = getSvgPoint(svg, e.clientX, e.clientY);
+          const svgPt = getCanvasPoint(
+            svg,
+            e.clientX,
+            e.clientY,
+            viewportOffset,
+            viewportScale,
+          );
           const nodeX = node.position?.x ?? 32;
           const nodeY = node.position?.y ?? 32;
           dragRef.current = {
@@ -474,7 +498,13 @@ export function TopologyCanvas({
       if (cableState.mode === "idle") {
         const svg = svgRef.current;
         if (!svg) return;
-        const svgPt = getSvgPoint(svg, e.clientX, e.clientY);
+        const svgPt = getCanvasPoint(
+          svg,
+          e.clientX,
+          e.clientY,
+          viewportOffset,
+          viewportScale,
+        );
         setSelectionBox({
           active: true,
           startX: svgPt.x,
@@ -498,6 +528,7 @@ export function TopologyCanvas({
       selectedNodeIds,
       spaceHeld,
       viewportOffset,
+      viewportScale,
     ],
   );
 
@@ -505,7 +536,13 @@ export function TopologyCanvas({
     (e: React.MouseEvent<SVGSVGElement>) => {
       const svg = svgRef.current;
       if (!svg) return;
-      const svgPt = getSvgPoint(svg, e.clientX, e.clientY);
+      const svgPt = getCanvasPoint(
+        svg,
+        e.clientX,
+        e.clientY,
+        viewportOffset,
+        viewportScale,
+      );
 
       if (panState?.active) {
         setViewportOffset({
@@ -546,7 +583,13 @@ export function TopologyCanvas({
         }));
       }
     },
-    [cableState.mode, selectionBox?.active, panState],
+    [
+      cableState.mode,
+      selectionBox?.active,
+      panState,
+      viewportOffset,
+      viewportScale,
+    ],
   );
 
   const handleSvgMouseUp = useCallback(
@@ -665,6 +708,41 @@ export function TopologyCanvas({
     }
   }, []);
 
+  const handleSvgWheel = useCallback(
+    (e: React.WheelEvent<SVGSVGElement>) => {
+      const svg = svgRef.current;
+      if (!svg) return;
+
+      e.preventDefault();
+
+      const nextScale = Math.max(
+        MIN_VIEWPORT_SCALE,
+        Math.min(
+          MAX_VIEWPORT_SCALE,
+          viewportScale *
+            (e.deltaY < 0 ? VIEWPORT_ZOOM_STEP : 1 / VIEWPORT_ZOOM_STEP),
+        ),
+      );
+
+      if (nextScale === viewportScale) {
+        return;
+      }
+
+      const svgPt = getSvgPoint(svg, e.clientX, e.clientY);
+      const canvasPoint = {
+        x: (svgPt.x - viewportOffset.x) / viewportScale,
+        y: (svgPt.y - viewportOffset.y) / viewportScale,
+      };
+
+      setViewportScale(nextScale);
+      setViewportOffset({
+        x: svgPt.x - canvasPoint.x * nextScale,
+        y: svgPt.y - canvasPoint.y * nextScale,
+      });
+    },
+    [viewportOffset, viewportScale],
+  );
+
   const handleDisconnect = useCallback(
     async (interfaceIds: string[]) => {
       if (!labId || !onDetachInterface) return;
@@ -728,7 +806,13 @@ export function TopologyCanvas({
               onSelect: () => {
                 const svg = svgRef.current;
                 if (!svg) return;
-                const svgPt = getSvgPoint(svg, e.clientX, e.clientY);
+                const svgPt = getCanvasPoint(
+                  svg,
+                  e.clientX,
+                  e.clientY,
+                  viewportOffset,
+                  viewportScale,
+                );
                 setCableState({
                   mode: "drawing",
                   sourceNodeId: nodeId,
@@ -759,6 +843,8 @@ export function TopologyCanvas({
       onSelectCable,
       onSelectNode,
       resolvedNodes,
+      viewportOffset,
+      viewportScale,
     ],
   );
 
@@ -822,6 +908,7 @@ export function TopologyCanvas({
           }}
           onMouseMove={handleSvgMouseMove}
           onMouseUp={handleSvgMouseUp}
+          onWheel={handleSvgWheel}
           onContextMenu={handleSvgContextMenu}
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
@@ -829,7 +916,7 @@ export function TopologyCanvas({
         >
           <g
             data-testid="viewport-layer"
-            transform={`translate(${viewportOffset.x} ${viewportOffset.y})`}
+            transform={`translate(${viewportOffset.x} ${viewportOffset.y}) scale(${viewportScale})`}
           >
             {links.map((link) => (
               <line
