@@ -625,7 +625,7 @@ export const defaultTemplates: Template[] = [
     configSchema: {
       ramMb: { default: 0, min: 0, max: 0 },
       vcpu: { default: 0, min: 0, max: 0 },
-      interfaceCount: { default: 1, min: 1, max: 8 },
+      interfaceCount: { default: 10, min: 1, max: 24 },
     },
   },
 ];

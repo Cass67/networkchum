@@ -58,6 +58,7 @@ const addNodeSchema = z.object({
   name: z.string().min(1),
   position: z.object({ x: z.number(), y: z.number() }),
   imageId: z.string().min(1).nullable().optional(),
+  interfaceCount: z.number().int().min(1).optional(),
 });
 
 const addNetworkSchema = z.object({
@@ -250,6 +251,7 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       name: body.name,
       position: body.position,
       imageId: resolvedImageId,
+      interfaceCount: body.interfaceCount,
       accelerationMode:
         template.runtime === "qemu"
           ? acceleration.mode
@@ -323,7 +325,7 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       const params = z
         .object({ labId: z.string().min(1), nodeId: z.string().min(1) })
         .parse(request.params);
-      let body;
+      let body: z.infer<typeof setNodeBootActionSchema>;
       try {
         body = setNodeBootActionSchema.parse(request.body);
       } catch (error) {

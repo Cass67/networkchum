@@ -10,8 +10,8 @@ export const NodeInterfaceSchema = z.object({
 });
 
 export const NodeConfigSchema = z.object({
-  vcpu: z.number().int().positive(),
-  ramMb: z.number().int().positive(),
+  vcpu: z.number().int().nonnegative(),
+  ramMb: z.number().int().nonnegative(),
   interfaceCount: z.number().int().positive(),
   nicModel: z.string().min(1).optional(),
   accelerationMode: z.string().min(1).optional(),

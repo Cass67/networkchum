@@ -75,6 +75,7 @@ export async function createLab(name: string): Promise<LabRecord> {
       attachments: [],
       annotations: [],
       startupConfigSets: [],
+      nodeBootActions: [],
       activeConfigSetId: null,
     },
   };

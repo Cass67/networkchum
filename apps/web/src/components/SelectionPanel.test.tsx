@@ -69,6 +69,60 @@ describe("SelectionPanel", () => {
     expect(screen.getByText("Telnet Port: 5004")).toBeInTheDocument();
   });
 
+  it("shows interfaces and attachment status for selected node", () => {
+    render(
+      <SelectionPanel
+        selected={{
+          type: "node",
+          node: {
+            id: "node-1",
+            name: "Cloud-1",
+            interfaces: [
+              { id: "if-1", name: "eth0" },
+              { id: "if-2", name: "eth1" },
+            ],
+          },
+          status: "stopped",
+          attachments: [{ interfaceId: "if-1", networkName: "LAN 1" }],
+        }}
+        onDeleteNode={vi.fn()}
+        onPowerOnNode={vi.fn()}
+        onPowerOffNode={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Interfaces")).toBeInTheDocument();
+    expect(screen.getByText("eth0")).toBeInTheDocument();
+    expect(screen.getByText("Connected to LAN 1")).toBeInTheDocument();
+    expect(screen.getByText("eth1")).toBeInTheDocument();
+    expect(screen.getByText("Not connected")).toBeInTheDocument();
+  });
+
+  it("connects an unbound interface to chosen network from panel", () => {
+    const onAttachInterface = vi.fn();
+
+    render(
+      <SelectionPanel
+        selected={{
+          type: "node",
+          node: {
+            id: "node-1",
+            name: "Cloud-1",
+            interfaces: [{ id: "if-2", name: "eth1" }],
+          },
+          status: "stopped",
+          attachments: [],
+          networks: [{ id: "net-1", name: "LAN 1" }],
+        }}
+        onAttachInterface={onAttachInterface}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect eth1" }));
+
+    expect(onAttachInterface).toHaveBeenCalledWith("if-2", "net-1");
+  });
+
   it("shows the auto backup checkbox for a selected lab", () => {
     render(
       <SelectionPanel

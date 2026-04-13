@@ -12,6 +12,7 @@ type AddNodeInput = {
   name: string;
   position: { x: number; y: number };
   imageId?: string | null;
+  interfaceCount?: number;
   accelerationMode?: string;
 };
 
@@ -20,7 +21,8 @@ export function addNode(
   input: AddNodeInput,
 ): LabDocument {
   const nodeId = `node-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const interfaceCount = input.template.configSchema.interfaceCount.default;
+  const interfaceCount =
+    input.interfaceCount ?? input.template.configSchema.interfaceCount.default;
   const ifaceNames = input.template.interfaceNames;
   const interfaces = Array.from({ length: interfaceCount }, (_, index) => ({
     id: `if-${nodeId}-${index}`,

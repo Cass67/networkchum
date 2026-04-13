@@ -3,9 +3,9 @@ import { z } from "zod";
 import { RuntimeKindSchema } from "./topology.js";
 
 const NumberLimitSchema = z.object({
-  default: z.number().int().positive(),
-  min: z.number().int().positive(),
-  max: z.number().int().positive(),
+  default: z.number().int().nonnegative(),
+  min: z.number().int().nonnegative(),
+  max: z.number().int().nonnegative(),
 });
 
 export const TemplateSchema = z.object({

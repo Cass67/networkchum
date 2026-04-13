@@ -98,6 +98,7 @@ describe("powerOnNode", () => {
       canvas: { zoom: 1, backgroundImage: null },
       annotations: [],
       startupConfigSets: [],
+      nodeBootActions: [],
       activeConfigSetId: null,
       networks: [
         { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
@@ -167,6 +168,7 @@ describe("powerOnNode", () => {
       canvas: { zoom: 1, backgroundImage: null },
       annotations: [],
       startupConfigSets: [],
+      nodeBootActions: [],
       activeConfigSetId: null,
       networks: [
         { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
@@ -231,6 +233,7 @@ describe("powerOnNode", () => {
       canvas: { zoom: 1, backgroundImage: null },
       annotations: [],
       startupConfigSets: [],
+      nodeBootActions: [],
       activeConfigSetId: null,
       networks: [
         { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
@@ -272,6 +275,7 @@ describe("powerOnNode", () => {
       canvas: { zoom: 1, backgroundImage: null },
       annotations: [],
       startupConfigSets: [],
+      nodeBootActions: [],
       activeConfigSetId: null,
       networks: [
         { id: "net-1", kind: "ethernet", name: "LAN", visible: false },

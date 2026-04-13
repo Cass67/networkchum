@@ -184,7 +184,12 @@ type ApiClient = {
   attachInterfaces?: (
     labId: string,
     input: { networkId: string; interfaceIds: string[] },
-  ) => Promise<unknown>;
+  ) => Promise<{
+    id: string;
+    name: string;
+    autoBackup?: boolean;
+    document: LabDocumentData;
+  }>;
   createConfigSet?: (
     labId: string,
     name: string,
@@ -411,7 +416,7 @@ const demoCatalog: CatalogSummary[] = [
     configSchema: {
       ramMb: { default: 0, min: 0, max: 0 },
       vcpu: { default: 0, min: 0, max: 0 },
-      interfaceCount: { default: 1, min: 1, max: 8 },
+      interfaceCount: { default: 10, min: 1, max: 24 },
     },
   },
 ];
@@ -559,6 +564,7 @@ const defaultApi: ApiClient = browserApi ?? {
       templateId: string;
       name: string;
       position: { x: number; y: number };
+      interfaceCount?: number;
     },
   ) {
     return {
@@ -596,8 +602,12 @@ const defaultApi: ApiClient = browserApi ?? {
   async createNetwork() {
     return { network: { id: "net-demo" } };
   },
-  async attachInterfaces() {
-    return undefined as unknown as void;
+  async attachInterfaces(labId: string) {
+    return {
+      id: labId,
+      name: demoLabs[0]?.name ?? "Demo Lab",
+      document: { nodes: [], networks: [], attachments: [] },
+    };
   },
   async moveNode(labId: string) {
     return {
@@ -1109,6 +1119,7 @@ export function App({
     templateId: string;
     name: string;
     position: { x: number; y: number };
+    interfaceCount?: number;
   }) {
     if (!selectedLabId) {
       return;
@@ -1411,6 +1422,31 @@ export function App({
             nodeStatuses[selectedNode.id] ??
             (selectedNode.state?.desiredPower === "on" ? "running" : "stopped"),
           connectCommand: nodeConnectCommands[selectedNode.id],
+          attachments: selectedNode.interfaces
+            ?.map((iface) => {
+              const attachment = selectedLab?.document.attachments.find(
+                (entry) => entry.interfaceId === iface.id,
+              );
+              if (!attachment) {
+                return null;
+              }
+
+              return {
+                interfaceId: iface.id,
+                networkName:
+                  selectedLab?.document.networks.find(
+                    (network) => network.id === attachment.networkId,
+                  )?.name ?? attachment.networkId,
+              };
+            })
+            .filter(
+              (entry): entry is NonNullable<typeof entry> => entry !== null,
+            ),
+          networks:
+            selectedLab?.document.networks.map((network) => ({
+              id: network.id,
+              name: network.name,
+            })) ?? [],
         }
       : selectedCable
         ? {
@@ -1976,6 +2012,25 @@ export function App({
           onPowerOnNode={handlePowerOnNode}
           onPowerOffNode={handlePowerOffNode}
           onEditStartupConfig={handleOpenStartupConfigDialog}
+          onAttachInterface={async (interfaceId, networkId) => {
+            if (!selectedLabId || !api.attachInterfaces) {
+              return;
+            }
+
+            const lab = await api.attachInterfaces(selectedLabId, {
+              networkId,
+              interfaceIds: [interfaceId],
+            });
+            applyLabUpdate(lab);
+          }}
+          onDetachInterface={async (interfaceId) => {
+            if (!selectedLabId || !api.detachInterface) {
+              return;
+            }
+
+            const lab = await api.detachInterface(selectedLabId, interfaceId);
+            applyLabUpdate(lab);
+          }}
           onUnbindImage={async (imageId) => {
             if (!api.unbindImageFromTemplate) return;
             await api.unbindImageFromTemplate(imageId);
@@ -2241,6 +2296,8 @@ export function App({
                       catalog.find((c) => c.id === dialogTemplateId)?.name ??
                       dialogTemplateId,
                     source: "",
+                    configSchema: catalog.find((c) => c.id === dialogTemplateId)
+                      ?.configSchema,
                   },
                 ]
               : catalog

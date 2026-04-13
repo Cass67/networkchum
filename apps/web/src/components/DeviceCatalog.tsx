@@ -1,3 +1,5 @@
+import { DeviceIcon, getDeviceIconKind } from "../icons/deviceIcons.js";
+
 type CatalogEntry = {
   id: string;
   name: string;
@@ -40,7 +42,21 @@ export function DeviceCatalog({
           <div className="resource-card">
             <div className="resource-card-copy">
               <span className="resource-card-label">{entry.source}</span>
-              <strong className="resource-card-title">{entry.name}</strong>
+              <strong className="resource-card-title">
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <DeviceIcon
+                    kind={getDeviceIconKind(entry.runtime)}
+                    testId={`device-icon-${getDeviceIconKind(entry.runtime)}`}
+                  />
+                  <span>{entry.name}</span>
+                </span>
+              </strong>
               {entry.vendor || entry.runtime ? (
                 <p className="resource-card-meta">
                   {[
@@ -49,7 +65,9 @@ export function DeviceCatalog({
                       ? "VM"
                       : entry.runtime === "container"
                         ? "Container"
-                        : undefined,
+                        : entry.runtime === "cloud"
+                          ? "Cloud"
+                          : undefined,
                   ]
                     .filter(Boolean)
                     .join(" • ")}
@@ -57,9 +75,9 @@ export function DeviceCatalog({
               ) : null}
               {entry.configSchema ? (
                 <p className="resource-card-meta">
-                  {entry.configSchema.vcpu.default} vCPU •{" "}
-                  {entry.configSchema.ramMb.default} MB RAM •{" "}
-                  {entry.configSchema.interfaceCount.default} interfaces
+                  {entry.runtime === "cloud"
+                    ? `${entry.configSchema.interfaceCount.default} interfaces`
+                    : `${entry.configSchema.vcpu.default} vCPU • ${entry.configSchema.ramMb.default} MB RAM • ${entry.configSchema.interfaceCount.default} interfaces`}
                 </p>
               ) : null}
             </div>

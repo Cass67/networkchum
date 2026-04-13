@@ -42,7 +42,12 @@ import {
 } from "./configInjectors.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import { setNodeBootActions } from "../topology/mutations.js";
-import type { LabDocument, LabNode, NodeBootAction } from "@networkchum/shared";
+import type {
+  LabDocument,
+  LabNode,
+  NodeBootAction,
+  NodeBootActionState,
+} from "@networkchum/shared";
 
 const execFileAsync = promisify(execFile);
 
@@ -75,19 +80,9 @@ type RuntimeDependencies = {
 };
 
 function resolveNodeBootSettings(
-  bootActions: Array<
-    | {
-        nodeId: string;
-        startupConfig?: NodeBootAction;
-        runningConfigBackup?: NodeBootAction;
-      }
-    | {
-        nodeId: string;
-        action?: "none" | "backup-once" | "inject-once";
-      }
-  >,
+  bootActions: LabDocument["nodeBootActions"],
   nodeId: string,
-) {
+): Pick<NodeBootActionState, "startupConfig" | "runningConfigBackup"> {
   const entry = bootActions.find((candidate) => candidate.nodeId === nodeId);
   if (!entry) {
     return {
@@ -96,16 +91,10 @@ function resolveNodeBootSettings(
     };
   }
 
-  if ("action" in entry && entry.action) {
-    return {
-      startupConfig: entry.action === "inject-once" ? "once" : "none",
-      runningConfigBackup: entry.action === "backup-once" ? "once" : "none",
-    };
-  }
-
   return {
-    startupConfig: entry.startupConfig ?? "none",
-    runningConfigBackup: entry.runningConfigBackup ?? "none",
+    startupConfig: (entry.startupConfig ?? "none") as NodeBootAction,
+    runningConfigBackup: (entry.runningConfigBackup ??
+      "none") as NodeBootAction,
   };
 }
 

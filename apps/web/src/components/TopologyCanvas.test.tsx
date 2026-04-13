@@ -135,6 +135,28 @@ describe("TopologyCanvas", () => {
     expect(screen.getByTestId("status-n1")).toHaveTextContent("running");
   });
 
+  it("renders cloud icon for cloud nodes", () => {
+    render(
+      <TopologyCanvas
+        labName="Lab"
+        labId="lab-1"
+        nodes={[
+          {
+            id: "n1",
+            name: "Cloud-1",
+            runtime: "cloud",
+            position: { x: 50, y: 50 },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("node-icon-n1")).toHaveAttribute(
+      "data-icon-kind",
+      "cloud",
+    );
+  });
+
   it("calls onSelectNode when a node is clicked", () => {
     const onSelectNode = vi.fn();
     render(

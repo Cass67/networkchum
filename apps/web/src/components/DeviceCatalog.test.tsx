@@ -96,4 +96,31 @@ describe("DeviceCatalog", () => {
     );
     expect(onEditTemplate).toHaveBeenCalledWith("cisco-vios");
   });
+
+  it("renders cloud runtime label and hides zero compute details", () => {
+    render(
+      <DeviceCatalog
+        entries={[
+          {
+            id: "cloud",
+            name: "Cloud (External Network)",
+            source: "built-in",
+            vendor: "NetworkChum",
+            runtime: "cloud",
+            configSchema: {
+              ramMb: { default: 0, min: 0, max: 0 },
+              vcpu: { default: 0, min: 0, max: 0 },
+              interfaceCount: { default: 10, min: 1, max: 24 },
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("NetworkChum • Cloud")).toBeInTheDocument();
+    expect(screen.getByTestId("device-icon-cloud")).toBeInTheDocument();
+    expect(screen.getByText("10 interfaces")).toBeInTheDocument();
+    expect(screen.queryByText(/0 vCPU/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/0 MB RAM/)).not.toBeInTheDocument();
+  });
 });

@@ -24,6 +24,26 @@ describe("TemplateSchema", () => {
 
     expect(result.runtime).toBe("qemu");
   });
+
+  it("accepts a cloud template with zero compute resources", () => {
+    const result = TemplateSchema.parse({
+      id: "cloud",
+      runtime: "cloud",
+      displayName: "Cloud",
+      vendor: "NetworkChum",
+      boot: {
+        console: "none",
+        acceleration: "n/a",
+      },
+      configSchema: {
+        ramMb: { default: 0, min: 0, max: 0 },
+        vcpu: { default: 0, min: 0, max: 0 },
+        interfaceCount: { default: 10, min: 1, max: 24 },
+      },
+    });
+
+    expect(result.runtime).toBe("cloud");
+  });
 });
 
 describe("ImageRecordSchema", () => {

@@ -55,4 +55,18 @@ describe("getCatalog", () => {
       ),
     ).toBe(true);
   });
+
+  it("returns cloud template as built-in entry", async () => {
+    const entries = await getCatalog();
+
+    expect(
+      entries.some(
+        (entry) =>
+          entry.template.id === "cloud" &&
+          entry.source === "built-in" &&
+          entry.image === null &&
+          entry.template.configSchema.interfaceCount.default === 10,
+      ),
+    ).toBe(true);
+  });
 });

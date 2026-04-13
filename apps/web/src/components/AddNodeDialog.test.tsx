@@ -20,8 +20,26 @@ describe("AddNodeDialog", () => {
       id: "linux-alpine-container",
       name: "Alpine Container",
       source: "built-in",
+      configSchema: {
+        interfaceCount: { default: 1, min: 1, max: 1 },
+      },
     },
-    { id: "cisco-asr", name: "Cisco ASR", source: "image-bound" },
+    {
+      id: "cisco-asr",
+      name: "Cisco ASR",
+      source: "image-bound",
+      configSchema: {
+        interfaceCount: { default: 8, min: 4, max: 24 },
+      },
+    },
+    {
+      id: "cloud",
+      name: "Cloud (External Network)",
+      source: "built-in",
+      configSchema: {
+        interfaceCount: { default: 10, min: 1, max: 24 },
+      },
+    },
   ];
 
   it("renders the dialog with template selector and name input", () => {
@@ -126,6 +144,35 @@ describe("AddNodeDialog", () => {
 
     const nameInput = screen.getByTestId("node-name-input") as HTMLInputElement;
     expect(nameInput.value).toContain("Cisco");
+  });
+
+  it("submits chosen interface count for templates with variable ports", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AddNodeDialog
+        templates={templates}
+        existingNodes={[]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("template-select"), {
+      target: { value: "cloud" },
+    });
+    fireEvent.change(screen.getByTestId("interface-count-input"), {
+      target: { value: "12" },
+    });
+    fireEvent.click(screen.getByTestId("add-node-submit"));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledOnce();
+    });
+
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      templateId: "cloud",
+      interfaceCount: 12,
+    });
   });
 });
 

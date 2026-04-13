@@ -4,6 +4,9 @@ type TemplateEntry = {
   id: string;
   name: string;
   source: string;
+  configSchema?: {
+    interfaceCount: { default: number; min: number; max: number };
+  };
 };
 
 type ExistingNode = {
@@ -19,6 +22,7 @@ type AddNodeDialogProps = {
     templateId: string;
     name: string;
     position: { x: number; y: number };
+    interfaceCount?: number;
   }) => Promise<void>;
   onCancel: () => void;
 };
@@ -71,6 +75,15 @@ export function AddNodeDialog({
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedTemplate = templates.find(
+    (template) => template.id === templateId,
+  );
+  const interfaceRange = selectedTemplate?.configSchema?.interfaceCount;
+  const showInterfaceCount =
+    interfaceRange !== undefined && interfaceRange.min !== interfaceRange.max;
+  const [interfaceCount, setInterfaceCount] = useState(
+    templates[0]?.configSchema?.interfaceCount.default,
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,7 +91,12 @@ export function AddNodeDialog({
     setError(null);
     try {
       const position = computeNextPosition(existingNodes);
-      await onSubmit({ templateId, name, position });
+      await onSubmit({
+        templateId,
+        name,
+        position,
+        interfaceCount: showInterfaceCount ? interfaceCount : undefined,
+      });
     } catch {
       setError("Failed to add node");
     } finally {
@@ -90,6 +108,7 @@ export function AddNodeDialog({
     setTemplateId(newTemplateId);
     const template = templates.find((t) => t.id === newTemplateId);
     if (template) {
+      setInterfaceCount(template.configSchema?.interfaceCount.default);
       const base = template.id
         .replace(/-/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase())
@@ -135,6 +154,22 @@ export function AddNodeDialog({
               />
             </label>
           </div>
+          {showInterfaceCount && interfaceRange ? (
+            <div className="field">
+              <label>
+                <span className="field-label">Interfaces</span>
+                <input
+                  type="number"
+                  min={interfaceRange.min}
+                  max={interfaceRange.max}
+                  value={interfaceCount ?? interfaceRange.default}
+                  onChange={(e) => setInterfaceCount(Number(e.target.value))}
+                  className="field-input"
+                  data-testid="interface-count-input"
+                />
+              </label>
+            </div>
+          ) : null}
           {error ? <p className="form-error">{error}</p> : null}
           <div className="dialog-actions">
             <button

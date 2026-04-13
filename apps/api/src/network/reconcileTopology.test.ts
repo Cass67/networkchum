@@ -15,6 +15,7 @@ function makeLab(overrides: Partial<LabDocument> = {}): LabDocument {
     attachments: [],
     annotations: [],
     startupConfigSets: [],
+    nodeBootActions: [],
     activeConfigSetId: null,
     ...overrides,
   };

@@ -1,10 +1,12 @@
 import { useCallback, useRef, useState } from "react";
 
 import { ContextMenu } from "./ContextMenu.js";
+import { DeviceIcon, getDeviceIconKind } from "../icons/deviceIcons.js";
 
 type CanvasNode = {
   id: string;
   name: string;
+  runtime?: string;
   position?: { x: number; y: number };
   interfaces?: Array<{ id: string; name: string; slot: number }>;
   state?: { desiredPower: string };
@@ -854,8 +856,23 @@ export function TopologyCanvas({
                     rx={10}
                     ry={10}
                   />
+                  <foreignObject x={x + 8} y={y + 7} width={18} height={18}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--canvas-node-text)",
+                      }}
+                    >
+                      <DeviceIcon
+                        kind={getDeviceIconKind(node.runtime)}
+                        testId={`node-icon-${node.id}`}
+                      />
+                    </div>
+                  </foreignObject>
                   <text
-                    x={x + NODE_WIDTH / 2}
+                    x={x + NODE_WIDTH / 2 + 8}
                     y={y + NODE_HEIGHT / 2}
                     textAnchor="middle"
                     dominantBaseline="central"

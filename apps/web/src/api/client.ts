@@ -51,6 +51,7 @@ type LabDocumentSummary = {
   nodes: Array<{
     id: string;
     name: string;
+    runtime?: string;
     position?: { x: number; y: number };
     interfaces?: Array<{ id: string; name: string; slot: number }>;
     state?: { desiredPower: string };
@@ -250,6 +251,7 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
         templateId: string;
         name: string;
         position: { x: number; y: number };
+        interfaceCount?: number;
       },
     ): Promise<LabDetails> {
       const response = await fetcher(`${baseUrl}/labs/${labId}/nodes`, {

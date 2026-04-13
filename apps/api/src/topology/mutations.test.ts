@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { LabDocument } from "@networkchum/shared";
 
 import {
+  addNode,
   detachInterface,
   moveNode,
   removeNetwork,
@@ -129,6 +130,35 @@ describe("detachInterface", () => {
   });
 });
 
+describe("addNode", () => {
+  it("uses interfaceCount override instead of template default", () => {
+    const result = addNode(makeDocument(), {
+      template: {
+        id: "cloud",
+        runtime: "cloud",
+        displayName: "Cloud",
+        vendor: "NetworkChum",
+        boot: {
+          console: "none",
+          acceleration: "n/a",
+        },
+        configSchema: {
+          ramMb: { default: 0, min: 0, max: 0 },
+          vcpu: { default: 0, min: 0, max: 0 },
+          interfaceCount: { default: 10, min: 1, max: 24 },
+        },
+      },
+      name: "cloud-1",
+      position: { x: 0, y: 0 },
+      interfaceCount: 3,
+    });
+
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0]?.config.interfaceCount).toBe(3);
+    expect(result.nodes[0]?.interfaces).toHaveLength(3);
+  });
+});
+
 describe("removeNode", () => {
   it("removes the node and all interface attachments", () => {
     const doc = makeDocument({
@@ -169,7 +199,13 @@ describe("removeNode", () => {
           interfaces: [],
         },
       ],
-      nodeBootActions: [{ nodeId: "node-a", action: "inject-once" }],
+      nodeBootActions: [
+        {
+          nodeId: "node-a",
+          startupConfig: "once",
+          runningConfigBackup: "none",
+        },
+      ],
     });
 
     const result = removeNode(doc, "node-a");

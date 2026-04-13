@@ -91,6 +91,7 @@ describe("dockerNetworking", () => {
         attachments: [],
         annotations: [],
         startupConfigSets: [],
+        nodeBootActions: [],
         activeConfigSetId: null,
         ...overrides,
       };

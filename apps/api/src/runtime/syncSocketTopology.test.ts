@@ -23,6 +23,7 @@ describe("syncSocketTopology", () => {
             canvas: { zoom: 1, backgroundImage: null },
             annotations: [],
             startupConfigSets: [],
+            nodeBootActions: [],
             activeConfigSetId: null,
             nodes: [
               {
@@ -57,6 +58,7 @@ describe("syncSocketTopology", () => {
             canvas: { zoom: 1, backgroundImage: null },
             annotations: [],
             startupConfigSets: [],
+            nodeBootActions: [],
             activeConfigSetId: null,
             nodes: [
               {
