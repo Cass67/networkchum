@@ -449,6 +449,40 @@ describe("api", () => {
     });
   });
 
+  it("creates a cloud node with a configured bridge interface", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Cloud Create Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const addNodeResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes`,
+      payload: {
+        templateId: "cloud",
+        name: "cloud-1",
+        position: { x: 10, y: 10 },
+        bridgeInterface: "eno1",
+      },
+    });
+
+    expect(addNodeResponse.statusCode).toBe(201);
+    expect(addNodeResponse.json()).toEqual({
+      lab: expect.objectContaining({
+        document: expect.objectContaining({
+          nodes: expect.arrayContaining([
+            expect.objectContaining({
+              name: "cloud-1",
+              config: expect.objectContaining({ bridgeInterface: "eno1" }),
+            }),
+          ]),
+        }),
+      }),
+    });
+  });
+
   it("clears boot actions when the payload uses action none", async () => {
     const { labId, nodeId } = await createLabWithNode("node-boot-clear");
     await patchBootAction(labId, nodeId, {

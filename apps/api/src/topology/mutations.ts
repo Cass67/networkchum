@@ -14,6 +14,7 @@ type AddNodeInput = {
   imageId?: string | null;
   interfaceCount?: number;
   accelerationMode?: string;
+  bridgeInterface?: string | null;
 };
 
 export function addNode(
@@ -44,6 +45,7 @@ export function addNode(
       nicModel: input.template.boot.nicModel,
       accelerationMode:
         input.accelerationMode ?? input.template.boot.acceleration,
+      bridgeInterface: input.bridgeInterface ?? null,
     },
     state: {
       desiredPower: "off",

@@ -4,6 +4,7 @@ type TemplateEntry = {
   id: string;
   name: string;
   source: string;
+  runtime?: string;
   configSchema?: {
     interfaceCount: { default: number; min: number; max: number };
   };
@@ -23,7 +24,9 @@ type AddNodeDialogProps = {
     name: string;
     position: { x: number; y: number };
     interfaceCount?: number;
+    bridgeInterface?: string | null;
   }) => Promise<void>;
+  hostInterfaces: string[];
   onCancel: () => void;
 };
 
@@ -61,6 +64,7 @@ function computeNextPosition(existingNodes: ExistingNode[]): {
 export function AddNodeDialog({
   templates,
   existingNodes,
+  hostInterfaces,
   onSubmit,
   onCancel,
 }: AddNodeDialogProps) {
@@ -84,6 +88,8 @@ export function AddNodeDialog({
   const [interfaceCount, setInterfaceCount] = useState(
     templates[0]?.configSchema?.interfaceCount.default,
   );
+  const showBridgeInterface = selectedTemplate?.runtime === "cloud";
+  const [bridgeInterface, setBridgeInterface] = useState<string>("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -96,6 +102,7 @@ export function AddNodeDialog({
         name,
         position,
         interfaceCount: showInterfaceCount ? interfaceCount : undefined,
+        bridgeInterface: showBridgeInterface ? bridgeInterface || null : null,
       });
     } catch {
       setError("Failed to add node");
@@ -109,6 +116,7 @@ export function AddNodeDialog({
     const template = templates.find((t) => t.id === newTemplateId);
     if (template) {
       setInterfaceCount(template.configSchema?.interfaceCount.default);
+      setBridgeInterface("");
       const base = template.id
         .replace(/-/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase())
@@ -167,6 +175,27 @@ export function AddNodeDialog({
                   className="field-input"
                   data-testid="interface-count-input"
                 />
+              </label>
+            </div>
+          ) : null}
+          {showBridgeInterface ? (
+            <div className="field">
+              <label>
+                <span className="field-label">Physical Interface</span>
+                <select
+                  value={bridgeInterface}
+                  onChange={(e) => setBridgeInterface(e.target.value)}
+                  className="field-input"
+                  aria-label="Physical Interface"
+                  data-testid="bridge-interface-select"
+                >
+                  <option value="">No Physical Interface</option>
+                  {hostInterfaces.map((iface) => (
+                    <option key={iface} value={iface}>
+                      {iface}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
           ) : null}

@@ -127,6 +127,7 @@ type ApiClient = {
       templateId: string;
       name: string;
       position: { x: number; y: number };
+      bridgeInterface?: string | null;
     },
   ) => Promise<{
     id: string;
@@ -576,6 +577,7 @@ const defaultApi: ApiClient = browserApi ?? {
       name: string;
       position: { x: number; y: number };
       interfaceCount?: number;
+      bridgeInterface?: string | null;
     },
   ) {
     return {
@@ -1158,6 +1160,7 @@ export function App({
     name: string;
     position: { x: number; y: number };
     interfaceCount?: number;
+    bridgeInterface?: string | null;
   }) {
     if (!selectedLabId) {
       return;
@@ -1416,11 +1419,31 @@ export function App({
   }
 
   function handleSelectTemplate(templateId: string) {
+    if (api.listHostInterfaces) {
+      void api
+        .listHostInterfaces()
+        .then((interfaces) => {
+          setHostInterfaces(interfaces);
+        })
+        .catch(() => {
+          setHostInterfaces([]);
+        });
+    }
     setDialogTemplateId(templateId);
     setShowAddNodeDialog(true);
   }
 
   function handleOpenAddNodeDialog() {
+    if (api.listHostInterfaces) {
+      void api
+        .listHostInterfaces()
+        .then((interfaces) => {
+          setHostInterfaces(interfaces);
+        })
+        .catch(() => {
+          setHostInterfaces([]);
+        });
+    }
     setDialogTemplateId(null);
     setShowAddNodeDialog(true);
   }
@@ -2344,6 +2367,8 @@ export function App({
                       catalog.find((c) => c.id === dialogTemplateId)?.name ??
                       dialogTemplateId,
                     source: "",
+                    runtime: catalog.find((c) => c.id === dialogTemplateId)
+                      ?.runtime,
                     configSchema: catalog.find((c) => c.id === dialogTemplateId)
                       ?.configSchema,
                   },
@@ -2351,6 +2376,7 @@ export function App({
               : catalog
           }
           existingNodes={selectedLab?.document.nodes ?? []}
+          hostInterfaces={hostInterfaces}
           onSubmit={handleAddNode}
           onCancel={() => {
             setShowAddNodeDialog(false);

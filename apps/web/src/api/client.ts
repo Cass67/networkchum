@@ -255,6 +255,7 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
         name: string;
         position: { x: number; y: number };
         interfaceCount?: number;
+        bridgeInterface?: string | null;
       },
     ): Promise<LabDetails> {
       const response = await fetcher(`${baseUrl}/labs/${labId}/nodes`, {

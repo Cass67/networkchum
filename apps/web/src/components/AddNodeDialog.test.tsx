@@ -36,6 +36,7 @@ describe("AddNodeDialog", () => {
       id: "cloud",
       name: "Cloud (External Network)",
       source: "built-in",
+      runtime: "cloud",
       configSchema: {
         interfaceCount: { default: 10, min: 1, max: 24 },
       },
@@ -47,6 +48,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -64,6 +66,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={onCancel}
       />,
@@ -79,6 +82,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
       />,
@@ -102,6 +106,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
       />,
@@ -119,6 +124,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -134,6 +140,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -152,6 +159,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
       />,
@@ -172,6 +180,39 @@ describe("AddNodeDialog", () => {
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
       templateId: "cloud",
       interfaceCount: 12,
+    });
+  });
+
+  it("shows a physical interface selector for cloud templates and submits it", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AddNodeDialog
+        templates={templates}
+        existingNodes={[]}
+        hostInterfaces={["eno1", "ens192"]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("template-select"), {
+      target: { value: "cloud" },
+    });
+
+    expect(screen.getByLabelText("Physical Interface")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Physical Interface"), {
+      target: { value: "eno1" },
+    });
+    fireEvent.click(screen.getByTestId("add-node-submit"));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledOnce();
+    });
+
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      templateId: "cloud",
+      bridgeInterface: "eno1",
     });
   });
 });

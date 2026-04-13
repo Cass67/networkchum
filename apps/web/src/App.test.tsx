@@ -2250,4 +2250,103 @@ describe("App", () => {
       });
     });
   });
+
+  it("creates a cloud node with the selected host interface", async () => {
+    const addNode = vi.fn(
+      async (
+        _labId: string,
+        input: {
+          templateId: string;
+          name: string;
+          position: { x: number; y: number };
+          interfaceCount?: number;
+          bridgeInterface?: string | null;
+        },
+      ) => ({
+        id: "lab-1",
+        name: "Cloud Lab",
+        document: {
+          nodes: [
+            {
+              id: "node-cloud-1",
+              name: input.name,
+              runtime: "cloud",
+              position: input.position,
+              config: {
+                vcpu: 0,
+                ramMb: 0,
+                interfaceCount: input.interfaceCount ?? 10,
+                bridgeInterface: input.bridgeInterface ?? null,
+              },
+              interfaces: [{ id: "if-1", name: "eth0", slot: 0 }],
+            },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+    );
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Cloud Lab" }],
+      listCatalog: async () => [
+        {
+          id: "cloud",
+          name: "Cloud (External Network)",
+          source: "built-in",
+          runtime: "cloud",
+          configSchema: {
+            ramMb: { default: 0, min: 0, max: 0 },
+            vcpu: { default: 0, min: 0, max: 0 },
+            interfaceCount: { default: 10, min: 1, max: 24 },
+          },
+        },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Cloud Lab",
+        document: {
+          nodes: [],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [],
+      listHostInterfaces: async () => ["eno1", "ens192"],
+      addNode,
+      powerOnNode: async () => ({
+        nodeId: "node-cloud-1",
+        status: "running",
+        connectCommand: undefined,
+        message: null,
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Open Cloud Lab" });
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Node" }));
+
+    await screen.findByRole("dialog", { name: "Add Node" });
+    fireEvent.change(screen.getByTestId("template-select"), {
+      target: { value: "cloud" },
+    });
+    fireEvent.change(screen.getByLabelText("Physical Interface"), {
+      target: { value: "eno1" },
+    });
+    fireEvent.click(screen.getByTestId("add-node-submit"));
+
+    await waitFor(() => {
+      expect(addNode).toHaveBeenCalledWith(
+        "lab-1",
+        expect.objectContaining({
+          templateId: "cloud",
+          bridgeInterface: "eno1",
+        }),
+      );
+    });
+  });
 });

@@ -61,6 +61,7 @@ const addNodeSchema = z.object({
   position: z.object({ x: z.number(), y: z.number() }),
   imageId: z.string().min(1).nullable().optional(),
   interfaceCount: z.number().int().min(1).optional(),
+  bridgeInterface: z.string().min(1).nullable().optional(),
 });
 
 const addNetworkSchema = z.object({
@@ -262,6 +263,7 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       position: body.position,
       imageId: resolvedImageId,
       interfaceCount: body.interfaceCount,
+      bridgeInterface: body.bridgeInterface ?? null,
       accelerationMode:
         template.runtime === "qemu"
           ? acceleration.mode
