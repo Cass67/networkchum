@@ -51,6 +51,14 @@ describe("guessDeviceRoleIcon", () => {
     expect(
       guessDeviceRoleIcon({
         runtime: "qemu",
+        name: "NX-OS Sandbox",
+        vendor: "Cisco",
+      }),
+    ).toBe("switch");
+
+    expect(
+      guessDeviceRoleIcon({
+        runtime: "qemu",
         name: "CSR1000v",
         vendor: "Cisco",
       }),

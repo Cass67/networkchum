@@ -25,6 +25,7 @@ const SWITCH_KEYWORDS = [
   "veos",
   "eos",
   "iosvl2",
+  "nx-os",
   "nxos",
   "switch",
   "cat9k",
