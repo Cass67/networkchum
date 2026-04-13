@@ -64,10 +64,50 @@ const NODE_GLYPH_SIZE = 40;
 const NODE_LABEL_GAP = 16;
 const NODE_STATUS_GAP = 14;
 const NODE_ICON_BASE_SIZE = 16;
+const NODE_CABLE_ANCHOR_GAP = 12;
+const CABLE_LABEL_OFFSET = 16;
 function getNodeCenter(node: CanvasNode): { x: number; y: number } {
   return {
     x: (node.position?.x ?? 32) + NODE_WIDTH / 2,
     y: (node.position?.y ?? 32) + NODE_HEIGHT / 2,
+  };
+}
+
+function getNodeStatusY(node: CanvasNode): number {
+  const center = getNodeCenter(node);
+  const labelY = center.y + NODE_GLYPH_SIZE / 2 + NODE_LABEL_GAP;
+  return labelY + NODE_STATUS_GAP;
+}
+
+function getNodeCableAnchor(
+  node: CanvasNode,
+  target: { x: number; y: number },
+): { x: number; y: number } {
+  const center = getNodeCenter(node);
+  const dx = target.x - center.x;
+  const dy = target.y - center.y;
+
+  if (dy > 0) {
+    return {
+      x: center.x,
+      y: getNodeStatusY(node) + NODE_CABLE_ANCHOR_GAP,
+    };
+  }
+
+  if (dy < 0) {
+    return {
+      x: center.x,
+      y: center.y - NODE_GLYPH_SIZE / 2 - NODE_CABLE_ANCHOR_GAP,
+    };
+  }
+
+  return {
+    x:
+      center.x +
+      (dx >= 0
+        ? NODE_GLYPH_SIZE / 2 + NODE_CABLE_ANCHOR_GAP
+        : -(NODE_GLYPH_SIZE / 2 + NODE_CABLE_ANCHOR_GAP)),
+    y: center.y,
   };
 }
 
@@ -80,28 +120,28 @@ function getCableLabelPosition(
 ) {
   const dx = x2 - x1;
   const dy = y2 - y1;
-  const horizontalBias = Math.abs(dx) >= Math.abs(dy);
+  const horizontalBias = Math.abs(dx) > Math.abs(dy);
 
   if (side === "source") {
     return horizontalBias
       ? {
-          x: x1 + (dx >= 0 ? NODE_WIDTH / 2 + 18 : -(NODE_WIDTH / 2 + 18)),
+          x: x1 + (dx >= 0 ? CABLE_LABEL_OFFSET : -CABLE_LABEL_OFFSET),
           y: y1 - 8,
         }
       : {
           x: x1,
-          y: y1 + (dy >= 0 ? NODE_HEIGHT / 2 + 18 : -(NODE_HEIGHT / 2 + 18)),
+          y: y1 + (dy >= 0 ? CABLE_LABEL_OFFSET : -CABLE_LABEL_OFFSET),
         };
   }
 
   return horizontalBias
     ? {
-        x: x2 + (dx >= 0 ? -(NODE_WIDTH / 2 + 18) : NODE_WIDTH / 2 + 18),
+        x: x2 + (dx >= 0 ? -CABLE_LABEL_OFFSET : CABLE_LABEL_OFFSET),
         y: y2 - 8,
       }
     : {
         x: x2,
-        y: y2 + (dy >= 0 ? -(NODE_HEIGHT / 2 + 18) : NODE_HEIGHT / 2 + 18),
+        y: y2 + (dy >= 0 ? -CABLE_LABEL_OFFSET : CABLE_LABEL_OFFSET),
       };
 }
 
@@ -158,8 +198,8 @@ function buildLinks(
     if (uniqueNodeIds.length === 2) {
       const n1 = nodeMap.get(uniqueNodeIds[0]!)!;
       const n2 = nodeMap.get(uniqueNodeIds[1]!)!;
-      const c1 = getNodeCenter(n1);
-      const c2 = getNodeCenter(n2);
+      const c1 = getNodeCableAnchor(n1, getNodeCenter(n2));
+      const c2 = getNodeCableAnchor(n2, getNodeCenter(n1));
       const source = attachedIfaces.find((entry) => entry.node?.id === n1.id);
       const target = attachedIfaces.find((entry) => entry.node?.id === n2.id);
       links.push({
@@ -176,7 +216,7 @@ function buildLinks(
     } else {
       for (const nodeId of uniqueNodeIds) {
         const n = nodeMap.get(nodeId)!;
-        const c = getNodeCenter(n);
+        const c = getNodeCableAnchor(n, { x: midX, y: midY });
         const iface = attachedIfaces.find(
           (entry) => entry.node?.id === nodeId,
         )?.iface;
@@ -726,8 +766,11 @@ export function TopologyCanvas({
     if (cableState.mode !== "drawing" || !cableState.sourceNodeId) return null;
     const sourceNode = nodes.find((n) => n.id === cableState.sourceNodeId);
     if (!sourceNode) return null;
-    return getNodeCenter(
-      resolvedNodes.find((n) => n.id === sourceNode.id) ?? sourceNode,
+    const resolvedSourceNode =
+      resolvedNodes.find((n) => n.id === sourceNode.id) ?? sourceNode;
+    return getNodeCableAnchor(
+      resolvedSourceNode,
+      cableState.mousePos ?? getNodeCenter(resolvedSourceNode),
     );
   })();
 
@@ -851,7 +894,7 @@ export function TopologyCanvas({
               const glowColor =
                 isSelected || status === "running" ? outlineColor : null;
               const labelY = center.y + NODE_GLYPH_SIZE / 2 + NODE_LABEL_GAP;
-              const statusY = labelY + NODE_STATUS_GAP;
+              const statusY = getNodeStatusY(node);
               const hitboxHeight = statusY - y + 10;
               const iconScale = NODE_GLYPH_SIZE / NODE_ICON_BASE_SIZE;
 
