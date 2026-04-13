@@ -1,21 +1,24 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  MACOS_MANAGEMENT_SUBNET,
-  MACOS_MANAGEMENT_UNAVAILABLE_MESSAGE,
   buildMacOsManagementUnavailableMessage,
   getMacOsManagementSubnet,
 } from "./macosManagementCloud.js";
 
 describe("macOS management cloud helpers", () => {
   it("provides the fixed management subnet metadata", () => {
-    expect(getMacOsManagementSubnet()).toBe(MACOS_MANAGEMENT_SUBNET);
+    expect(getMacOsManagementSubnet()).toEqual({
+      subnetCidr: "172.31.255.0/24",
+      hostIp: "172.31.255.1",
+    });
   });
 
   it("reports an unavailable message that mentions the host-only management backend", () => {
     const message = buildMacOsManagementUnavailableMessage();
 
-    expect(message).toBe(MACOS_MANAGEMENT_UNAVAILABLE_MESSAGE);
+    expect(message).toContain("macOS");
+    expect(message).toContain("management");
+    expect(message).toContain("host-only management backend");
     expect(message).toContain("unavailable");
   });
 });
