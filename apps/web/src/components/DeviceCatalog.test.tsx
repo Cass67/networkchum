@@ -123,4 +123,23 @@ describe("DeviceCatalog", () => {
     expect(screen.queryByText(/0 vCPU/)).not.toBeInTheDocument();
     expect(screen.queryByText(/0 MB RAM/)).not.toBeInTheDocument();
   });
+
+  it("renders firewall role icon for qemu runtime templates", () => {
+    render(
+      <DeviceCatalog
+        entries={[
+          {
+            id: "fortigate-firewall",
+            name: "Fortigate Firewall",
+            source: "built-in",
+            runtime: "qemu",
+            deviceRoleIcon: "firewall",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("device-role-icon-firewall")).toBeInTheDocument();
+    expect(screen.queryByTestId("device-icon-vm")).not.toBeInTheDocument();
+  });
 });

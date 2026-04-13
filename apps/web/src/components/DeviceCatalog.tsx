@@ -1,4 +1,8 @@
 import { DeviceIcon, getDeviceIconKind } from "../icons/deviceIcons.js";
+import {
+  getDeviceRoleIcon,
+  type DeviceRoleIcon,
+} from "../icons/deviceRoleIcons.js";
 
 type CatalogEntry = {
   id: string;
@@ -6,6 +10,7 @@ type CatalogEntry = {
   source: string;
   vendor?: string;
   runtime?: string;
+  deviceRoleIcon?: DeviceRoleIcon;
   configSchema?: {
     ramMb: { default: number; min: number; max: number };
     vcpu: { default: number; min: number; max: number };
@@ -50,10 +55,12 @@ export function DeviceCatalog({
                     gap: 8,
                   }}
                 >
-                  <DeviceIcon
-                    kind={getDeviceIconKind(entry.runtime)}
-                    testId={`device-icon-${getDeviceIconKind(entry.runtime)}`}
-                  />
+                  {getDeviceRoleIcon(entry.deviceRoleIcon) ?? (
+                    <DeviceIcon
+                      kind={getDeviceIconKind(entry.runtime)}
+                      testId={`device-icon-${getDeviceIconKind(entry.runtime)}`}
+                    />
+                  )}
                   <span>{entry.name}</span>
                 </span>
               </strong>
