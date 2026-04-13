@@ -2,11 +2,16 @@ import { useCallback, useRef, useState } from "react";
 
 import { ContextMenu } from "./ContextMenu.js";
 import { DeviceIcon, getDeviceIconKind } from "../icons/deviceIcons.js";
+import {
+  DeviceRoleIconGlyph,
+  type DeviceRoleIcon,
+} from "../icons/deviceRoleIcons.js";
 
 type CanvasNode = {
   id: string;
   name: string;
   runtime?: string;
+  deviceRoleIcon?: DeviceRoleIcon;
   position?: { x: number; y: number };
   interfaces?: Array<{ id: string; name: string; slot: number }>;
   state?: { desiredPower: string };
@@ -55,6 +60,11 @@ type TopologyCanvasProps = {
 
 const NODE_WIDTH = 100;
 const NODE_HEIGHT = 48;
+const NODE_GLYPH_SIZE = 40;
+const NODE_GLYPH_RADIUS = NODE_GLYPH_SIZE / 2;
+const NODE_LABEL_GAP = 16;
+const NODE_STATUS_GAP = 14;
+const NODE_ICON_SIZE = 16;
 function getNodeCenter(node: CanvasNode): { x: number; y: number } {
   return {
     x: (node.position?.x ?? 32) + NODE_WIDTH / 2,
@@ -824,6 +834,9 @@ export function TopologyCanvas({
             {resolvedNodes.map((node) => {
               const x = node.position?.x ?? 32;
               const y = node.position?.y ?? 32;
+              const center = getNodeCenter(node);
+              const labelY = center.y + NODE_GLYPH_RADIUS + NODE_LABEL_GAP;
+              const statusY = labelY + NODE_STATUS_GAP;
               const status =
                 nodeStatuses[node.id] ??
                 (node.state?.desiredPower === "on" ? "running" : "stopped");
@@ -835,6 +848,11 @@ export function TopologyCanvas({
                   : status === "stopped"
                     ? "var(--canvas-node-stopped)"
                     : "var(--canvas-node-idle)";
+              const outlineColor = isSelected
+                ? "var(--canvas-node-selected)"
+                : borderColor;
+              const glowColor =
+                isSelected || status === "running" ? outlineColor : null;
 
               return (
                 <g
@@ -848,32 +866,43 @@ export function TopologyCanvas({
                     y={y}
                     width={NODE_WIDTH}
                     height={NODE_HEIGHT}
-                    fill="var(--canvas-node-fill)"
-                    stroke={
-                      isSelected ? "var(--canvas-node-selected)" : borderColor
-                    }
-                    strokeWidth={isSelected ? 3 : 2}
-                    rx={10}
-                    ry={10}
+                    fill="transparent"
+                    data-testid={`node-hitbox-${node.id}`}
                   />
-                  <foreignObject x={x + 8} y={y + 7} width={18} height={18}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--canvas-node-text)",
-                      }}
-                    >
+                  <circle
+                    cx={center.x}
+                    cy={center.y}
+                    r={NODE_GLYPH_RADIUS}
+                    fill="var(--canvas-node-fill)"
+                    stroke={outlineColor}
+                    strokeWidth={isSelected ? 3 : 2}
+                    data-testid={`node-body-${node.id}`}
+                    style={
+                      glowColor
+                        ? { filter: `drop-shadow(0 0 6px ${glowColor})` }
+                        : undefined
+                    }
+                  />
+                  <g
+                    transform={`translate(${center.x - NODE_ICON_SIZE / 2} ${center.y - NODE_ICON_SIZE / 2})`}
+                    style={{ color: "var(--canvas-node-text)" }}
+                    pointerEvents="none"
+                  >
+                    {node.deviceRoleIcon ? (
+                      <DeviceRoleIconGlyph
+                        kind={node.deviceRoleIcon}
+                        testId={`canvas-node-${node.deviceRoleIcon}-${node.id}`}
+                      />
+                    ) : (
                       <DeviceIcon
                         kind={getDeviceIconKind(node.runtime)}
                         testId={`node-icon-${node.id}`}
                       />
-                    </div>
-                  </foreignObject>
+                    )}
+                  </g>
                   <text
-                    x={x + NODE_WIDTH / 2 + 8}
-                    y={y + NODE_HEIGHT / 2}
+                    x={center.x}
+                    y={labelY}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize={12}
@@ -883,8 +912,8 @@ export function TopologyCanvas({
                     {node.name}
                   </text>
                   <text
-                    x={x + NODE_WIDTH / 2}
-                    y={y + NODE_HEIGHT - 6}
+                    x={center.x}
+                    y={statusY}
                     textAnchor="middle"
                     fontSize={10}
                     fill={borderColor}

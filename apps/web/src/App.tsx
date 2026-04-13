@@ -67,7 +67,9 @@ type EditableCatalogSummary = CatalogSummary & {
 type LabNodeData = {
   id: string;
   name: string;
+  templateId?: string | null;
   runtime?: string;
+  deviceRoleIcon?: DeviceRoleIcon;
   position?: { x: number; y: number };
   interfaces?: Array<{ id: string; name: string; slot: number }>;
   config?: {
@@ -1521,6 +1523,17 @@ export function App({
             }
           : null;
 
+  const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
+  const canvasNodes = (selectedLab?.document.nodes ?? []).map((node) => {
+    const catalogEntry = node.templateId
+      ? catalogById.get(node.templateId)
+      : undefined;
+    return {
+      ...node,
+      deviceRoleIcon: node.deviceRoleIcon ?? catalogEntry?.deviceRoleIcon,
+    };
+  });
+
   async function refreshImages() {
     if (!api.listImages) return;
     const nextImages = await api.listImages();
@@ -2054,7 +2067,7 @@ export function App({
         <TopologyCanvas
           labName={selectedLab?.name ?? null}
           labId={selectedLabId}
-          nodes={selectedLab?.document.nodes ?? []}
+          nodes={canvasNodes}
           networks={selectedLab?.document.networks ?? []}
           attachments={selectedLab?.document.attachments ?? []}
           nodeStatuses={nodeStatuses}

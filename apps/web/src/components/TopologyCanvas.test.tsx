@@ -108,7 +108,7 @@ describe("TopologyCanvas", () => {
 
     expect(screen.getByTestId("status-n1")).toHaveTextContent("running");
     expect(screen.getByTestId("status-n2")).toHaveTextContent("stopped");
-    expect(screen.getByTestId("status-n1")).toHaveAttribute("y", "92");
+    expect(screen.getByTestId("status-n1")).toHaveAttribute("y", "124");
   });
 
   it("shows default stopped status when no nodeStatuses", () => {
@@ -133,6 +133,30 @@ describe("TopologyCanvas", () => {
     );
 
     expect(screen.getByTestId("status-n1")).toHaveTextContent("running");
+  });
+
+  it("renders firewall role glyphs instead of legacy node boxes", () => {
+    render(
+      <TopologyCanvas
+        labName="Lab"
+        labId="lab-1"
+        nodes={[
+          {
+            id: "node-1",
+            name: "Firewall-1",
+            position: { x: 50, y: 50 },
+            deviceRoleIcon: "firewall",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByTestId("canvas-node-firewall-node-1"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("node-body-node-1").tagName.toLowerCase()).toBe(
+      "circle",
+    );
   });
 
   it("renders cloud icon for cloud nodes", () => {
@@ -266,9 +290,8 @@ describe("TopologyCanvas", () => {
       />,
     );
 
-    const nodeGroup = screen.getByTestId("node-n1");
-    const rect = nodeGroup.querySelector("rect");
-    expect(rect?.getAttribute("stroke")).toBe("var(--canvas-node-selected)");
+    const body = screen.getByTestId("node-body-n1");
+    expect(body).toHaveAttribute("stroke", "var(--canvas-node-selected)");
   });
 
   describe("drag", () => {
