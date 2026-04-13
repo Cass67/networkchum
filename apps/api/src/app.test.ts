@@ -12,6 +12,7 @@ import path from "node:path";
 import type { NodeBootAction, NodeBootActionState } from "@networkchum/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import type { DeviceRoleIcon } from "./templates/deviceRoleIcon.js";
 import { appendRunningConfigBackupRecord } from "./runtime/runningConfigBackupStore.js";
 import { buildApp } from "./app.js";
 import { saveImages } from "./images/imageStore.js";
@@ -163,7 +164,7 @@ describe("api", () => {
     const templatesPayload = templatesResponse.json() as {
       templates: Array<{
         id: string;
-        deviceRoleIcon?: string;
+        deviceRoleIcon?: DeviceRoleIcon;
         configSchema: {
           ramMb: { default: number };
           vcpu: { default: number };
@@ -241,6 +242,74 @@ describe("api", () => {
     expect(addNodePayload.lab.document.nodes[0]?.config.ramMb).toBe(1024);
     expect(addNodePayload.lab.document.nodes[0]?.config.interfaceCount).toBe(3);
     expect(addNodePayload.lab.document.nodes[0]?.interfaces).toHaveLength(3);
+  });
+
+  it("supports partial template updates driven by deviceRoleIcon", async () => {
+    const templatesBeforeResponse = await app.inject({
+      method: "GET",
+      url: "/templates",
+    });
+    const templatesBeforePayload = templatesBeforeResponse.json() as {
+      templates: Array<{
+        id: string;
+        deviceRoleIcon?: DeviceRoleIcon;
+        configSchema: {
+          ramMb: { default: number };
+          vcpu: { default: number };
+          interfaceCount: { default: number };
+        };
+      }>;
+    };
+    const beforeTemplate = templatesBeforePayload.templates.find(
+      (template) => template.id === "linux-ubuntu-container",
+    );
+
+    expect(beforeTemplate).toBeTruthy();
+
+    const patchResponse = await app.inject({
+      method: "PATCH",
+      url: "/templates/linux-ubuntu-container",
+      payload: {
+        deviceRoleIcon: "switch",
+      },
+    });
+
+    expect(patchResponse.statusCode).toBe(200);
+
+    const templatesAfterResponse = await app.inject({
+      method: "GET",
+      url: "/templates",
+    });
+    const templatesAfterPayload = templatesAfterResponse.json() as {
+      templates: Array<{
+        id: string;
+        deviceRoleIcon?: DeviceRoleIcon;
+        configSchema: {
+          ramMb: { default: number };
+          vcpu: { default: number };
+          interfaceCount: { default: number };
+        };
+      }>;
+    };
+    const afterTemplate = templatesAfterPayload.templates.find(
+      (template) => template.id === "linux-ubuntu-container",
+    );
+
+    expect(afterTemplate).toBeTruthy();
+    expect(afterTemplate?.deviceRoleIcon).toBe("switch");
+    expect(afterTemplate?.configSchema).toEqual(beforeTemplate?.configSchema);
+  });
+
+  it("rejects invalid deviceRoleIcon values", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/templates/linux-ubuntu-container",
+      payload: {
+        deviceRoleIcon: "not-a-real-role",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
   });
 
   it("creates and lists labs", async () => {
