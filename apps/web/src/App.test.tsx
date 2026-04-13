@@ -2188,7 +2188,7 @@ describe("App", () => {
   });
 
   describe("Cloud Settings", () => {
-    it("opens cloud settings and saves the selected bridge interface", async () => {
+    it("opens cloud settings and saves the selected host bridge", async () => {
       const lab = {
         id: "lab-1",
         name: "Cloud Lab",
@@ -2226,7 +2226,7 @@ describe("App", () => {
               ...lab.document.nodes[0],
               config: {
                 ...lab.document.nodes[0].config,
-                bridgeInterface: "eno1",
+                bridgeInterface: "br-mgmt",
               },
             },
           ],
@@ -2246,7 +2246,7 @@ describe("App", () => {
           connectCommand: undefined,
           message: null,
         }),
-        listHostInterfaces: async () => ["eno1", "ens192"],
+        listHostInterfaces: async () => ["br-lab", "br-mgmt"],
         setNodeSettings,
       };
 
@@ -2262,20 +2262,20 @@ describe("App", () => {
       fireEvent.click(screen.getByRole("button", { name: "Cloud Settings" }));
       await screen.findByRole("dialog", { name: "Cloud Settings" });
 
-      fireEvent.change(screen.getByLabelText("Physical Interface"), {
-        target: { value: "eno1" },
+      fireEvent.change(screen.getByLabelText("Host Bridge"), {
+        target: { value: "br-mgmt" },
       });
       fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
       await waitFor(() => {
         expect(setNodeSettings).toHaveBeenCalledWith("lab-1", "node-1", {
-          bridgeInterface: "eno1",
+          bridgeInterface: "br-mgmt",
         });
       });
     });
   });
 
-  it("creates a cloud node with the selected host interface", async () => {
+  it("creates a cloud node with the selected host bridge", async () => {
     const addNode = vi.fn(
       async (
         _labId: string,
@@ -2338,7 +2338,7 @@ describe("App", () => {
         },
       }),
       listRuntimeStates: async () => [],
-      listHostInterfaces: async () => ["eno1", "ens192"],
+      listHostInterfaces: async () => ["br-lab", "br-mgmt"],
       addNode,
       powerOnNode: async () => ({
         nodeId: "node-cloud-1",
@@ -2358,8 +2358,8 @@ describe("App", () => {
     fireEvent.change(screen.getByTestId("template-select"), {
       target: { value: "cloud" },
     });
-    fireEvent.change(screen.getByLabelText("Physical Interface"), {
-      target: { value: "eno1" },
+    fireEvent.change(screen.getByLabelText("Host Bridge"), {
+      target: { value: "br-mgmt" },
     });
     fireEvent.click(screen.getByTestId("add-node-submit"));
 
@@ -2368,7 +2368,7 @@ describe("App", () => {
         "lab-1",
         expect.objectContaining({
           templateId: "cloud",
-          bridgeInterface: "eno1",
+          bridgeInterface: "br-mgmt",
         }),
       );
     });

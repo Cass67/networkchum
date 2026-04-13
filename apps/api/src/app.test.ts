@@ -94,6 +94,9 @@ beforeAll(async () => {
         return { ok: true, stdout: "", stderr: "" };
       },
       hasBinary: async () => false,
+      isBridgeInterface: async (interfaceName) =>
+        interfaceName === "br-mgmt" || interfaceName === "br-lab",
+      listHostInterfaces: async () => ["br-lab", "br-mgmt"],
     },
   });
 });
@@ -460,6 +463,18 @@ describe("api", () => {
     });
   });
 
+  it("returns host bridge interfaces for cloud uplinks", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/host/interfaces",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      interfaces: ["br-lab", "br-mgmt"],
+    });
+  });
+
   it("updates and persists a cloud node bridge interface", async () => {
     const createLabResponse = await app.inject({
       method: "POST",
@@ -488,7 +503,7 @@ describe("api", () => {
     const patchResponse = await app.inject({
       method: "PATCH",
       url: `/labs/${labId}/nodes/${nodeId}/settings`,
-      payload: { bridgeInterface: "eno1" },
+      payload: { bridgeInterface: "br-mgmt" },
     });
 
     expect(patchResponse.statusCode).toBe(200);
@@ -498,7 +513,7 @@ describe("api", () => {
           nodes: expect.arrayContaining([
             expect.objectContaining({
               id: nodeId,
-              config: expect.objectContaining({ bridgeInterface: "eno1" }),
+              config: expect.objectContaining({ bridgeInterface: "br-mgmt" }),
             }),
           ]),
         }),
@@ -516,12 +531,51 @@ describe("api", () => {
           nodes: expect.arrayContaining([
             expect.objectContaining({
               id: nodeId,
-              config: expect.objectContaining({ bridgeInterface: "eno1" }),
+              config: expect.objectContaining({ bridgeInterface: "br-mgmt" }),
             }),
           ]),
         }),
       }),
     });
+  });
+
+  it("rejects updating a cloud node with a raw host interface", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Cloud Node Raw Interface Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const addNodeResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes`,
+      payload: {
+        templateId: "cloud",
+        name: "cloud-1",
+        position: { x: 10, y: 10 },
+      },
+    });
+    const nodeId = (
+      addNodeResponse.json() as {
+        lab: {
+          document: { nodes: Array<{ id: string }> };
+        };
+      }
+    ).lab.document.nodes[0]!.id;
+
+    const patchResponse = await app.inject({
+      method: "PATCH",
+      url: `/labs/${labId}/nodes/${nodeId}/settings`,
+      payload: { bridgeInterface: "eno1" },
+    });
+
+    expect(patchResponse.statusCode).toBe(400);
+    expect(patchResponse.json()).toEqual(
+      expect.objectContaining({
+        message: expect.stringContaining("pre-existing Linux bridge"),
+      }),
+    );
   });
 
   it("creates a cloud node with a configured bridge interface", async () => {
@@ -539,7 +593,7 @@ describe("api", () => {
         templateId: "cloud",
         name: "cloud-1",
         position: { x: 10, y: 10 },
-        bridgeInterface: "eno1",
+        bridgeInterface: "br-mgmt",
       },
     });
 
@@ -550,12 +604,39 @@ describe("api", () => {
           nodes: expect.arrayContaining([
             expect.objectContaining({
               name: "cloud-1",
-              config: expect.objectContaining({ bridgeInterface: "eno1" }),
+              config: expect.objectContaining({ bridgeInterface: "br-mgmt" }),
             }),
           ]),
         }),
       }),
     });
+  });
+
+  it("rejects creating a cloud node with a raw host interface", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Cloud Create Raw Interface Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const addNodeResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes`,
+      payload: {
+        templateId: "cloud",
+        name: "cloud-1",
+        position: { x: 10, y: 10 },
+        bridgeInterface: "eno1",
+      },
+    });
+
+    expect(addNodeResponse.statusCode).toBe(400);
+    expect(addNodeResponse.json()).toEqual(
+      expect.objectContaining({
+        message: expect.stringContaining("pre-existing Linux bridge"),
+      }),
+    );
   });
 
   it("clears boot actions when the payload uses action none", async () => {

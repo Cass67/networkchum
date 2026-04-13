@@ -39,19 +39,19 @@ export function CloudNodeSettingsDialog({
           <p className="panel-eyebrow">Cloud Settings</p>
           <h2>{nodeName}</h2>
           <p className="panel-description">
-            Choose which host interface this cloud node should bridge onto.
+            Select the pre-existing Linux bridge this cloud node should use.
           </p>
         </div>
 
         <label className="field">
-          <span className="field-label">Physical Interface</span>
+          <span className="field-label">Host Bridge</span>
           <select
             className="field-input"
-            aria-label="Physical Interface"
+            aria-label="Host Bridge"
             value={bridgeInterface}
             onChange={(event) => setBridgeInterface(event.target.value)}
           >
-            <option value="">No Physical Interface</option>
+            <option value="">No Host Bridge</option>
             {hostInterfaces.map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -59,6 +59,10 @@ export function CloudNodeSettingsDialog({
             ))}
           </select>
         </label>
+        <p className="panel-description">
+          NetworkChum only attaches cloud-connected TAPs to an existing host
+          bridge such as `br-mgmt`.
+        </p>
 
         <div className="dialog-actions">
           <button

@@ -183,13 +183,13 @@ describe("AddNodeDialog", () => {
     });
   });
 
-  it("shows a physical interface selector for cloud templates and submits it", async () => {
+  it("shows a host bridge selector for cloud templates and submits it", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
-        hostInterfaces={["eno1", "ens192"]}
+        hostInterfaces={["br-lab", "br-mgmt"]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
       />,
@@ -199,10 +199,10 @@ describe("AddNodeDialog", () => {
       target: { value: "cloud" },
     });
 
-    expect(screen.getByLabelText("Physical Interface")).toBeInTheDocument();
+    expect(screen.getByLabelText("Host Bridge")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Physical Interface"), {
-      target: { value: "eno1" },
+    fireEvent.change(screen.getByLabelText("Host Bridge"), {
+      target: { value: "br-mgmt" },
     });
     fireEvent.click(screen.getByTestId("add-node-submit"));
 
@@ -212,7 +212,7 @@ describe("AddNodeDialog", () => {
 
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
       templateId: "cloud",
-      bridgeInterface: "eno1",
+      bridgeInterface: "br-mgmt",
     });
   });
 });

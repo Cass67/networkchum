@@ -181,15 +181,15 @@ export function AddNodeDialog({
           {showBridgeInterface ? (
             <div className="field">
               <label>
-                <span className="field-label">Physical Interface</span>
+                <span className="field-label">Host Bridge</span>
                 <select
                   value={bridgeInterface}
                   onChange={(e) => setBridgeInterface(e.target.value)}
                   className="field-input"
-                  aria-label="Physical Interface"
+                  aria-label="Host Bridge"
                   data-testid="bridge-interface-select"
                 >
-                  <option value="">No Physical Interface</option>
+                  <option value="">No Host Bridge</option>
                   {hostInterfaces.map((iface) => (
                     <option key={iface} value={iface}>
                       {iface}
@@ -197,6 +197,9 @@ export function AddNodeDialog({
                   ))}
                 </select>
               </label>
+              <p className="panel-description">
+                Select a pre-existing Linux bridge such as `br-mgmt`.
+              </p>
             </div>
           ) : null}
           {error ? <p className="form-error">{error}</p> : null}

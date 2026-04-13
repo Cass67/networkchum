@@ -242,7 +242,7 @@ describe("reconcileTopology", () => {
     ]);
   });
 
-  it("uses the configured bridge interface for cloud nodes", () => {
+  it("does not attach a raw host interface for cloud nodes without a bridge target", () => {
     const lab = makeLab({
       networks: [
         { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
@@ -269,7 +269,7 @@ describe("reconcileTopology", () => {
 
     const ops = reconcileTopology(lab);
 
-    expect(ops).toContainEqual({
+    expect(ops).not.toContainEqual({
       kind: "attach-to-bridge",
       interfaceName: "eno1",
       bridgeName: "nc-br-net1",

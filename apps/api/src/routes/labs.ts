@@ -51,7 +51,11 @@ import { deleteNode } from "../topology/nodeService.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import { listImages } from "../images/imageStore.js";
 import type { AppDependencies } from "../app.js";
-import { listHostInterfaces } from "../network/reconcileTopology.js";
+import {
+  isLinuxBridgeInterface,
+  listLinuxBridgeInterfaces,
+  validateCloudBridgeTargets,
+} from "../network/cloudUplink.js";
 
 const createLabSchema = z.object({
   name: z.string().min(1),
@@ -142,10 +146,67 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     );
   }
 
+  async function ensureValidCloudBridgeSelection(
+    nodeName: string,
+    bridgeInterface: string | null | undefined,
+  ): Promise<string | null> {
+    if (!bridgeInterface) {
+      return null;
+    }
+
+    const validation = await validateCloudBridgeTargets(
+      {
+        id: "validation",
+        name: "validation",
+        version: 1,
+        canvas: { zoom: 1, backgroundImage: null },
+        annotations: [],
+        startupConfigSets: [],
+        nodeBootActions: [],
+        activeConfigSetId: null,
+        networks: [
+          {
+            id: "net-validation",
+            kind: "ethernet",
+            name: "validation",
+            visible: false,
+          },
+        ],
+        nodes: [
+          {
+            id: "cloud-validation",
+            name: nodeName,
+            runtime: "cloud",
+            templateId: "cloud",
+            imageId: null,
+            position: { x: 0, y: 0 },
+            config: {
+              vcpu: 0,
+              ramMb: 0,
+              interfaceCount: 1,
+              bridgeInterface,
+            },
+            state: { desiredPower: "off" },
+            interfaces: [{ id: "if-validation", name: "eth0", slot: 0 }],
+          },
+        ],
+        attachments: [
+          { interfaceId: "if-validation", networkId: "net-validation" },
+        ],
+      },
+      undefined,
+      options.runtime?.isBridgeInterface ?? isLinuxBridgeInterface,
+    );
+
+    return validation.ok ? null : validation.message;
+  }
+
   app.get("/labs", async () => ({ labs: await listLabs() }));
 
   app.get("/host/interfaces", async () => ({
-    interfaces: listHostInterfaces(),
+    interfaces: await (
+      options.runtime?.listHostInterfaces ?? listLinuxBridgeInterfaces
+    )(),
   }));
 
   app.post("/labs", async (request, reply) => {
@@ -253,6 +314,16 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     const template = registry.get(body.templateId);
     if (!template) {
       return reply.code(404).send({ message: "Template not found" });
+    }
+
+    if (template.runtime === "cloud") {
+      const bridgeValidationMessage = await ensureValidCloudBridgeSelection(
+        body.name,
+        body.bridgeInterface ?? null,
+      );
+      if (bridgeValidationMessage) {
+        return reply.code(400).send({ message: bridgeValidationMessage });
+      }
     }
 
     const acceleration = await detectAccelerationMode();
@@ -398,6 +469,17 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     );
     if (!nodeExists) {
       return reply.code(404).send({ message: "Node not found" });
+    }
+
+    const node = lab.document.nodes.find((entry) => entry.id === params.nodeId);
+    if (node?.runtime === "cloud") {
+      const bridgeValidationMessage = await ensureValidCloudBridgeSelection(
+        node.name,
+        body.bridgeInterface,
+      );
+      if (bridgeValidationMessage) {
+        return reply.code(400).send({ message: bridgeValidationMessage });
+      }
     }
 
     const document = setNodeBridgeInterface(

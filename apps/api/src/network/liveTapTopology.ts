@@ -9,7 +9,6 @@ import {
   isLinuxBridgeInterface,
   shouldDetachCloudUplink,
 } from "./cloudUplink.js";
-import { detectPhysicalNic } from "./reconcileTopology.js";
 
 type CommandResult = {
   ok: boolean;
@@ -29,7 +28,6 @@ type LiveTapSyncDependencies = {
   ensureTapNetworking?: typeof ensureTapNetworking;
   tapExists?: Parameters<typeof ensureTapNetworking>[2];
   isBridgeInterface?: (interfaceName: string) => Promise<boolean>;
-  detectPhysicalNic?: () => string | null;
   warn?: (message: string) => void;
 };
 
@@ -101,15 +99,9 @@ async function ensureRunningNodeTapTopology(
   }
 }
 
-function resolveCloudUplink(
-  node: LabNode | undefined,
-  deps: LiveTapSyncDependencies,
-): string | null {
+function resolveCloudUplink(node: LabNode | undefined): string | null {
   if (!node) return null;
-  return (
-    node.config.bridgeInterface ??
-    (deps.detectPhysicalNic ?? detectPhysicalNic)()
-  );
+  return node.config.bridgeInterface ?? null;
 }
 
 async function detachInterfaceFromBridge(
@@ -195,7 +187,7 @@ export async function detachRunningInterfaceFromBridge(
   }
 
   if (node.runtime === "cloud") {
-    const uplink = resolveCloudUplink(node, deps);
+    const uplink = resolveCloudUplink(node);
     if (
       await shouldDetachCloudUplink(
         uplink,
@@ -227,8 +219,8 @@ export async function syncRunningCloudNodeBridgeInterface(
     return;
   }
 
-  const previousUplink = resolveCloudUplink(previousNode, deps);
-  const nextUplink = resolveCloudUplink(nextNode, deps);
+  const previousUplink = resolveCloudUplink(previousNode);
+  const nextUplink = resolveCloudUplink(nextNode);
   if (
     previousUplink &&
     previousUplink !== nextUplink &&

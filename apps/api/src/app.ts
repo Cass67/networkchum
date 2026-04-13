@@ -17,6 +17,8 @@ export type AppDependencies = {
       args: string[],
     ) => Promise<{ ok: boolean; stdout: string; stderr: string }>;
     hasBinary?: (command: string) => Promise<boolean>;
+    isBridgeInterface?: (interfaceName: string) => Promise<boolean>;
+    listHostInterfaces?: () => Promise<string[]>;
   };
 };
 

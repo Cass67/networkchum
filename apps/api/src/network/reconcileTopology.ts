@@ -91,24 +91,5 @@ export function reconcileTopology(
     }
   }
 
-  const cloudNodes = document.nodes.filter((node) => node.runtime === "cloud");
-
-  for (const node of cloudNodes) {
-    if (targetNodeId && node.id !== targetNodeId) continue;
-    const physicalNic = node.config.bridgeInterface ?? detectPhysicalNic();
-
-    for (const iface of node.interfaces) {
-      const attachment = attachmentByInterfaceId.get(iface.id);
-      if (!attachment || !physicalNic) continue;
-      if (bridgeTargets.has(attachment.networkId)) continue;
-
-      operations.push({
-        kind: "attach-to-bridge",
-        interfaceName: physicalNic,
-        bridgeName: bridgeName(attachment.networkId),
-      });
-    }
-  }
-
   return operations;
 }

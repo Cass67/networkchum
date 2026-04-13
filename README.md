@@ -70,6 +70,7 @@ For runtime features:
 - `qemu-system-x86_64` for VM nodes
 - Docker for container nodes
 - Linux `ip` tooling for TAP/bridge networking on Linux hosts
+- a pre-existing Linux bridge such as `br-mgmt` for cloud-node uplinks
 
 Platform notes:
 
@@ -115,6 +116,14 @@ For Linux TAP labs without repeated password prompts, use:
 ```bash
 ./start.sh lan --sudo-api --data-dir ~/networkchum-data
 ```
+
+Linux cloud-node uplinks are bridge-only:
+
+- create or reuse a host bridge such as `br-mgmt`
+- move the host IP address and default route onto that bridge
+- enslave the physical uplink under that bridge
+- select that bridge in the cloud node `Host Bridge` field
+- let the host OS manage the bridge itself; NetworkChum only attaches VM TAPs to it
 
 If you want that API elevation to run without an interactive sudo prompt, add a constrained `sudoers` rule for the exact API command on that host:
 

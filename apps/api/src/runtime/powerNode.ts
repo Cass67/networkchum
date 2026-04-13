@@ -21,6 +21,7 @@ import {
   buildBridgeTargetByNetworkId,
   isLinuxBridgeInterface,
   shouldDetachCloudUplink,
+  validateCloudBridgeTargets,
 } from "../network/cloudUplink.js";
 import { buildContainerSpec } from "./container/buildContainerSpec.js";
 import { resolveNodeImagePath } from "../images/resolveNodeImage.js";
@@ -133,6 +134,15 @@ export async function ensureTapNetworking(
     interfaceName: string,
   ) => Promise<boolean> = isLinuxBridgeInterface,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
+  const validation = await validateCloudBridgeTargets(
+    document,
+    targetNodeId,
+    isBridgeInterface,
+  );
+  if (!validation.ok) {
+    return validation;
+  }
+
   const bridgeTargets = await buildBridgeTargetByNetworkId(
     document,
     isBridgeInterface,

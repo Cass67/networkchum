@@ -77,6 +77,14 @@ If you want Linux VM labs that use TAP networking, start with:
 
 That keeps the web UI and native console bridge unprivileged, but starts the API with the privileges needed for bridge and TAP device management.
 
+For Linux cloud-node management access:
+
+- do not point a cloud node at the host's active physical NIC directly
+- create or reuse a host Linux bridge such as `br-mgmt`
+- move the host management IP and default route onto that bridge
+- enslave the physical uplink under that bridge
+- select that bridge from the cloud node `Host Bridge` field in NetworkChum
+
 That starts:
 
 - the API at `http://127.0.0.1:4000`
