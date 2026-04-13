@@ -48,4 +48,46 @@ describe("reconcileRuntimeStates", () => {
     );
     expect(persisted?.status).toBe("running");
   });
+
+  it("stops stale podman-backed container runtime states", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "networkchum-rt-"));
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    await upsertRuntimeState({
+      labId: "lab-1",
+      nodeId: "container-a",
+      status: "running",
+      runtime: "container",
+      accelerationMode: null,
+      externalId: "container-a",
+      connectCommand: ["podman", "exec", "-it", "container-a", "sh"],
+      message: null,
+      commandPreview: ["podman", "run", "-d", "--name", "container-a"],
+      updatedAt: "2026-04-13T00:00:00.000Z",
+    });
+
+    const calls: string[] = [];
+    const reconciled = await reconcileRuntimeStates(
+      undefined,
+      async (command) => {
+        calls.push(command);
+        return {
+          ok: false,
+          stdout: "",
+          stderr: "Error: no such container",
+        };
+      },
+    );
+
+    const state = reconciled.find((entry) => entry.nodeId === "container-a");
+    expect(calls).toEqual(["podman"]);
+    expect(state?.status).toBe("stopped");
+    expect(state?.message).toContain("Container is not running");
+
+    const persisted = (await listRuntimeStates()).find(
+      (entry) => entry.nodeId === "container-a",
+    );
+    expect(persisted?.status).toBe("stopped");
+  });
 });

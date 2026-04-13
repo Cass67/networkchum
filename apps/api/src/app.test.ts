@@ -91,6 +91,9 @@ beforeAll(async () => {
         if (command === "docker" && args[0] === "run") {
           return { ok: true, stdout: "container-id-from-test", stderr: "" };
         }
+        if (command === "docker" && args[0] === "inspect") {
+          return { ok: true, stdout: "true", stderr: "" };
+        }
         if (command === "docker" && args[0] === "image" && args[1] === "ls") {
           return {
             ok: true,

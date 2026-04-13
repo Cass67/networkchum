@@ -12,6 +12,7 @@ type CommandResult = {
 };
 
 type RunCommand = (command: string, args: string[]) => Promise<CommandResult>;
+type ContainerEngine = "docker" | "podman";
 
 function stopState(state: RuntimeState, message: string): RuntimeState {
   return {
@@ -28,10 +29,11 @@ function stopState(state: RuntimeState, message: string): RuntimeState {
 }
 
 async function isContainerRunning(
+  engine: ContainerEngine,
   externalId: string,
   runCommand: RunCommand,
-): Promise<boolean | null> {
-  const result = await runCommand("docker", [
+): Promise<boolean> {
+  const result = await runCommand(engine, [
     "inspect",
     "-f",
     "{{.State.Running}}",
@@ -39,7 +41,7 @@ async function isContainerRunning(
   ]);
 
   if (!result.ok) {
-    return null;
+    return false;
   }
 
   const state = result.stdout.trim();
@@ -50,7 +52,19 @@ async function isContainerRunning(
     return false;
   }
 
-  return null;
+  return false;
+}
+
+function containerEngineForState(state: RuntimeState): ContainerEngine {
+  if (state.connectCommand?.[0] === "podman") {
+    return "podman";
+  }
+
+  if (state.commandPreview[0] === "podman") {
+    return "podman";
+  }
+
+  return "docker";
 }
 
 async function reconcileRuntimeState(
@@ -85,8 +99,12 @@ async function reconcileRuntimeState(
       return stopState(state, "Container is not running on this host.");
     }
 
-    const isRunning = await isContainerRunning(state.externalId, runCommand);
-    if (isRunning === false) {
+    const isRunning = await isContainerRunning(
+      containerEngineForState(state),
+      state.externalId,
+      runCommand,
+    );
+    if (!isRunning) {
       return stopState(state, "Container is not running on this host.");
     }
 
@@ -116,8 +134,12 @@ async function reconcileRuntimeState(
   }
 
   if (state.externalId && state.externalId !== "cloud-tap") {
-    const isRunning = await isContainerRunning(state.externalId, runCommand);
-    if (isRunning !== false) {
+    const isRunning = await isContainerRunning(
+      containerEngineForState(state),
+      state.externalId,
+      runCommand,
+    );
+    if (isRunning) {
       return state;
     }
   }
