@@ -113,7 +113,7 @@ export const containerRoutes: FastifyPluginAsync<AppDependencies> = async (
   const fetcher = options.runtime?.fetcher;
 
   async function resolveEngine() {
-    return detectContainerEngine(hasBinary);
+    return detectContainerEngine(hasBinary, runCommand);
   }
 
   app.get("/containers/runtime", async (_request, reply) => {

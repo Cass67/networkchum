@@ -290,8 +290,16 @@ function runtimeName(labId: string, nodeId: string): string {
 async function resolveContainerEngine(
   preferred: "docker" | "podman" | undefined,
   hasBinary: (command: string) => Promise<boolean>,
+  runCommand: (command: string, args: string[]) => Promise<CommandResult>,
 ): Promise<"docker" | "podman"> {
-  return preferred ?? (await detectContainerEngine(hasBinary)) ?? "docker";
+  if (preferred && (await hasBinary(preferred))) {
+    const availability = await runCommand(preferred, ["info"]);
+    if (availability.ok) {
+      return preferred;
+    }
+  }
+
+  return (await detectContainerEngine(hasBinary, runCommand)) ?? "docker";
 }
 
 function commandPreviewEngine(commandPreview?: string[]): "docker" | "podman" {
@@ -543,6 +551,7 @@ export async function powerOnNode(
     const engine = await resolveContainerEngine(
       node.config.containerEngine ?? template?.container?.engine,
       hasBinary,
+      runCommand,
     );
     const imageRef =
       node.config.containerImageRef ?? template?.container?.imageRef;
@@ -717,7 +726,11 @@ export async function powerOnNode(
 
     const containerName = runtimeName(labId, nodeId);
     const attachments = getNodeAttachmentsForContainer(lab.document, nodeId);
-    const engine = await resolveContainerEngine(undefined, hasBinary);
+    const engine = await resolveContainerEngine(
+      undefined,
+      hasBinary,
+      runCommand,
+    );
 
     const networkIds = [...new Set(attachments.map((a) => a.networkId))];
     for (const networkId of networkIds) {

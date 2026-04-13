@@ -48,6 +48,12 @@ type CatalogSummary = {
   vendor?: string;
   runtime?: string;
   deviceRoleIcon?: DeviceRoleIcon;
+  container?: {
+    imageRef: string;
+    registry: string;
+    engine?: ContainerEngine;
+    defaultShell?: string;
+  };
   configSchema?: {
     ramMb: { default: number; min: number; max: number };
     vcpu: { default: number; min: number; max: number };
@@ -74,12 +80,17 @@ type LabDocumentSummary = {
   nodes: Array<{
     id: string;
     name: string;
+    templateId?: string | null;
     runtime?: string;
     position?: { x: number; y: number };
     interfaces?: Array<{ id: string; name: string; slot: number }>;
     config?: {
       cloudRole?: CloudRole;
       bridgeGroup?: string | null;
+      containerImageRef?: string;
+      containerRegistry?: string;
+      containerEngine?: ContainerEngine;
+      containerShell?: string;
     };
     state?: { desiredPower: string };
   }>;
@@ -120,6 +131,12 @@ type TemplatePayload = {
   vendor: string;
   runtime: string;
   deviceRoleIcon?: DeviceRoleIcon;
+  container?: {
+    imageRef: string;
+    registry: string;
+    engine?: ContainerEngine;
+    defaultShell?: string;
+  };
   configSchema: {
     ramMb: { default: number; min: number; max: number };
     vcpu: { default: number; min: number; max: number };
@@ -142,6 +159,7 @@ function mapTemplateSummary(template: TemplatePayload) {
     vendor: template.vendor,
     runtime: template.runtime,
     deviceRoleIcon: template.deviceRoleIcon,
+    container: template.container,
     configSchema: template.configSchema,
   };
 }

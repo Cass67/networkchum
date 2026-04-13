@@ -24,13 +24,31 @@ export type ContainerSearchResult = {
   stars?: number;
 };
 
+export async function isContainerEngineAvailable(
+  engine: ContainerEngine,
+  hasBinary: HasBinary,
+  runCommand?: RunCommand,
+): Promise<boolean> {
+  if (!(await hasBinary(engine))) {
+    return false;
+  }
+
+  if (!runCommand) {
+    return true;
+  }
+
+  const result = await runCommand(engine, ["info"]);
+  return result.ok;
+}
+
 export async function detectContainerEngine(
   hasBinary: HasBinary,
+  runCommand?: RunCommand,
 ): Promise<ContainerEngine | null> {
-  if (await hasBinary("podman")) {
+  if (await isContainerEngineAvailable("podman", hasBinary, runCommand)) {
     return "podman";
   }
-  if (await hasBinary("docker")) {
+  if (await isContainerEngineAvailable("docker", hasBinary, runCommand)) {
     return "docker";
   }
   return null;

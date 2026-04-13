@@ -69,6 +69,12 @@ type CatalogSummary = {
   vendor?: string;
   runtime?: string;
   deviceRoleIcon?: DeviceRoleIcon;
+  container?: {
+    imageRef: string;
+    registry: string;
+    engine?: ContainerEngine;
+    defaultShell?: string;
+  };
   configSchema?: {
     ramMb: { default: number; min: number; max: number };
     vcpu: { default: number; min: number; max: number };
@@ -95,6 +101,10 @@ type LabNodeData = {
   config?: {
     cloudRole?: CloudRole;
     bridgeGroup?: string | null;
+    containerImageRef?: string;
+    containerRegistry?: string;
+    containerEngine?: ContainerEngine;
+    containerShell?: string;
   };
   state?: { desiredPower: string };
 };
@@ -662,6 +672,38 @@ function hasEditableConfig(
   entry: CatalogSummary,
 ): entry is EditableCatalogSummary {
   return entry.configSchema !== undefined;
+}
+
+function resolveEffectiveContainerDetails(
+  node: LabNodeData,
+  catalog: CatalogSummary[],
+) {
+  if (node.runtime !== "container") {
+    return undefined;
+  }
+
+  const template =
+    (node.templateId
+      ? catalog.find((entry) => entry.id === node.templateId)
+      : null) ?? null;
+  const templateContainer = template?.container;
+  const imageRef =
+    node.config?.containerImageRef ?? templateContainer?.imageRef;
+  const registry =
+    node.config?.containerRegistry ?? templateContainer?.registry;
+  const engine = node.config?.containerEngine ?? templateContainer?.engine;
+  const shell = node.config?.containerShell ?? templateContainer?.defaultShell;
+
+  if (!imageRef && !registry && !engine && !shell) {
+    return undefined;
+  }
+
+  return {
+    imageRef,
+    registry,
+    engine,
+    shell,
+  };
 }
 
 const defaultApi: ApiClient = browserApi ?? {
@@ -1765,7 +1807,13 @@ export function App({
     : selectedNode
       ? {
           type: "node" as const,
-          node: selectedNode,
+          node: {
+            ...selectedNode,
+            effectiveContainer: resolveEffectiveContainerDetails(
+              selectedNode,
+              catalog,
+            ),
+          },
           status:
             nodeStatuses[selectedNode.id] ??
             (selectedNode.state?.desiredPower === "on" ? "running" : "stopped"),

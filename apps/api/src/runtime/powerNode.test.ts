@@ -667,6 +667,9 @@ describe("powerOnNode", () => {
     const state = await powerOnNode(lab.id, nodeId, {
       runCommand: async (command, args) => {
         expect(command).toBe("docker");
+        if (args[0] === "info") {
+          return { ok: true, stdout: "{}", stderr: "" };
+        }
         expect(args).toContain("run");
         return { ok: true, stdout: "container-id-123", stderr: "" };
       },
@@ -682,6 +685,50 @@ describe("powerOnNode", () => {
       "container-id-123",
       "sh",
     ]);
+  });
+
+  it("falls back to docker when podman is installed but unreachable", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const registry = new TemplateRegistry();
+    const lab = await createLab("Container Fallback Lab");
+    const template = registry.get("linux-alpine-container")!;
+    const document = addNode(lab.document, {
+      template,
+      name: "alpine-1",
+      position: { x: 10, y: 10 },
+    });
+    await updateLabDocument(lab.id, document);
+    const savedLab = await getLab(lab.id);
+    const nodeId = savedLab!.document.nodes[0]!.id;
+
+    const state = await powerOnNode(lab.id, nodeId, {
+      runCommand: async (command, args) => {
+        if (command === "podman" && args[0] === "info") {
+          return {
+            ok: false,
+            stdout: "",
+            stderr: "Cannot connect to Podman socket",
+          };
+        }
+
+        expect(command).toBe("docker");
+        if (args[0] === "info") {
+          return { ok: true, stdout: "{}", stderr: "" };
+        }
+        expect(args).toContain("run");
+        return { ok: true, stdout: "container-id-123", stderr: "" };
+      },
+      hasBinary: async (command) =>
+        command === "docker" || command === "podman",
+    });
+
+    expect(state?.status).toBe("running");
+    expect(state?.connectCommand?.[0]).toBe("docker");
   });
 
   it("uses the macos management backend for management clouds instead of the NAT helper", async () => {
@@ -1012,6 +1059,9 @@ describe("powerOnNode", () => {
     const state = await powerOnNode(lab.id, nodeId, {
       runCommand: async (command, args) => {
         expect(command).toBe("docker");
+        if (args[0] === "info") {
+          return { ok: true, stdout: "{}", stderr: "" };
+        }
         expect(args).toContain("run");
         return { ok: true, stdout: "container-id-123", stderr: "" };
       },
@@ -1180,6 +1230,9 @@ describe("powerOnNode", () => {
     const state = await powerOnNode(lab.id, nodeId, {
       runCommand: async (command, args) => {
         expect(command).toBe("docker");
+        if (args[0] === "info") {
+          return { ok: true, stdout: "{}", stderr: "" };
+        }
         expect(args).toContain("run");
         return { ok: true, stdout: "container-id-123", stderr: "" };
       },

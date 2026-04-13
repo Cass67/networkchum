@@ -1144,6 +1144,84 @@ describe("App", () => {
     );
   });
 
+  it("shows the effective container image in the inspector for selected container nodes", async () => {
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Containers Lab" }],
+      listCatalog: async () => [
+        {
+          id: "container-oraclelinux",
+          name: "Oracle Linux",
+          source: "built-in",
+          runtime: "container",
+          container: {
+            imageRef: "oraclelinux:latest",
+            registry: "docker-hub",
+            engine: "docker" as const,
+            defaultShell: "bash",
+          },
+        },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Containers Lab",
+        document: {
+          nodes: [
+            {
+              id: "node-1",
+              name: "oraclelinux-1",
+              runtime: "container",
+              templateId: "container-oraclelinux",
+              position: { x: 10, y: 10 },
+              config: {
+                containerImageRef: "oraclelinux:10-slim",
+              },
+            },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Containers Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "oraclelinux-1", "bash"],
+        message: null,
+      }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Open Containers Lab" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open Containers Lab" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("node-node-1")).toBeInTheDocument();
+    });
+
+    const node = screen.getByTestId("node-node-1");
+    fireEvent.mouseDown(node);
+    fireEvent.click(node);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Image: oraclelinux:10-slim"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Registry: docker-hub")).toBeInTheDocument();
+      expect(screen.getByText("Runtime: docker")).toBeInTheDocument();
+      expect(screen.getByText("Shell: bash")).toBeInTheDocument();
+    });
+  });
+
   it("copies the native telnet command on double-click when preference is copy command", async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, "clipboard", {

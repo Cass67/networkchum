@@ -126,6 +126,33 @@ describe("SelectionPanel", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows effective container runtime details for a selected container node", () => {
+    render(
+      <SelectionPanel
+        selected={{
+          type: "node",
+          node: {
+            id: "container-1",
+            name: "Oracle Linux",
+            runtime: "container",
+            effectiveContainer: {
+              imageRef: "oraclelinux:10-slim",
+              registry: "docker-hub",
+              engine: "docker",
+              shell: "bash",
+            },
+          },
+          status: "stopped",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Image: oraclelinux:10-slim")).toBeInTheDocument();
+    expect(screen.getByText("Registry: docker-hub")).toBeInTheDocument();
+    expect(screen.getByText("Runtime: docker")).toBeInTheDocument();
+    expect(screen.getByText("Shell: bash")).toBeInTheDocument();
+  });
+
   it("shows macOS management subnet guidance for a selected management cloud", () => {
     render(
       <SelectionPanel

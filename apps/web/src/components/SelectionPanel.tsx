@@ -5,6 +5,13 @@ type CloudManagementCapabilities = {
   managementCloudMode?: string;
 };
 
+type EffectiveContainerDetails = {
+  imageRef?: string;
+  registry?: string;
+  engine?: string;
+  shell?: string;
+};
+
 type SelectionPanelProps = {
   selected:
     | { type: "lab"; lab: { id: string; name: string; autoBackup?: boolean } }
@@ -14,7 +21,15 @@ type SelectionPanelProps = {
           id: string;
           name: string;
           runtime?: string;
-          config?: { cloudRole?: string; bridgeGroup?: string | null };
+          config?: {
+            cloudRole?: string;
+            bridgeGroup?: string | null;
+            containerImageRef?: string;
+            containerRegistry?: string;
+            containerEngine?: string;
+            containerShell?: string;
+          };
+          effectiveContainer?: EffectiveContainerDetails;
           interfaces?: Array<{ id: string; name: string }>;
         };
         status: string;
@@ -58,6 +73,10 @@ export function SelectionPanel(props: SelectionPanelProps) {
     selected.node.runtime === "cloud" &&
     selected.node.config?.cloudRole === "management" &&
     props.cloudManagementCapabilities?.platform === "macos";
+  const effectiveContainer =
+    selected?.type === "node" && selected.node.runtime === "container"
+      ? selected.node.effectiveContainer
+      : null;
 
   useEffect(() => {
     if (selected?.type === "lab") {
@@ -168,6 +187,30 @@ export function SelectionPanel(props: SelectionPanelProps) {
             <p className="panel-description">
               Telnet Port: {selected.connectCommand[2]}
             </p>
+          ) : null}
+          {effectiveContainer ? (
+            <>
+              {effectiveContainer.imageRef ? (
+                <p className="panel-description">
+                  Image: {effectiveContainer.imageRef}
+                </p>
+              ) : null}
+              {effectiveContainer.registry ? (
+                <p className="panel-description">
+                  Registry: {effectiveContainer.registry}
+                </p>
+              ) : null}
+              {effectiveContainer.engine ? (
+                <p className="panel-description">
+                  Runtime: {effectiveContainer.engine}
+                </p>
+              ) : null}
+              {effectiveContainer.shell ? (
+                <p className="panel-description">
+                  Shell: {effectiveContainer.shell}
+                </p>
+              ) : null}
+            </>
           ) : null}
           <div className="action-grid">
             {selected.status === "running" ? (
