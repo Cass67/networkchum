@@ -414,7 +414,7 @@ describe("TopologyCanvas", () => {
       );
     });
 
-    it("draws a selection box when dragging on empty canvas", () => {
+    it("pans the canvas when dragging on empty canvas", () => {
       render(
         <TopologyCanvas labName="Lab" labId="lab-1" nodes={nodesWithIface} />,
       );
@@ -425,10 +425,14 @@ describe("TopologyCanvas", () => {
       fireEvent.mouseDown(svg, { clientX: 20, clientY: 20 });
       fireEvent.mouseMove(svg, { clientX: 220, clientY: 180 });
 
-      expect(screen.getByTestId("selection-box")).toBeInTheDocument();
+      expect(screen.getByTestId("viewport-layer")).toHaveAttribute(
+        "transform",
+        "translate(200 160) scale(1)",
+      );
+      expect(screen.queryByTestId("selection-box")).not.toBeInTheDocument();
     });
 
-    it("selects nodes inside the selection box", () => {
+    it("selects nodes inside the selection box when using Shift+drag", () => {
       const onSelectNode = vi.fn();
       render(
         <TopologyCanvas
@@ -442,7 +446,7 @@ describe("TopologyCanvas", () => {
       const svg = screen.getByTestId("topology-svg");
       mockSvgPoint(svg);
 
-      fireEvent.mouseDown(svg, { clientX: 40, clientY: 40 });
+      fireEvent.mouseDown(svg, { clientX: 40, clientY: 40, shiftKey: true });
       fireEvent.mouseMove(svg, { clientX: 180, clientY: 140 });
       fireEvent.mouseUp(svg, { clientX: 180, clientY: 140 });
 
@@ -463,7 +467,7 @@ describe("TopologyCanvas", () => {
       const svg = screen.getByTestId("topology-svg");
       mockSvgPoint(svg);
 
-      fireEvent.mouseDown(svg, { clientX: 40, clientY: 40 });
+      fireEvent.mouseDown(svg, { clientX: 40, clientY: 40, shiftKey: true });
       fireEvent.mouseMove(svg, { clientX: 360, clientY: 140 });
       fireEvent.mouseUp(svg, { clientX: 360, clientY: 140 });
 

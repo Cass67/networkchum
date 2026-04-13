@@ -496,22 +496,32 @@ export function TopologyCanvas({
       }
 
       if (cableState.mode === "idle") {
-        const svg = svgRef.current;
-        if (!svg) return;
-        const svgPt = getCanvasPoint(
-          svg,
-          e.clientX,
-          e.clientY,
-          viewportOffset,
-          viewportScale,
-        );
-        setSelectionBox({
-          active: true,
-          startX: svgPt.x,
-          startY: svgPt.y,
-          currentX: svgPt.x,
-          currentY: svgPt.y,
-        });
+        if (e.shiftKey) {
+          const svg = svgRef.current;
+          if (!svg) return;
+          const svgPt = getCanvasPoint(
+            svg,
+            e.clientX,
+            e.clientY,
+            viewportOffset,
+            viewportScale,
+          );
+          setSelectionBox({
+            active: true,
+            startX: svgPt.x,
+            startY: svgPt.y,
+            currentX: svgPt.x,
+            currentY: svgPt.y,
+          });
+        } else {
+          setPanState({
+            active: true,
+            startClientX: e.clientX,
+            startClientY: e.clientY,
+            originX: viewportOffset.x,
+            originY: viewportOffset.y,
+          });
+        }
       }
 
       setDisconnectPopup(null);
