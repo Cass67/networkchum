@@ -679,6 +679,204 @@ describe("powerOnNode", () => {
     ]);
   });
 
+  it("uses the macos management backend for management clouds instead of the NAT helper", async () => {
+    const platformSpy = vi.spyOn(os, "platform").mockReturnValue("darwin");
+    try {
+      const tempDir = await mkdtemp(
+        path.join(os.tmpdir(), "networkchum-runtime-"),
+      );
+      tempDirs.push(tempDir);
+      process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+      const lab = await createLab("macos mgmt cloud backend lab");
+      const document: LabDocument = {
+        ...lab.document,
+        networks: [
+          { id: "net-1", kind: "ethernet", name: "Mgmt", visible: false },
+        ],
+        nodes: [
+          {
+            id: "cloud-a",
+            name: "mgmt",
+            runtime: "cloud",
+            templateId: "cloud",
+            imageId: null,
+            position: { x: 0, y: 0 },
+            config: {
+              vcpu: 0,
+              ramMb: 0,
+              interfaceCount: 1,
+              cloudRole: "management",
+              bridgeGroup: "management",
+            },
+            state: { desiredPower: "off" },
+            interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+          },
+        ],
+        attachments: [{ interfaceId: "if-cloud-0", networkId: "net-1" }],
+      };
+      await updateLabDocument(lab.id, document);
+
+      const commands: string[][] = [];
+      const state = await powerOnNode(lab.id, "cloud-a", {
+        runCommand: async (command, args) => {
+          commands.push([command, ...args]);
+          if (command.includes("qemu") && args[0] === "-netdev") {
+            return { ok: true, stdout: "vmnet-host\n", stderr: "" };
+          }
+          return { ok: true, stdout: "container-id-123", stderr: "" };
+        },
+        hasBinary: async (command) =>
+          command === "docker" || command.includes("qemu"),
+        resolveQemuBinary: async () => "/usr/bin/qemu-system-x86_64",
+      });
+
+      expect(state?.runtime).toBe("cloud");
+      expect(
+        commands.some((cmd) => cmd[0] === "docker" || cmd[0] === "podman"),
+      ).toBe(false);
+    } finally {
+      platformSpy.mockRestore();
+    }
+  });
+
+  it("fails clearly when macos management backend is unavailable", async () => {
+    const platformSpy = vi.spyOn(os, "platform").mockReturnValue("darwin");
+    try {
+      const tempDir = await mkdtemp(
+        path.join(os.tmpdir(), "networkchum-runtime-"),
+      );
+      tempDirs.push(tempDir);
+      process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+      const lab = await createLab("macos mgmt cloud unavailable lab");
+      const document: LabDocument = {
+        ...lab.document,
+        networks: [
+          { id: "net-1", kind: "ethernet", name: "Mgmt", visible: false },
+        ],
+        nodes: [
+          {
+            id: "cloud-a",
+            name: "mgmt",
+            runtime: "cloud",
+            templateId: "cloud",
+            imageId: null,
+            position: { x: 0, y: 0 },
+            config: {
+              vcpu: 0,
+              ramMb: 0,
+              interfaceCount: 1,
+              cloudRole: "management",
+              bridgeGroup: "management",
+            },
+            state: { desiredPower: "off" },
+            interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+          },
+        ],
+        attachments: [{ interfaceId: "if-cloud-0", networkId: "net-1" }],
+      };
+      await updateLabDocument(lab.id, document);
+
+      const state = await powerOnNode(lab.id, "cloud-a", {
+        runCommand: async (command, args) => {
+          if (command.includes("qemu") && args[0] === "-netdev") {
+            return { ok: true, stdout: "socket\n", stderr: "" };
+          }
+          return { ok: true, stdout: "container-id-123", stderr: "" };
+        },
+        hasBinary: async (command) =>
+          command === "docker" || command.includes("qemu"),
+        resolveQemuBinary: async () => "/usr/bin/qemu-system-x86_64",
+      });
+
+      expect(state?.status).toBe("failed");
+      expect(state?.message).toContain("host-only management backend");
+    } finally {
+      platformSpy.mockRestore();
+    }
+  });
+
+  it("assigns macos-management NIC backend for qemu interfaces attached to management cloud networks on macos", async () => {
+    const platformSpy = vi.spyOn(os, "platform").mockReturnValue("darwin");
+    try {
+      const tempDir = await mkdtemp(
+        path.join(os.tmpdir(), "networkchum-runtime-"),
+      );
+      tempDirs.push(tempDir);
+      process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+      const registry = new TemplateRegistry();
+      const lab = await createLab("macos mgmt qemu nic backend lab");
+      const template = registry.get("cisco-iosv")!;
+      let document = addNode(lab.document, {
+        template,
+        name: "vm-1",
+        position: { x: 100, y: 0 },
+        imageId: "/tmp/vm.qcow2",
+      });
+      const nodeId = document.nodes[0]!.id;
+
+      // Add a management cloud attached to net-mgmt, and attach NIC0 to it.
+      document = {
+        ...document,
+        networks: [
+          { id: "net-mgmt", kind: "ethernet", name: "Mgmt", visible: false },
+          { id: "net-lan", kind: "ethernet", name: "LAN", visible: false },
+        ],
+        nodes: [
+          ...document.nodes,
+          {
+            id: "cloud-a",
+            name: "mgmt",
+            runtime: "cloud",
+            templateId: "cloud",
+            imageId: null,
+            position: { x: 0, y: 0 },
+            config: {
+              vcpu: 0,
+              ramMb: 0,
+              interfaceCount: 1,
+              cloudRole: "management",
+              bridgeGroup: "management",
+            },
+            state: { desiredPower: "off" },
+            interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+          },
+        ],
+        attachments: [
+          { interfaceId: "if-cloud-0", networkId: "net-mgmt" },
+          // VM NIC0: management-backed
+          {
+            interfaceId: document.nodes[0]!.interfaces[0]!.id,
+            networkId: "net-mgmt",
+          },
+          // VM NIC1: normal socket segment
+          {
+            interfaceId: document.nodes[0]!.interfaces[1]!.id,
+            networkId: "net-lan",
+          },
+        ],
+      };
+      await updateLabDocument(lab.id, document);
+
+      const state = await powerOnNode(lab.id, nodeId, {
+        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+        hasBinary: async () => true,
+        findAvailablePort: async (port) => port,
+        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+      });
+
+      expect(state?.status).toBe("running");
+      expect(state?.commandPreview.join(" ")).toContain("vmnet-host,id=net0");
+      expect(state?.commandPreview.join(" ")).toContain(
+        "socket,id=net1,listen=127.0.0.1:20001",
+      );
+    } finally {
+      platformSpy.mockRestore();
+    }
+  });
+
   it("clears inject-once boot action after launch attempt", async () => {
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), "networkchum-runtime-"),

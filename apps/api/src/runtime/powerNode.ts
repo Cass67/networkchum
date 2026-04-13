@@ -16,6 +16,7 @@ import { ensureManagementBridgeUplink } from "../network/managementUplink.js";
 import { reconcileTopology, bridgeName } from "../network/reconcileTopology.js";
 import {
   buildBridgeTargetByNetworkId,
+  buildCloudRoleByNetworkId,
   isLinuxBridgeInterface,
   resolveCloudBridge,
   shouldDetachCloudUplink,
@@ -48,6 +49,7 @@ import {
 } from "./configInjectors.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import { setNodeBootActions } from "../topology/mutations.js";
+import { buildMacOsManagementUnavailableMessage } from "./macosManagementCloud.js";
 import type {
   LabDocument,
   LabNode,
@@ -296,6 +298,20 @@ function commandPreviewEngine(commandPreview?: string[]): "docker" | "podman" {
   return commandPreview?.[0] === "podman" ? "podman" : "docker";
 }
 
+async function hasMacOsHostOnlyManagementBackend(
+  resolveBinary: () => Promise<string | null>,
+  runCommand: (command: string, args: string[]) => Promise<CommandResult>,
+): Promise<boolean> {
+  const qemuBinary = await resolveBinary();
+  if (!qemuBinary) {
+    return false;
+  }
+
+  const helpResult = await runCommand(qemuBinary, ["-netdev", "help"]);
+  const output = `${helpResult.stdout}${helpResult.stderr}`;
+  return helpResult.ok && output.includes("vmnet-host");
+}
+
 async function findAvailablePort(startPort: number): Promise<number> {
   const { createServer } = await import("node:net");
   return new Promise((resolve) => {
@@ -506,6 +522,9 @@ export async function powerOnNode(
     }
   };
 
+  const platform = getPlatform();
+  const networkBackend = getNetworkBackend();
+
   if (existingState?.status === "running") {
     if (existingState.runtime === "qemu") {
       await syncSocketTopology();
@@ -608,7 +627,62 @@ export async function powerOnNode(
   if (node.runtime === "cloud") {
     console.log(`[powerNode] activating cloud node ${nodeId} in lab ${labId}`);
 
-    if (getNetworkBackend() === "tap") {
+    const resolvedBridge = resolveCloudBridge(node);
+    const cloudRole =
+      resolvedBridge?.cloudRole ?? node.config.cloudRole ?? null;
+
+    if (cloudRole === "management" && platform === "macos") {
+      const available = await hasMacOsHostOnlyManagementBackend(
+        resolveBinary,
+        runCommand,
+      );
+
+      const ok = available;
+      const errorMsg = ok ? null : buildMacOsManagementUnavailableMessage();
+
+      const state = {
+        labId,
+        nodeId,
+        status: ok ? ("running" as const) : ("failed" as const),
+        runtime: "cloud" as const,
+        accelerationMode: null,
+        // Avoid container cleanup on power-off; host-only backend has no external ID.
+        externalId: null,
+        connectCommand: undefined,
+        consolePort: null,
+        nicPorts: undefined,
+        message: errorMsg,
+        commandPreview: [],
+        updatedAt: new Date().toISOString(),
+      };
+      await upsertRuntimeState(state);
+      scheduleBackupIfNeeded(state);
+      await clearOneShotBootAction();
+      return state;
+    }
+
+    if (cloudRole === "management" && platform !== "linux") {
+      const state = {
+        labId,
+        nodeId,
+        status: "failed" as const,
+        runtime: "cloud" as const,
+        accelerationMode: null,
+        externalId: null,
+        connectCommand: undefined,
+        consolePort: null,
+        nicPorts: undefined,
+        message: `Management cloud is only supported on Linux (TAP/bridge) and macOS (host-only management backend). This host platform is '${platform}'.`,
+        commandPreview: [],
+        updatedAt: new Date().toISOString(),
+      };
+      await upsertRuntimeState(state);
+      scheduleBackupIfNeeded(state);
+      await clearOneShotBootAction();
+      return state;
+    }
+
+    if (networkBackend === "tap") {
       const networkResult = await ensureTapNetworking(
         lab.document,
         runCommand,
@@ -763,8 +837,6 @@ export async function powerOnNode(
     return state;
   }
 
-  const platform = getPlatform();
-  const networkBackend = getNetworkBackend();
   const resolvedImagePath = await resolveNodeImagePath(node.imageId);
   const hasRealImage = resolvedImagePath !== null;
   const imagePath = resolvedImagePath ?? getDataFile("images/blank-1G.qcow2");
@@ -977,6 +1049,25 @@ export async function powerOnNode(
   // On macOS (socket backend) each NIC gets its own listen port. The virtual
   // switch connects to all of them and forwards frames between attached ports,
   // so the cable topology can change at runtime without rebooting VMs.
+  let nicBackends: Array<{ kind: "macos-management" }> | undefined;
+  if (platform === "macos") {
+    const rolesByNetworkId = buildCloudRoleByNetworkId(lab.document);
+    const networkIdByInterfaceId = new Map(
+      lab.document.attachments.map((attachment) => [
+        attachment.interfaceId,
+        attachment.networkId,
+      ]),
+    );
+
+    for (const iface of node.interfaces) {
+      const networkId = networkIdByInterfaceId.get(iface.id);
+      if (!networkId) continue;
+      if (rolesByNetworkId.get(networkId) !== "management") continue;
+      nicBackends ??= [];
+      nicBackends[iface.slot] = { kind: "macos-management" };
+    }
+  }
+
   const nicPorts =
     networkBackend === "socket"
       ? await findConsecutivePorts(
@@ -1015,6 +1106,7 @@ export async function powerOnNode(
       accelerationMode: node.config.accelerationMode,
     },
     nicPorts,
+    nicBackends,
     networkBackend,
   });
 

@@ -170,6 +170,36 @@ export async function buildBridgeTargetByNetworkId(
   return targets;
 }
 
+export function buildCloudRoleByNetworkId(
+  document: LabDocument,
+): Map<string, CloudRole> {
+  const attachmentByInterfaceId = new Map(
+    document.attachments.map((attachment) => [
+      attachment.interfaceId,
+      attachment.networkId,
+    ]),
+  );
+
+  const targets = new Map<string, CloudRole>();
+
+  for (const node of document.nodes) {
+    if (node.runtime !== "cloud") continue;
+
+    const resolvedBridge = resolveCloudBridge(node);
+    if (!resolvedBridge) {
+      continue;
+    }
+
+    for (const iface of node.interfaces) {
+      const networkId = attachmentByInterfaceId.get(iface.id);
+      if (!networkId || targets.has(networkId)) continue;
+      targets.set(networkId, resolvedBridge.cloudRole);
+    }
+  }
+
+  return targets;
+}
+
 export async function validateCloudBridgeTargets(
   document: LabDocument,
   targetNodeId: string | undefined,
