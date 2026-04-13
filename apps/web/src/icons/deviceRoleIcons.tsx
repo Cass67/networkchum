@@ -67,8 +67,16 @@ export function DeviceRoleIconGlyph({ kind, testId }: DeviceRoleIconProps) {
   );
 }
 
-export function getDeviceRoleIcon(role?: DeviceRoleIcon, testId?: string) {
-  if (!role) {
+function isDeviceRoleIcon(value?: string): value is DeviceRoleIcon {
+  if (!value) {
+    return false;
+  }
+
+  return roleIconOptions.includes(value as DeviceRoleIcon);
+}
+
+export function getDeviceRoleIcon(role?: string, testId?: string) {
+  if (!isDeviceRoleIcon(role)) {
     return null;
   }
 

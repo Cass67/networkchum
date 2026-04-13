@@ -142,4 +142,24 @@ describe("DeviceCatalog", () => {
     expect(screen.getByTestId("device-role-icon-firewall")).toBeInTheDocument();
     expect(screen.queryByTestId("device-icon-vm")).not.toBeInTheDocument();
   });
+
+  it("falls back to runtime icon when device role icon is invalid", () => {
+    render(
+      <DeviceCatalog
+        entries={[
+          {
+            id: "unknown-role",
+            name: "Unknown Role",
+            source: "built-in",
+            runtime: "qemu",
+            deviceRoleIcon:
+              "unknown" as unknown as import("../icons/deviceRoleIcons.js").DeviceRoleIcon,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("device-icon-vm")).toBeInTheDocument();
+    expect(screen.queryByTestId(/device-role-icon/i)).not.toBeInTheDocument();
+  });
 });
