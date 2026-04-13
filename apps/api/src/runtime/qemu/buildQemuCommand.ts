@@ -10,6 +10,16 @@ export function tapName(labId: string, nodeId: string, index: number): string {
   return `tap-${shortSuffix(labId)}-${shortSuffix(nodeId)}-${index}`;
 }
 
+type ExplicitNicBackend =
+  | { kind: "tap" }
+  | { kind: "socket"; port: number }
+  | { kind: "macos-management" };
+
+type ComputedNicBackend =
+  | { kind: "tap" }
+  | { kind: "socket"; port?: number }
+  | { kind: "macos-management" };
+
 type BuildQemuCommandInput = {
   qemuBinary?: string;
   labId: string;
@@ -30,11 +40,12 @@ type BuildQemuCommandInput = {
   // virtual switch can connect and forward frames without a VM restart.
   // nicPorts[i] = listen port for NIC index i.
   nicPorts?: number[];
+  nicBackends?: ExplicitNicBackend[];
   networkBackend?: "tap" | "socket";
 };
 
 export function buildQemuCommand(input: BuildQemuCommandInput): string[] {
-  const backend = input.networkBackend ?? "tap";
+  const defaultBackend: "tap" | "socket" = input.networkBackend ?? "tap";
   const command = [
     input.qemuBinary ?? "qemu-system-x86_64",
     "-machine",
@@ -73,35 +84,53 @@ export function buildQemuCommand(input: BuildQemuCommandInput): string[] {
 
   for (let index = 0; index < input.config.interfaceCount; index += 1) {
     const nicModel = input.config.nicModel ?? "virtio-net-pci";
+    const explicitBackend = input.nicBackends?.[index];
+    const backend: ComputedNicBackend =
+      explicitBackend ??
+      (defaultBackend === "socket"
+        ? { kind: "socket", port: input.nicPorts?.[index] }
+        : { kind: "tap" });
 
-    if (backend === "tap") {
-      const name = tapName(input.labId, input.nodeId, index);
-      command.push(
-        "-netdev",
-        `tap,id=net${index},ifname=${name},script=no,downscript=no`,
-        "-device",
-        `${nicModel},netdev=net${index}`,
-      );
-    } else {
-      // Socket backend: each NIC listens on its own dedicated port so the
-      // in-process virtual switch can connect and route frames dynamically.
-      const port = input.nicPorts?.[index];
-      if (port !== undefined) {
+    switch (backend.kind) {
+      case "tap": {
+        const name = tapName(input.labId, input.nodeId, index);
         command.push(
           "-netdev",
-          `socket,id=net${index},listen=127.0.0.1:${port}`,
+          `tap,id=net${index},ifname=${name},script=no,downscript=no`,
           "-device",
           `${nicModel},netdev=net${index}`,
         );
-      } else {
-        // Fallback: unconnected user-mode (should not happen in practice).
-        command.push(
-          "-netdev",
-          `user,id=net${index},restrict=on`,
-          "-device",
-          `${nicModel},netdev=net${index}`,
-        );
+        break;
       }
+      case "macos-management": {
+        command.push(
+          "-netdev",
+          `vmnet-host,id=net${index}`,
+          "-device",
+          `${nicModel},netdev=net${index}`,
+        );
+        break;
+      }
+      case "socket": {
+        if (backend.port !== undefined) {
+          command.push(
+            "-netdev",
+            `socket,id=net${index},listen=127.0.0.1:${backend.port}`,
+            "-device",
+            `${nicModel},netdev=net${index}`,
+          );
+        } else {
+          command.push(
+            "-netdev",
+            `user,id=net${index},restrict=on`,
+            "-device",
+            `${nicModel},netdev=net${index}`,
+          );
+        }
+        break;
+      }
+      default:
+        throw new Error("Unexpected NIC backend");
     }
   }
 

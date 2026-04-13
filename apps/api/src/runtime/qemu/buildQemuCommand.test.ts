@@ -66,6 +66,25 @@ describe("buildQemuCommand", () => {
     expect(result.join(" ")).toContain("user,id=net0,restrict=on");
   });
 
+  it("supports socket NICs alongside a macOS management NIC", () => {
+    const result = buildQemuCommand({
+      labId: "lab-1",
+      nodeId: "node-1",
+      imagePath: "/tmp/test.qcow2",
+      machineType: "q35",
+      config: { ramMb: 1024, vcpu: 1, interfaceCount: 2, nicModel: "e1000" },
+      networkBackend: "socket",
+      nicPorts: [20000],
+      nicBackends: [
+        { kind: "socket", port: 20000 },
+        { kind: "macos-management" },
+      ],
+    });
+
+    expect(result).toContain("socket,id=net0,listen=127.0.0.1:20000");
+    expect(result).toContain("vmnet-host,id=net1");
+  });
+
   it("adds a modern x86 CPU model when running under tcg", () => {
     const result = buildQemuCommand({
       labId: "lab-1",
