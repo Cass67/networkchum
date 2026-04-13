@@ -6,6 +6,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco IOSv",
     vendor: "Cisco",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -24,6 +25,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco ASR",
     vendor: "Cisco",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -42,6 +44,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco NX-OSv",
     vendor: "Cisco",
+    deviceRoleIcon: "switch",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -59,6 +62,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper vSRX",
     vendor: "Juniper",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -76,6 +80,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Arista vEOS",
     vendor: "Arista",
+    deviceRoleIcon: "switch",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -112,6 +117,7 @@ export const defaultTemplates: Template[] = [
     runtime: "container",
     displayName: "Alpine Container",
     vendor: "Linux",
+    deviceRoleIcon: "host",
     boot: {
       console: "serial",
       acceleration: "n/a",
@@ -127,6 +133,7 @@ export const defaultTemplates: Template[] = [
     runtime: "container",
     displayName: "Ubuntu Container",
     vendor: "Linux",
+    deviceRoleIcon: "host",
     boot: {
       console: "serial",
       acceleration: "n/a",
@@ -142,6 +149,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco vIOS Router",
     vendor: "Cisco",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -159,6 +167,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco vIOS Switch",
     vendor: "Cisco",
+    deviceRoleIcon: "switch",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -176,6 +185,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco XRv",
     vendor: "Cisco",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -193,6 +203,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco XRv 9000",
     vendor: "Cisco",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -210,6 +221,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco ASAv",
     vendor: "Cisco",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -227,6 +239,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco Firepower FTD",
     vendor: "Cisco",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "vnc",
       machineType: "q35",
@@ -244,6 +257,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco Catalyst 8000V",
     vendor: "Cisco",
+    deviceRoleIcon: "switch",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -261,6 +275,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco Catalyst 9000v",
     vendor: "Cisco",
+    deviceRoleIcon: "switch",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -278,6 +293,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cisco ISE",
     vendor: "Cisco",
+    deviceRoleIcon: "host",
     boot: {
       console: "vnc",
       machineType: "q35",
@@ -295,6 +311,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper vMX",
     vendor: "Juniper",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -312,6 +329,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper vMX VCP",
     vendor: "Juniper",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -329,6 +347,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper vMX VFP",
     vendor: "Juniper",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -346,6 +365,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper vSRX 3.0",
     vendor: "Juniper",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -363,6 +383,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper vSRX-NG",
     vendor: "Juniper",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -380,6 +401,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper vQFX RE",
     vendor: "Juniper",
+    deviceRoleIcon: "switch",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -397,6 +419,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper vQFX PFE",
     vendor: "Juniper",
+    deviceRoleIcon: "switch",
     boot: {
       console: "vnc",
       machineType: "q35",
@@ -414,6 +437,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper cRPD",
     vendor: "Juniper",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -431,6 +455,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Juniper VRR",
     vendor: "Juniper",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -448,6 +473,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Fortinet FortiGate",
     vendor: "Fortinet",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -465,6 +491,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Palo Alto VM",
     vendor: "Palo Alto",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "vnc",
       machineType: "q35",
@@ -482,6 +509,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "pfSense",
     vendor: "Netgate",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -499,6 +527,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "OPNsense",
     vendor: "Deciso",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -516,6 +545,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "VyOS",
     vendor: "VyOS",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -533,6 +563,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "MikroTik RouterOS",
     vendor: "MikroTik",
+    deviceRoleIcon: "router",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -550,6 +581,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "Cumulus VX",
     vendor: "NVIDIA",
+    deviceRoleIcon: "switch",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -567,6 +599,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "F5 BIG-IP",
     vendor: "F5",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -584,6 +617,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "NetScaler VPX",
     vendor: "Citrix",
+    deviceRoleIcon: "firewall",
     boot: {
       console: "serial",
       machineType: "q35",
@@ -601,6 +635,7 @@ export const defaultTemplates: Template[] = [
     runtime: "qemu",
     displayName: "FreeBSD",
     vendor: "FreeBSD",
+    deviceRoleIcon: "host",
     boot: {
       console: "vnc",
       machineType: "q35",
@@ -618,6 +653,7 @@ export const defaultTemplates: Template[] = [
     runtime: "cloud",
     displayName: "Cloud (External Network)",
     vendor: "NetworkChum",
+    deviceRoleIcon: "cloud",
     boot: {
       console: "none",
       acceleration: "n/a",

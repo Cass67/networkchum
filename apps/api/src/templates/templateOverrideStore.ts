@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
-import type { Template } from "@networkchum/shared";
+import { DeviceRoleIconSchema, type Template } from "@networkchum/shared";
 
 import { getDataDir, getDataFile } from "../storagePaths.js";
 
@@ -24,10 +24,35 @@ export function listTemplateOverrides(): TemplateOverrideMap {
   }
 
   try {
-    return JSON.parse(readFileSync(file, "utf8")) as TemplateOverrideMap;
+    const raw = JSON.parse(readFileSync(file, "utf8")) as TemplateOverrideMap;
+    return sanitizeOverrides(raw);
   } catch {
     return {};
   }
+}
+
+function sanitizeOverrides(
+  overrides: TemplateOverrideMap,
+): TemplateOverrideMap {
+  const sanitized: TemplateOverrideMap = {};
+
+  for (const [templateId, override] of Object.entries(overrides)) {
+    if (!override || typeof override !== "object") {
+      continue;
+    }
+
+    const nextOverride: TemplateDefaultsOverride = { ...override };
+    if (
+      nextOverride.deviceRoleIcon !== undefined &&
+      !DeviceRoleIconSchema.safeParse(nextOverride.deviceRoleIcon).success
+    ) {
+      delete nextOverride.deviceRoleIcon;
+    }
+
+    sanitized[templateId] = nextOverride;
+  }
+
+  return sanitized;
 }
 
 export function saveTemplateOverrides(overrides: TemplateOverrideMap): void {

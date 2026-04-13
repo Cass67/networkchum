@@ -1,25 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { guessDeviceRoleIcon } from "./deviceRoleIcon.js";
-
-let tempDataDir = "";
-
-beforeEach(async () => {
-  tempDataDir = await mkdtemp(path.join(os.tmpdir(), "networkchum-role-"));
-  process.env.NETWORKCHUM_DATA_DIR = tempDataDir;
-});
-
-afterEach(async () => {
-  delete process.env.NETWORKCHUM_DATA_DIR;
-  if (tempDataDir) {
-    await rm(tempDataDir, { recursive: true, force: true });
-    tempDataDir = "";
-  }
-});
 
 describe("guessDeviceRoleIcon", () => {
   it("classifies common device names deterministically", () => {

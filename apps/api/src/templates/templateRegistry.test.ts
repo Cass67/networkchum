@@ -7,18 +7,25 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TemplateRegistry } from "./templateRegistry.js";
 
 let tempDataDir = "";
+let priorDataDir: string | undefined;
 
 beforeEach(async () => {
+  priorDataDir = process.env.NETWORKCHUM_DATA_DIR;
   tempDataDir = await mkdtemp(path.join(os.tmpdir(), "networkchum-registry-"));
   process.env.NETWORKCHUM_DATA_DIR = tempDataDir;
 });
 
 afterEach(async () => {
-  delete process.env.NETWORKCHUM_DATA_DIR;
+  if (priorDataDir === undefined) {
+    delete process.env.NETWORKCHUM_DATA_DIR;
+  } else {
+    process.env.NETWORKCHUM_DATA_DIR = priorDataDir;
+  }
   if (tempDataDir) {
     await rm(tempDataDir, { recursive: true, force: true });
     tempDataDir = "";
   }
+  priorDataDir = undefined;
 });
 
 describe("TemplateRegistry overrides", () => {

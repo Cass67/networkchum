@@ -138,6 +138,7 @@ describe("addNode", () => {
         runtime: "cloud",
         displayName: "Cloud",
         vendor: "NetworkChum",
+        deviceRoleIcon: "cloud",
         boot: {
           console: "none",
           acceleration: "n/a",
