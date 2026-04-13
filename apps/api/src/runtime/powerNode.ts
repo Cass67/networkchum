@@ -17,6 +17,11 @@ import {
   bridgeName,
   detectPhysicalNic,
 } from "../network/reconcileTopology.js";
+import {
+  buildBridgeTargetByNetworkId,
+  isLinuxBridgeInterface,
+  shouldDetachCloudUplink,
+} from "../network/cloudUplink.js";
 import { buildContainerSpec } from "./container/buildContainerSpec.js";
 import { resolveNodeImagePath } from "../images/resolveNodeImage.js";
 import { buildQemuCommand, tapName } from "./qemu/buildQemuCommand.js";
@@ -27,6 +32,7 @@ import {
 import { syncSocketTopology } from "./syncSocketTopology.js";
 import { virtualSwitch } from "./virtualSwitch.js";
 import { getNetworkBackend, getPlatform } from "./hostCapabilities.js";
+import { reconcileRuntimeStates } from "./reconcileRuntimeStates.js";
 import { listRuntimeStates, upsertRuntimeState } from "./runtimeStateStore.js";
 import type { RuntimeState } from "./runtimeStateStore.js";
 import {
@@ -77,6 +83,7 @@ type RuntimeDependencies = {
   scheduleRunningConfigBackup?: (
     params: ScheduleRunningConfigBackupParams,
   ) => Promise<unknown>;
+  isBridgeInterface?: (interfaceName: string) => Promise<boolean>;
 };
 
 function resolveNodeBootSettings(
@@ -122,8 +129,15 @@ export async function ensureTapNetworking(
     }
   },
   targetNodeId?: string,
+  isBridgeInterface: (
+    interfaceName: string,
+  ) => Promise<boolean> = isLinuxBridgeInterface,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const ops = reconcileTopology(document, targetNodeId);
+  const bridgeTargets = await buildBridgeTargetByNetworkId(
+    document,
+    isBridgeInterface,
+  );
+  const ops = reconcileTopology(document, targetNodeId, bridgeTargets);
 
   for (const op of ops) {
     const cmd = buildCommand(op);
@@ -387,9 +401,10 @@ export async function powerOnNode(
   const hasBinary = dependencies.hasBinary ?? defaultHasBinary;
   const resolveBinary =
     dependencies.resolveQemuBinary ?? (() => resolveQemuBinary(hasBinary));
-  const existingState = (await listRuntimeStates(labId)).find(
-    (state) => state.nodeId === nodeId,
-  );
+  const existingStates = dependencies.runCommand
+    ? await reconcileRuntimeStates(labId, runCommand)
+    : await listRuntimeStates(labId);
+  const existingState = existingStates.find((state) => state.nodeId === nodeId);
 
   const bootActions = lab.document.nodeBootActions ?? [];
   const nodeBootSettings = resolveNodeBootSettings(bootActions, nodeId);
@@ -536,19 +551,15 @@ export async function powerOnNode(
     console.log(`[powerNode] activating cloud node ${nodeId} in lab ${labId}`);
 
     if (getNetworkBackend() === "tap") {
-      const ops = reconcileTopology(lab.document, nodeId);
-      let ok = true;
-      let errorMsg: string | null = null;
-      for (const op of ops) {
-        const cmd = buildCommand(op);
-        if (!cmd) continue;
-        const result = await runCommand(cmd[0]!, cmd.slice(1));
-        if (!result.ok && !isAlreadyExistsError(result.stderr)) {
-          console.warn(`[cloud] ${op.kind}: ${result.stderr.trim()}`);
-          ok = false;
-          errorMsg = buildNetworkFailureMessage(op.kind, result.stderr, cmd);
-        }
-      }
+      const networkResult = await ensureTapNetworking(
+        lab.document,
+        runCommand,
+        undefined,
+        nodeId,
+        dependencies.isBridgeInterface,
+      );
+      const ok = networkResult.ok;
+      const errorMsg = networkResult.ok ? null : networkResult.message;
 
       const state = {
         labId,
@@ -1020,7 +1031,13 @@ export async function powerOffNode(
         if (node) {
           const physicalNic =
             node.config.bridgeInterface ?? detectPhysicalNic();
-          if (physicalNic) {
+          if (
+            physicalNic &&
+            (await shouldDetachCloudUplink(
+              physicalNic,
+              dependencies.isBridgeInterface ?? isLinuxBridgeInterface,
+            ))
+          ) {
             await runCommand("ip", [
               "link",
               "set",

@@ -275,4 +275,64 @@ describe("reconcileTopology", () => {
       bridgeName: "nc-br-net1",
     });
   });
+
+  it("attaches network members directly to an existing host bridge target", () => {
+    const lab = makeLab({
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "cloud-a",
+          name: "cloud-a",
+          runtime: "cloud",
+          templateId: "cloud",
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 1,
+            bridgeInterface: "br-mgmt",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+        },
+        {
+          id: "node-a",
+          name: "router-a",
+          runtime: "qemu",
+          templateId: "tmpl",
+          position: { x: 100, y: 0 },
+          config: { vcpu: 1, ramMb: 256, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-a-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [
+        { interfaceId: "if-cloud-0", networkId: "net-1" },
+        { interfaceId: "if-a-0", networkId: "net-1" },
+      ],
+    });
+
+    const ops = reconcileTopology(
+      lab,
+      undefined,
+      new Map([["net-1", "br-mgmt"]]),
+    );
+
+    expect(ops).not.toContainEqual({
+      kind: "create-bridge",
+      bridgeName: "nc-br-net1",
+    });
+    expect(ops).toContainEqual({
+      kind: "attach-to-bridge",
+      interfaceName: "tap-c123-odea-0",
+      bridgeName: "br-mgmt",
+    });
+    expect(ops).not.toContainEqual({
+      kind: "attach-to-bridge",
+      interfaceName: "br-mgmt",
+      bridgeName: "nc-br-net1",
+    });
+  });
 });

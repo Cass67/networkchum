@@ -30,6 +30,7 @@ import {
 import { detectAccelerationMode } from "../runtime/hostCapabilities.js";
 import { powerOffNode, powerOnNode } from "../runtime/powerNode.js";
 import { syncSocketTopology } from "../runtime/syncSocketTopology.js";
+import { reconcileRuntimeStates } from "../runtime/reconcileRuntimeStates.js";
 import { listRuntimeStates } from "../runtime/runtimeStateStore.js";
 import { listRunningConfigBackupRecords } from "../runtime/runningConfigBackupStore.js";
 import {
@@ -115,8 +116,10 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
   }
 
   async function enrichRuntimeStates(labId: string) {
-    const states = await listRuntimeStates(labId);
     const runCommand = options.runtime?.runCommand;
+    const states = runCommand
+      ? await reconcileRuntimeStates(labId, runCommand)
+      : await listRuntimeStates(labId);
     if (!runCommand) {
       return states.map((state) => ({ ...state, consoleInUse: false }));
     }

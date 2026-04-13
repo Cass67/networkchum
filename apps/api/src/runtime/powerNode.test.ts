@@ -18,6 +18,7 @@ import { TemplateRegistry } from "../templates/templateRegistry.js";
 import {
   ensureTapNetworking,
   findAvailableQemuPortBase,
+  powerOffNode,
   powerOnNode,
 } from "./powerNode.js";
 import { listRuntimeStates, upsertRuntimeState } from "./runtimeStateStore.js";
@@ -307,6 +308,96 @@ describe("powerOnNode", () => {
       throw new Error("expected missing tap validation to fail");
     }
     expect(result.message).toContain("expected TAP device");
+  });
+
+  it("attaches qemu taps directly to an existing host bridge for cloud-backed networks", async () => {
+    const document: LabDocument = {
+      id: "lab-abc123",
+      name: "Test Lab",
+      version: 1,
+      canvas: { zoom: 1, backgroundImage: null },
+      annotations: [],
+      startupConfigSets: [],
+      nodeBootActions: [],
+      activeConfigSetId: null,
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "cloud-a",
+          name: "mgmt",
+          runtime: "cloud",
+          templateId: "cloud",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 1,
+            bridgeInterface: "br-mgmt",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+        },
+        {
+          id: "node-a",
+          name: "router-1",
+          runtime: "qemu",
+          templateId: "tmpl",
+          imageId: null,
+          position: { x: 100, y: 0 },
+          config: { vcpu: 1, ramMb: 1024, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-a-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [
+        { interfaceId: "if-cloud-0", networkId: "net-1" },
+        { interfaceId: "if-a-0", networkId: "net-1" },
+      ],
+    };
+
+    const commands: string[][] = [];
+    const result = await ensureTapNetworking(
+      document,
+      async (command, args) => {
+        commands.push([command, ...args]);
+        return { ok: true, stdout: "", stderr: "" };
+      },
+      async () => true,
+      undefined,
+      async (interfaceName) => interfaceName === "br-mgmt",
+    );
+
+    expect(result.ok).toBe(true);
+    expect(commands).not.toContainEqual([
+      "ip",
+      "link",
+      "add",
+      "name",
+      "nc-br-net1",
+      "type",
+      "bridge",
+    ]);
+    expect(commands).toContainEqual([
+      "ip",
+      "link",
+      "set",
+      "dev",
+      "tap-c123-odea-0",
+      "master",
+      "br-mgmt",
+    ]);
+    expect(commands).not.toContainEqual([
+      "ip",
+      "link",
+      "set",
+      "dev",
+      "br-mgmt",
+      "master",
+      "nc-br-net1",
+    ]);
   });
 
   it("chooses a serial base where both serial and monitor ports are free", async () => {
@@ -1213,7 +1304,18 @@ describe("powerOnNode", () => {
     });
 
     const state = await powerOnNode(lab.id, nodeId, {
-      runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+      runCommand: async (command, args) => {
+        if (command === "ps" && args[0] === "-p" && args[1] === "99999") {
+          return {
+            ok: true,
+            stdout:
+              "qemu-system-x86_64 -serial tcp:127.0.0.1:5004,server,nowait\n",
+            stderr: "",
+          };
+        }
+
+        return { ok: true, stdout: "", stderr: "" };
+      },
       hasBinary: async () => true,
       launchQemu: async () => {
         throw new Error("should not launch twice");
@@ -1291,5 +1393,54 @@ describe("powerOnNode", () => {
       5004,
     );
     expect(state?.connectCommand).toEqual(["telnet", "127.0.0.1", "5004"]);
+  });
+
+  it("does not detach a pre-existing host bridge when powering off a cloud node", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const registry = new TemplateRegistry();
+    const lab = await createLab("Cloud Poweroff Lab");
+    const template = registry.get("cloud")!;
+    const document = addNode(lab.document, {
+      template,
+      name: "mgmt",
+      position: { x: 10, y: 10 },
+      bridgeInterface: "br-mgmt",
+    });
+    await updateLabDocument(lab.id, document);
+    const savedLab = await getLab(lab.id);
+    const nodeId = savedLab!.document.nodes[0]!.id;
+
+    await upsertRuntimeState({
+      labId: lab.id,
+      nodeId,
+      status: "running",
+      runtime: "cloud",
+      accelerationMode: null,
+      externalId: "cloud-tap",
+      commandPreview: [],
+      updatedAt: new Date().toISOString(),
+    });
+
+    const runCommand = vi
+      .fn()
+      .mockResolvedValue({ ok: true, stdout: "", stderr: "" });
+
+    await powerOffNode(lab.id, nodeId, {
+      runCommand,
+      isBridgeInterface: async (interfaceName) => interfaceName === "br-mgmt",
+    });
+
+    expect(runCommand).not.toHaveBeenCalledWith("ip", [
+      "link",
+      "set",
+      "dev",
+      "br-mgmt",
+      "nomaster",
+    ]);
   });
 });

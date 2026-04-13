@@ -42,10 +42,15 @@ export function bridgeName(networkId: string): string {
 export function reconcileTopology(
   document: LabDocument,
   targetNodeId?: string,
+  bridgeTargets: ReadonlyMap<string, string> = new Map(),
 ): NetworkOperation[] {
   const operations: NetworkOperation[] = [];
 
   for (const network of document.networks) {
+    if (bridgeTargets.has(network.id)) {
+      continue;
+    }
+
     operations.push({
       kind: "create-bridge",
       bridgeName: bridgeName(network.id),
@@ -79,7 +84,9 @@ export function reconcileTopology(
       operations.push({
         kind: "attach-to-bridge",
         interfaceName: tap,
-        bridgeName: bridgeName(attachment.networkId),
+        bridgeName:
+          bridgeTargets.get(attachment.networkId) ??
+          bridgeName(attachment.networkId),
       });
     }
   }
@@ -93,6 +100,7 @@ export function reconcileTopology(
     for (const iface of node.interfaces) {
       const attachment = attachmentByInterfaceId.get(iface.id);
       if (!attachment || !physicalNic) continue;
+      if (bridgeTargets.has(attachment.networkId)) continue;
 
       operations.push({
         kind: "attach-to-bridge",

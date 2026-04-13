@@ -5,6 +5,10 @@ import { listRuntimeStates } from "../runtime/runtimeStateStore.js";
 import { getNetworkBackend } from "../runtime/hostCapabilities.js";
 import { ensureTapNetworking } from "../runtime/powerNode.js";
 import { tapName } from "../runtime/qemu/buildQemuCommand.js";
+import {
+  isLinuxBridgeInterface,
+  shouldDetachCloudUplink,
+} from "./cloudUplink.js";
 import { detectPhysicalNic } from "./reconcileTopology.js";
 
 type CommandResult = {
@@ -24,6 +28,7 @@ type LiveTapSyncDependencies = {
   listRuntimeStates?: (labId?: string) => Promise<RuntimeState[]>;
   ensureTapNetworking?: typeof ensureTapNetworking;
   tapExists?: Parameters<typeof ensureTapNetworking>[2];
+  isBridgeInterface?: (interfaceName: string) => Promise<boolean>;
   detectPhysicalNic?: () => string | null;
   warn?: (message: string) => void;
 };
@@ -88,6 +93,7 @@ async function ensureRunningNodeTapTopology(
     runtime.runCommand,
     deps.tapExists,
     nodeId,
+    deps.isBridgeInterface,
   );
 
   if (!result.ok) {
@@ -189,11 +195,15 @@ export async function detachRunningInterfaceFromBridge(
   }
 
   if (node.runtime === "cloud") {
-    await detachInterfaceFromBridge(
-      resolveCloudUplink(node, deps),
-      runtime,
-      deps,
-    );
+    const uplink = resolveCloudUplink(node, deps);
+    if (
+      await shouldDetachCloudUplink(
+        uplink,
+        deps.isBridgeInterface ?? isLinuxBridgeInterface,
+      )
+    ) {
+      await detachInterfaceFromBridge(uplink, runtime, deps);
+    }
   }
 }
 
@@ -219,14 +229,33 @@ export async function syncRunningCloudNodeBridgeInterface(
 
   const previousUplink = resolveCloudUplink(previousNode, deps);
   const nextUplink = resolveCloudUplink(nextNode, deps);
-  if (previousUplink && previousUplink !== nextUplink) {
+  if (
+    previousUplink &&
+    previousUplink !== nextUplink &&
+    (await shouldDetachCloudUplink(
+      previousUplink,
+      deps.isBridgeInterface ?? isLinuxBridgeInterface,
+    ))
+  ) {
     await detachInterfaceFromBridge(previousUplink, runtime, deps);
   }
 
-  await ensureRunningNodeTapTopology(
+  const cloudInterfaceIds = new Set(
+    nextNode.interfaces.map((iface) => iface.id),
+  );
+  const networkIds = new Set(
+    nextDocument.attachments
+      .filter((attachment) => cloudInterfaceIds.has(attachment.interfaceId))
+      .map((attachment) => attachment.networkId),
+  );
+  const affectedInterfaceIds = nextDocument.attachments
+    .filter((attachment) => networkIds.has(attachment.networkId))
+    .map((attachment) => attachment.interfaceId);
+
+  await syncRunningNodesForInterfaces(
     labId,
     nextDocument,
-    nodeId,
+    affectedInterfaceIds,
     runtime,
     deps,
   );

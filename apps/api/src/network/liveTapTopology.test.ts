@@ -176,20 +176,43 @@ describe("liveTapTopology", () => {
       attachments: [{ interfaceId: "if-cloud-0", networkId: "net-1" }],
     });
 
-    const nextDocument = {
-      ...previousDocument,
-      nodes: previousDocument.nodes.map((node) =>
-        node.id === "cloud-a"
-          ? {
-              ...node,
-              config: {
-                ...node.config,
-                bridgeInterface: "enp6s18",
-              },
-            }
-          : node,
-      ),
-    };
+    const nextDocument = makeLab({
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "cloud-a",
+          name: "mgmt",
+          runtime: "cloud",
+          templateId: "cloud",
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 1,
+            bridgeInterface: "enp6s18",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+        },
+        {
+          id: "node-b",
+          name: "router",
+          runtime: "qemu",
+          templateId: "tmpl",
+          imageId: null,
+          position: { x: 100, y: 0 },
+          config: { vcpu: 1, ramMb: 1024, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-b-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [
+        { interfaceId: "if-cloud-0", networkId: "net-1" },
+        { interfaceId: "if-b-0", networkId: "net-1" },
+      ],
+    });
 
     const runCommand = vi
       .fn()
@@ -209,6 +232,10 @@ describe("liveTapTopology", () => {
             nodeId: "cloud-a",
             runtime: "cloud",
           }),
+          makeRuntimeState({
+            nodeId: "node-b",
+            runtime: "qemu",
+          }),
         ],
         ensureTapNetworking,
       },
@@ -221,8 +248,57 @@ describe("liveTapTopology", () => {
       "eno1",
       "nomaster",
     ]);
-    expect(ensureTapNetworking).toHaveBeenCalledTimes(1);
+    expect(ensureTapNetworking).toHaveBeenCalledTimes(2);
     expect(ensureTapNetworking.mock.calls[0]?.[0]).toBe(nextDocument);
-    expect(ensureTapNetworking.mock.calls[0]?.[3]).toBe("cloud-a");
+    expect(ensureTapNetworking.mock.calls[1]?.[0]).toBe(nextDocument);
+    expect(ensureTapNetworking.mock.calls.map((call) => call[3])).toEqual([
+      "cloud-a",
+      "node-b",
+    ]);
+  });
+
+  it("does not detach a host bridge when a cloud cable is removed", async () => {
+    const document = makeLab({
+      nodes: [
+        {
+          id: "cloud-a",
+          name: "mgmt",
+          runtime: "cloud",
+          templateId: "cloud",
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 1,
+            bridgeInterface: "br-mgmt",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+        },
+      ],
+    });
+
+    const runCommand = vi
+      .fn()
+      .mockResolvedValue({ ok: true, stdout: "", stderr: "" });
+
+    await detachRunningInterfaceFromBridge(
+      document.id,
+      document,
+      "if-cloud-0",
+      { runCommand },
+      {
+        networkBackend: "tap",
+        listRuntimeStates: async () => [
+          makeRuntimeState({
+            nodeId: "cloud-a",
+            runtime: "cloud",
+          }),
+        ],
+        isBridgeInterface: async (interfaceName) => interfaceName === "br-mgmt",
+      },
+    );
+
+    expect(runCommand).not.toHaveBeenCalled();
   });
 });

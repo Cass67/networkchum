@@ -17,7 +17,10 @@ import { appendRunningConfigBackupRecord } from "./runtime/runningConfigBackupSt
 import { buildApp } from "./app.js";
 import { saveImages } from "./images/imageStore.js";
 import { getLab } from "./labs/labStore.js";
-import { upsertRuntimeState } from "./runtime/runtimeStateStore.js";
+import {
+  listRuntimeStates,
+  upsertRuntimeState,
+} from "./runtime/runtimeStateStore.js";
 
 type App = ReturnType<typeof buildApp>;
 
@@ -924,6 +927,15 @@ describe("api", () => {
     const busyApp = buildApp({
       runtime: {
         runCommand: async (command, args) => {
+          if (command === "ps" && args[0] === "-p" && args[1] === "23812") {
+            return {
+              ok: true,
+              stdout:
+                "qemu-system-x86_64 -serial tcp:127.0.0.1:5002,server,nowait",
+              stderr: "",
+            };
+          }
+
           if (
             command === "lsof" &&
             args[0] === "-nP" &&
@@ -1044,6 +1056,93 @@ describe("api", () => {
     expect(killed).toEqual([["92403", "98246"]]);
 
     await disconnectApp.close();
+  });
+
+  it("reconciles stale running runtime states when the host no longer has the backing processes", async () => {
+    const reconcileApp = buildApp({
+      runtime: {
+        runCommand: async (command, args) => {
+          if (command === "ps" && args[0] === "-p") {
+            return { ok: false, stdout: "", stderr: "process not found" };
+          }
+
+          if (command === "lsof") {
+            return { ok: true, stdout: "", stderr: "" };
+          }
+
+          return { ok: false, stdout: "", stderr: "not running" };
+        },
+        hasBinary: async () => false,
+      },
+    });
+
+    const labResponse = await reconcileApp.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Stale Runtime Lab" },
+    });
+    const labId = (labResponse.json() as { lab: { id: string } }).lab.id;
+
+    await upsertRuntimeState({
+      labId,
+      nodeId: "node-qemu-stale",
+      status: "running",
+      runtime: "qemu",
+      accelerationMode: "tcg",
+      externalId: "4321",
+      connectCommand: ["telnet", "127.0.0.1", "5002"],
+      consolePort: 5002,
+      message: null,
+      commandPreview: ["qemu-system-x86_64"],
+      updatedAt: new Date().toISOString(),
+    });
+
+    await upsertRuntimeState({
+      labId,
+      nodeId: "node-cloud-stale",
+      status: "running",
+      runtime: "cloud",
+      accelerationMode: null,
+      externalId: "cloud-tap",
+      message: null,
+      commandPreview: [],
+      updatedAt: new Date().toISOString(),
+    });
+
+    const response = await reconcileApp.inject({
+      method: "GET",
+      url: `/labs/${labId}/runtime`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      states: expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: "node-qemu-stale",
+          status: "stopped",
+        }),
+        expect.objectContaining({
+          nodeId: "node-cloud-stale",
+          status: "stopped",
+        }),
+      ]),
+    });
+
+    const persistedStates = await listRuntimeStates(labId);
+    expect(
+      persistedStates.find(
+        (state: { nodeId: string; status: string }) =>
+          state.nodeId === "node-qemu-stale",
+      )?.status,
+    ).toBe("stopped");
+    expect(
+      persistedStates.find(
+        (state: { nodeId: string; status: string }) =>
+          state.nodeId === "node-cloud-stale",
+      )?.status,
+    ).toBe("stopped");
+
+    await reconcileApp.close();
   });
 
   it("deletes a node and removes its connected cable attachments", async () => {
