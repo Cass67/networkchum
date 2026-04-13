@@ -37,6 +37,7 @@ import {
   removeNodeConfig,
   setActiveConfigSet,
   setNodeBootActions,
+  setNodeBridgeInterface,
   setNodeConfig,
   upsertStartupConfigSet,
 } from "../topology/mutations.js";
@@ -44,6 +45,7 @@ import { deleteNode } from "../topology/nodeService.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import { listImages } from "../images/imageStore.js";
 import type { AppDependencies } from "../app.js";
+import { listHostInterfaces } from "../network/reconcileTopology.js";
 
 const createLabSchema = z.object({
   name: z.string().min(1),
@@ -74,6 +76,10 @@ const attachSchema = z.object({
 const setNodeBootActionSchema = z.object({
   startupConfig: NodeBootActionSchema,
   runningConfigBackup: NodeBootActionSchema,
+});
+
+const setNodeSettingsSchema = z.object({
+  bridgeInterface: z.string().min(1).nullable(),
 });
 
 export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
@@ -128,6 +134,10 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
   }
 
   app.get("/labs", async () => ({ labs: await listLabs() }));
+
+  app.get("/host/interfaces", async () => ({
+    interfaces: listHostInterfaces(),
+  }));
 
   app.post("/labs", async (request, reply) => {
     const body = createLabSchema.parse(request.body);
@@ -356,6 +366,35 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       return reply.send({ lab: updatedLab });
     },
   );
+
+  app.patch("/labs/:labId/nodes/:nodeId/settings", async (request, reply) => {
+    const params = z
+      .object({ labId: z.string().min(1), nodeId: z.string().min(1) })
+      .parse(request.params);
+    const body = setNodeSettingsSchema.parse(request.body);
+    const lab = await getManagedLab(params.labId);
+    if (!lab) {
+      return reply.code(404).send({ message: "Lab not found" });
+    }
+
+    const nodeExists = lab.document.nodes.some(
+      (node) => node.id === params.nodeId,
+    );
+    if (!nodeExists) {
+      return reply.code(404).send({ message: "Node not found" });
+    }
+
+    const document = setNodeBridgeInterface(
+      lab.document,
+      params.nodeId,
+      body.bridgeInterface,
+    );
+    const updatedLab = await updateLabDocument(params.labId, document);
+    if (updatedLab) {
+      await writeLabBackup(updatedLab);
+    }
+    return reply.send({ lab: updatedLab });
+  });
 
   app.delete(
     "/labs/:labId/attachments/:interfaceId",

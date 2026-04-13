@@ -1,19 +1,35 @@
+import os from "node:os";
+
 import type { LabDocument } from "@networkchum/shared";
 
 import { tapName } from "../runtime/qemu/buildQemuCommand.js";
 import type { NetworkOperation } from "./types.js";
 
+export function listHostInterfaces(): string[] {
+  const interfaces = os.networkInterfaces();
+  return Object.entries(interfaces)
+    .filter(([name, addresses]) => {
+      if (!addresses?.length) return false;
+      if (/^(lo|docker|br-|virbr|veth|tap|tun|utun|gif|stf|anpi)/i.test(name)) {
+        return false;
+      }
+
+      return addresses.some((address) => !address.internal);
+    })
+    .map(([name]) => name)
+    .sort((left, right) => left.localeCompare(right));
+}
+
 export function detectPhysicalNic(): string | null {
   const candidates = ["eth0", "ens192", "ens33", "enp3s0", "enp0s3", "en0"];
+  const available = new Set(listHostInterfaces());
   for (const nic of candidates) {
-    try {
-      require("node:fs").accessSync(`/sys/class/net/${nic}`);
+    if (available.has(nic)) {
       return nic;
-    } catch {
-      continue;
     }
   }
-  return null;
+
+  return listHostInterfaces()[0] ?? null;
 }
 
 // Linux bridge names follow the same 15-char limit (IFNAMSIZ=16 including NUL).
@@ -69,10 +85,10 @@ export function reconcileTopology(
   }
 
   const cloudNodes = document.nodes.filter((node) => node.runtime === "cloud");
-  const physicalNic = detectPhysicalNic();
 
   for (const node of cloudNodes) {
     if (targetNodeId && node.id !== targetNodeId) continue;
+    const physicalNic = node.config.bridgeInterface ?? detectPhysicalNic();
 
     for (const iface of node.interfaces) {
       const attachment = attachmentByInterfaceId.get(iface.id);

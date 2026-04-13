@@ -1018,7 +1018,8 @@ export async function powerOffNode(
       if (lab) {
         const node = lab.document.nodes.find((n) => n.id === nodeId);
         if (node) {
-          const physicalNic = detectPhysicalNic();
+          const physicalNic =
+            node.config.bridgeInterface ?? detectPhysicalNic();
           if (physicalNic) {
             await runCommand("ip", [
               "link",

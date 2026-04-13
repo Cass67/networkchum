@@ -69,7 +69,7 @@ describe("SelectionPanel", () => {
     expect(screen.getByText("Telnet Port: 5004")).toBeInTheDocument();
   });
 
-  it("shows interfaces and attachment status for selected node", () => {
+  it("does not show interface cable controls in the inspector", () => {
     render(
       <SelectionPanel
         selected={{
@@ -77,13 +77,13 @@ describe("SelectionPanel", () => {
           node: {
             id: "node-1",
             name: "Cloud-1",
+            runtime: "qemu",
             interfaces: [
               { id: "if-1", name: "eth0" },
               { id: "if-2", name: "eth1" },
             ],
           },
           status: "stopped",
-          attachments: [{ interfaceId: "if-1", networkName: "LAN 1" }],
         }}
         onDeleteNode={vi.fn()}
         onPowerOnNode={vi.fn()}
@@ -91,36 +91,36 @@ describe("SelectionPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Interfaces")).toBeInTheDocument();
-    expect(screen.getByText("eth0")).toBeInTheDocument();
-    expect(screen.getByText("Connected to LAN 1")).toBeInTheDocument();
-    expect(screen.getByText("eth1")).toBeInTheDocument();
-    expect(screen.getByText("Not connected")).toBeInTheDocument();
+    expect(screen.queryByText("Interfaces")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Connect / }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Disconnect / }),
+    ).not.toBeInTheDocument();
   });
 
-  it("connects an unbound interface to chosen network from panel", () => {
-    const onAttachInterface = vi.fn();
+  it("shows a cloud settings action for cloud nodes", () => {
+    const onEditCloudSettings = vi.fn();
 
     render(
       <SelectionPanel
         selected={{
           type: "node",
           node: {
-            id: "node-1",
+            id: "cloud-1",
             name: "Cloud-1",
-            interfaces: [{ id: "if-2", name: "eth1" }],
+            runtime: "cloud",
           },
           status: "stopped",
-          attachments: [],
-          networks: [{ id: "net-1", name: "LAN 1" }],
         }}
-        onAttachInterface={onAttachInterface}
+        onEditCloudSettings={onEditCloudSettings}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Connect eth1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cloud Settings" }));
 
-    expect(onAttachInterface).toHaveBeenCalledWith("if-2", "net-1");
+    expect(onEditCloudSettings).toHaveBeenCalledWith("cloud-1");
   });
 
   it("shows the auto backup checkbox for a selected lab", () => {

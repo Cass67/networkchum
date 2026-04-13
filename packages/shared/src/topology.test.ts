@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { LabDocumentSchema } from "./topology.ts";
+import { LabDocumentSchema } from "./topology.js";
 
 describe("LabDocumentSchema", () => {
   it("accepts a minimal lab document", () => {

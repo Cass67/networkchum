@@ -8,12 +8,11 @@ type SelectionPanelProps = {
         node: {
           id: string;
           name: string;
+          runtime?: string;
           interfaces?: Array<{ id: string; name: string }>;
         };
         status: string;
         connectCommand?: string[];
-        attachments?: Array<{ interfaceId: string; networkName: string }>;
-        networks?: Array<{ id: string; name: string }>;
       }
     | { type: "cable"; cable: { id: string; name: string } }
     | {
@@ -37,11 +36,7 @@ type SelectionPanelProps = {
   onPowerOnNode?: (nodeId: string) => void;
   onPowerOffNode?: (nodeId: string) => void;
   onEditStartupConfig?: (nodeId: string) => void;
-  onAttachInterface?: (
-    interfaceId: string,
-    networkId: string,
-  ) => void | Promise<void>;
-  onDetachInterface?: (interfaceId: string) => void | Promise<void>;
+  onEditCloudSettings?: (nodeId: string) => void;
   onUnbindImage?: (imageId: string) => void;
   onRemoveImageFromCatalog?: (imageId: string) => void;
   onDeleteImageFile?: (imageId: string) => void | Promise<void>;
@@ -51,27 +46,12 @@ export function SelectionPanel(props: SelectionPanelProps) {
   const { selected } = props;
   const [labName, setLabName] = useState("");
   const [savingLabName, setSavingLabName] = useState(false);
-  const [interfaceTargets, setInterfaceTargets] = useState<
-    Record<string, string>
-  >({});
 
   useEffect(() => {
     if (selected?.type === "lab") {
       setLabName(selected.lab.name);
     } else {
       setLabName("");
-    }
-
-    if (selected?.type === "node") {
-      const nextTargets = Object.fromEntries(
-        (selected.node.interfaces ?? []).map((iface) => [
-          iface.id,
-          selected.networks?.[0]?.id ?? "",
-        ]),
-      );
-      setInterfaceTargets(nextTargets);
-    } else {
-      setInterfaceTargets({});
     }
 
     setSavingLabName(false);
@@ -177,83 +157,6 @@ export function SelectionPanel(props: SelectionPanelProps) {
               Telnet Port: {selected.connectCommand[2]}
             </p>
           ) : null}
-          {selected.node.interfaces?.length ? (
-            <div className="field" style={{ marginTop: 12 }}>
-              <span className="field-label">Interfaces</span>
-              <ul className="entity-list entity-list--dense">
-                {selected.node.interfaces.map((iface) => {
-                  const attachment = selected.attachments?.find(
-                    (entry) => entry.interfaceId === iface.id,
-                  );
-
-                  return (
-                    <li key={iface.id} className="entity-list-item">
-                      <div className="resource-card">
-                        <div className="resource-card-copy">
-                          <strong className="resource-card-title">
-                            {iface.name}
-                          </strong>
-                          <p className="resource-card-meta">
-                            {attachment
-                              ? `Connected to ${attachment.networkName}`
-                              : "Not connected"}
-                          </p>
-                        </div>
-                        <div className="resource-card-controls">
-                          {attachment ? (
-                            <button
-                              type="button"
-                              className="btn btn-sm"
-                              onClick={() =>
-                                props.onDetachInterface?.(iface.id)
-                              }
-                              aria-label={`Disconnect ${iface.name}`}
-                            >
-                              Disconnect
-                            </button>
-                          ) : selected.networks?.length ? (
-                            <>
-                              <select
-                                className="field-input"
-                                value={interfaceTargets[iface.id] ?? ""}
-                                onChange={(event) =>
-                                  setInterfaceTargets((current) => ({
-                                    ...current,
-                                    [iface.id]: event.target.value,
-                                  }))
-                                }
-                                aria-label={`Network for ${iface.name}`}
-                              >
-                                {selected.networks.map((network) => (
-                                  <option key={network.id} value={network.id}>
-                                    {network.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                className="btn btn-sm"
-                                onClick={() =>
-                                  props.onAttachInterface?.(
-                                    iface.id,
-                                    interfaceTargets[iface.id] ?? "",
-                                  )
-                                }
-                                aria-label={`Connect ${iface.name}`}
-                                disabled={!interfaceTargets[iface.id]}
-                              >
-                                Connect
-                              </button>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null}
           <div className="action-grid">
             {selected.status === "running" ? (
               <button
@@ -279,6 +182,15 @@ export function SelectionPanel(props: SelectionPanelProps) {
             >
               Startup Config
             </button>
+            {selected.node.runtime === "cloud" ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => props.onEditCloudSettings?.(selected.node.id)}
+              >
+                Cloud Settings
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn btn-danger"

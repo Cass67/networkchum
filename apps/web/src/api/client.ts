@@ -54,6 +54,9 @@ type LabDocumentSummary = {
     runtime?: string;
     position?: { x: number; y: number };
     interfaces?: Array<{ id: string; name: string; slot: number }>;
+    config?: {
+      bridgeInterface?: string | null;
+    };
     state?: { desiredPower: string };
   }>;
   networks: Array<{ id: string; kind: string; name: string; visible: boolean }>;
@@ -301,6 +304,14 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
       return payload.states;
     },
 
+    async listHostInterfaces(): Promise<string[]> {
+      const response = await fetcher(`${baseUrl}/host/interfaces`);
+      const payload = await parseResponse<{ interfaces: string[] }>(
+        response as Response,
+      );
+      return payload.interfaces;
+    },
+
     async listRunningConfigBackups(
       labId: string,
       nodeId: string,
@@ -541,6 +552,25 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(actions),
+        },
+      );
+      const payload = await parseResponse<{ lab: LabDetails }>(
+        response as Response,
+      );
+      return payload.lab;
+    },
+
+    async setNodeSettings(
+      labId: string,
+      nodeId: string,
+      settings: { bridgeInterface: string | null },
+    ): Promise<LabDetails> {
+      const response = await fetcher(
+        `${baseUrl}/labs/${labId}/nodes/${nodeId}/settings`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(settings),
         },
       );
       const payload = await parseResponse<{ lab: LabDetails }>(

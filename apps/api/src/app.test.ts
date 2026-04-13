@@ -385,6 +385,70 @@ describe("api", () => {
     });
   });
 
+  it("updates and persists a cloud node bridge interface", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Cloud Node Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const addNodeResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes`,
+      payload: {
+        templateId: "cloud",
+        name: "cloud-1",
+        position: { x: 10, y: 10 },
+      },
+    });
+    const nodeId = (
+      addNodeResponse.json() as {
+        lab: {
+          document: { nodes: Array<{ id: string }> };
+        };
+      }
+    ).lab.document.nodes[0]!.id;
+
+    const patchResponse = await app.inject({
+      method: "PATCH",
+      url: `/labs/${labId}/nodes/${nodeId}/settings`,
+      payload: { bridgeInterface: "eno1" },
+    });
+
+    expect(patchResponse.statusCode).toBe(200);
+    expect(patchResponse.json()).toEqual({
+      lab: expect.objectContaining({
+        document: expect.objectContaining({
+          nodes: expect.arrayContaining([
+            expect.objectContaining({
+              id: nodeId,
+              config: expect.objectContaining({ bridgeInterface: "eno1" }),
+            }),
+          ]),
+        }),
+      }),
+    });
+
+    const getLabResponse = await app.inject({
+      method: "GET",
+      url: `/labs/${labId}`,
+    });
+    expect(getLabResponse.statusCode).toBe(200);
+    expect(getLabResponse.json()).toEqual({
+      lab: expect.objectContaining({
+        document: expect.objectContaining({
+          nodes: expect.arrayContaining([
+            expect.objectContaining({
+              id: nodeId,
+              config: expect.objectContaining({ bridgeInterface: "eno1" }),
+            }),
+          ]),
+        }),
+      }),
+    });
+  });
+
   it("clears boot actions when the payload uses action none", async () => {
     const { labId, nodeId } = await createLabWithNode("node-boot-clear");
     await patchBootAction(labId, nodeId, {

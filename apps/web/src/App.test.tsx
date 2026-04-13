@@ -2162,4 +2162,92 @@ describe("App", () => {
       },
     );
   });
+
+  describe("Cloud Settings", () => {
+    it("opens cloud settings and saves the selected bridge interface", async () => {
+      const lab = {
+        id: "lab-1",
+        name: "Cloud Lab",
+        autoBackup: false,
+        document: {
+          nodes: [
+            {
+              id: "node-1",
+              name: "cloud-1",
+              runtime: "cloud",
+              position: { x: 10, y: 10 },
+              config: {
+                vcpu: 0,
+                ramMb: 0,
+                interfaceCount: 1,
+                bridgeInterface: null,
+              },
+              interfaces: [{ id: "if-1", name: "eth0", slot: 0 }],
+            },
+          ],
+          networks: [],
+          attachments: [],
+          startupConfigSets: [],
+          nodeBootActions: [],
+          activeConfigSetId: null,
+        },
+      };
+
+      const setNodeSettings = vi.fn(async () => ({
+        ...lab,
+        document: {
+          ...lab.document,
+          nodes: [
+            {
+              ...lab.document.nodes[0],
+              config: {
+                ...lab.document.nodes[0].config,
+                bridgeInterface: "eno1",
+              },
+            },
+          ],
+        },
+      }));
+
+      const api = {
+        listLabs: async () => [{ id: lab.id, name: lab.name }],
+        listCatalog: async () => [],
+        createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+        getLab: async () => lab,
+        listRuntimeStates: async () => [],
+        addNode: async () => lab,
+        powerOnNode: async () => ({
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: undefined,
+          message: null,
+        }),
+        listHostInterfaces: async () => ["eno1", "ens192"],
+        setNodeSettings,
+      };
+
+      render(<App api={api} />);
+
+      await screen.findByRole("button", { name: "Open Cloud Lab" });
+      fireEvent.click(screen.getByRole("button", { name: "Open Cloud Lab" }));
+
+      const node = await screen.findByTestId("node-node-1");
+      fireEvent.mouseDown(node);
+      fireEvent.click(node);
+
+      fireEvent.click(screen.getByRole("button", { name: "Cloud Settings" }));
+      await screen.findByRole("dialog", { name: "Cloud Settings" });
+
+      fireEvent.change(screen.getByLabelText("Physical Interface"), {
+        target: { value: "eno1" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+      await waitFor(() => {
+        expect(setNodeSettings).toHaveBeenCalledWith("lab-1", "node-1", {
+          bridgeInterface: "eno1",
+        });
+      });
+    });
+  });
 });

@@ -241,4 +241,38 @@ describe("reconcileTopology", () => {
       },
     ]);
   });
+
+  it("uses the configured bridge interface for cloud nodes", () => {
+    const lab = makeLab({
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "cloud-a",
+          name: "cloud-a",
+          runtime: "cloud",
+          templateId: "cloud",
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 1,
+            bridgeInterface: "eno1",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [{ interfaceId: "if-cloud-0", networkId: "net-1" }],
+    });
+
+    const ops = reconcileTopology(lab);
+
+    expect(ops).toContainEqual({
+      kind: "attach-to-bridge",
+      interfaceName: "eno1",
+      bridgeName: "nc-br-net1",
+    });
+  });
 });

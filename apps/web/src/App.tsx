@@ -6,6 +6,7 @@ import "./theme.css";
 import { createApiClient } from "./api/client.js";
 import type { RunningConfigBackupRecord } from "./api/client.js";
 import { AddNodeDialog } from "./components/AddNodeDialog.js";
+import { CloudNodeSettingsDialog } from "./components/CloudNodeSettingsDialog.js";
 import { ConfirmDialog } from "./components/ConfirmDialog.js";
 import { ContextMenu } from "./components/ContextMenu.js";
 import { DeviceCatalog } from "./components/DeviceCatalog.js";
@@ -57,8 +58,12 @@ type EditableCatalogSummary = CatalogSummary & {
 type LabNodeData = {
   id: string;
   name: string;
+  runtime?: string;
   position?: { x: number; y: number };
   interfaces?: Array<{ id: string; name: string; slot: number }>;
+  config?: {
+    bridgeInterface?: string | null;
+  };
   state?: { desiredPower: string };
 };
 
@@ -177,6 +182,7 @@ type ApiClient = {
     labId: string,
     nodeId: string,
   ) => Promise<RunningConfigBackupRecord[]>;
+  listHostInterfaces?: () => Promise<string[]>;
   createNetwork?: (
     labId: string,
     input: { name: string; visible?: boolean },
@@ -214,6 +220,11 @@ type ApiClient = {
       startupConfig: NodeBootAction;
       runningConfigBackup: NodeBootAction;
     },
+  ) => Promise<{ id: string; name: string; document: LabDocumentData }>;
+  setNodeSettings?: (
+    labId: string,
+    nodeId: string,
+    settings: { bridgeInterface: string | null },
   ) => Promise<{ id: string; name: string; document: LabDocumentData }>;
   moveNode?: (
     labId: string,
@@ -599,6 +610,9 @@ const defaultApi: ApiClient = browserApi ?? {
   async listRuntimeStates() {
     return [];
   },
+  async listHostInterfaces() {
+    return [];
+  },
   async createNetwork() {
     return { network: { id: "net-demo" } };
   },
@@ -621,6 +635,24 @@ const defaultApi: ApiClient = browserApi ?? {
       id: labId,
       name: demoLabs[0]?.name ?? "Demo Lab",
       document: { nodes: [], networks: [], attachments: [] },
+    };
+  },
+  async setNodeSettings(labId: string, _nodeId: string, settings) {
+    return {
+      id: labId,
+      name: demoLabs[0]?.name ?? "Demo Lab",
+      document: {
+        nodes: [
+          {
+            id: "node-demo",
+            name: "cloud-demo",
+            runtime: "cloud",
+            config: { bridgeInterface: settings.bridgeInterface },
+          },
+        ],
+        networks: [],
+        attachments: [],
+      },
     };
   },
   async listImages() {
@@ -843,6 +875,12 @@ export function App({
     nodeId: string;
     nodeName: string;
   } | null>(null);
+  const [cloudNodeSettingsDialog, setCloudNodeSettingsDialog] = useState<{
+    nodeId: string;
+    nodeName: string;
+    bridgeInterface: string | null | undefined;
+  } | null>(null);
+  const [hostInterfaces, setHostInterfaces] = useState<string[]>([]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", themeMode);
@@ -1422,31 +1460,6 @@ export function App({
             nodeStatuses[selectedNode.id] ??
             (selectedNode.state?.desiredPower === "on" ? "running" : "stopped"),
           connectCommand: nodeConnectCommands[selectedNode.id],
-          attachments: selectedNode.interfaces
-            ?.map((iface) => {
-              const attachment = selectedLab?.document.attachments.find(
-                (entry) => entry.interfaceId === iface.id,
-              );
-              if (!attachment) {
-                return null;
-              }
-
-              return {
-                interfaceId: iface.id,
-                networkName:
-                  selectedLab?.document.networks.find(
-                    (network) => network.id === attachment.networkId,
-                  )?.name ?? attachment.networkId,
-              };
-            })
-            .filter(
-              (entry): entry is NonNullable<typeof entry> => entry !== null,
-            ),
-          networks:
-            selectedLab?.document.networks.map((network) => ({
-              id: network.id,
-              name: network.name,
-            })) ?? [],
         }
       : selectedCable
         ? {
@@ -1525,6 +1538,35 @@ export function App({
     setStartupConfigDialog({ nodeId, nodeName: node.name });
   }
 
+  function handleOpenCloudNodeSettingsDialog(nodeId: string) {
+    const node = selectedLab?.document.nodes.find(
+      (candidate) => candidate.id === nodeId,
+    );
+    if (!node || node.runtime !== "cloud") {
+      return;
+    }
+
+    setCloudNodeSettingsDialog({
+      nodeId,
+      nodeName: node.name,
+      bridgeInterface: node.config?.bridgeInterface,
+    });
+
+    if (!api.listHostInterfaces) {
+      setHostInterfaces([]);
+      return;
+    }
+
+    void api
+      .listHostInterfaces()
+      .then((interfaces) => {
+        setHostInterfaces(interfaces);
+      })
+      .catch(() => {
+        setHostInterfaces([]);
+      });
+  }
+
   async function handleSaveStartupConfig(
     nodeId: string,
     config: string,
@@ -1567,6 +1609,20 @@ export function App({
       ? await api.setNodeBootAction(selectedLabId, nodeId, actions)
       : nextLab;
     applyLabUpdate(finalLab);
+  }
+
+  async function handleSaveCloudNodeSettings(
+    nodeId: string,
+    bridgeInterface: string | null,
+  ) {
+    if (!selectedLabId || !api.setNodeSettings) {
+      return;
+    }
+
+    const nextLab = await api.setNodeSettings(selectedLabId, nodeId, {
+      bridgeInterface,
+    });
+    applyLabUpdate(nextLab);
   }
 
   function resolveNodeBootActions(
@@ -2012,25 +2068,7 @@ export function App({
           onPowerOnNode={handlePowerOnNode}
           onPowerOffNode={handlePowerOffNode}
           onEditStartupConfig={handleOpenStartupConfigDialog}
-          onAttachInterface={async (interfaceId, networkId) => {
-            if (!selectedLabId || !api.attachInterfaces) {
-              return;
-            }
-
-            const lab = await api.attachInterfaces(selectedLabId, {
-              networkId,
-              interfaceIds: [interfaceId],
-            });
-            applyLabUpdate(lab);
-          }}
-          onDetachInterface={async (interfaceId) => {
-            if (!selectedLabId || !api.detachInterface) {
-              return;
-            }
-
-            const lab = await api.detachInterface(selectedLabId, interfaceId);
-            applyLabUpdate(lab);
-          }}
+          onEditCloudSettings={handleOpenCloudNodeSettingsDialog}
           onUnbindImage={async (imageId) => {
             if (!api.unbindImageFromTemplate) return;
             await api.unbindImageFromTemplate(imageId);
@@ -2095,6 +2133,16 @@ export function App({
           )}
           onSave={handleSaveStartupConfig}
           onClose={() => setStartupConfigDialog(null)}
+        />
+      ) : null}
+      {cloudNodeSettingsDialog ? (
+        <CloudNodeSettingsDialog
+          nodeId={cloudNodeSettingsDialog.nodeId}
+          nodeName={cloudNodeSettingsDialog.nodeName}
+          hostInterfaces={hostInterfaces}
+          initialBridgeInterface={cloudNodeSettingsDialog.bridgeInterface}
+          onSave={handleSaveCloudNodeSettings}
+          onClose={() => setCloudNodeSettingsDialog(null)}
         />
       ) : null}
       <ConfirmDialog

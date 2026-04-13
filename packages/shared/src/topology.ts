@@ -15,6 +15,7 @@ export const NodeConfigSchema = z.object({
   interfaceCount: z.number().int().positive(),
   nicModel: z.string().min(1).optional(),
   accelerationMode: z.string().min(1).optional(),
+  bridgeInterface: z.string().min(1).nullable().optional(),
 });
 
 export const LabNodeSchema = z.object({

@@ -99,6 +99,27 @@ export function moveNode(
   };
 }
 
+export function setNodeBridgeInterface(
+  document: LabDocument,
+  nodeId: string,
+  bridgeInterface: string | null,
+): LabDocument {
+  return {
+    ...document,
+    nodes: document.nodes.map((node) =>
+      node.id === nodeId
+        ? {
+            ...node,
+            config: {
+              ...node.config,
+              bridgeInterface,
+            },
+          }
+        : node,
+    ),
+  };
+}
+
 export function attachInterfaces(
   document: LabDocument,
   input: { networkId: string; interfaceIds: string[] },
