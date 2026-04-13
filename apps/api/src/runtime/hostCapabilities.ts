@@ -19,7 +19,9 @@ async function defaultAccessCheck(devicePath: string): Promise<boolean> {
   }
 }
 
-export function getPlatform(): "linux" | "macos" | "other" {
+export type Platform = "linux" | "macos" | "other";
+
+export function getPlatform(): Platform {
   const platform = os.platform();
   if (platform === "linux") return "linux";
   if (platform === "darwin") return "macos";
@@ -27,12 +29,14 @@ export function getPlatform(): "linux" | "macos" | "other" {
 }
 
 export function getCloudManagementCapability(
-  platform: "linux" | "macos" | "other" = getPlatform(),
+  platform: Platform = getPlatform(),
 ) {
+  const networkBackend = getNetworkBackendForPlatform(platform);
+
   if (platform === "linux") {
     return {
       platform,
-      networkBackend: "tap" as const,
+      networkBackend,
       managementCloudMode: "linux-bridge" as const,
     };
   }
@@ -40,14 +44,14 @@ export function getCloudManagementCapability(
   if (platform === "macos") {
     return {
       platform,
-      networkBackend: "socket" as const,
+      networkBackend,
       managementCloudMode: "macos-host-only" as const,
     };
   }
 
   return {
     platform,
-    networkBackend: "socket" as const,
+    networkBackend,
     managementCloudMode: "unsupported" as const,
   };
 }
@@ -111,6 +115,12 @@ export async function detectAccelerationMode(
   };
 }
 
+export function getNetworkBackendForPlatform(
+  platform: Platform,
+): "tap" | "socket" {
+  return platform === "linux" ? "tap" : "socket";
+}
+
 export function getNetworkBackend(): "tap" | "socket" {
-  return getPlatform() === "linux" ? "tap" : "socket";
+  return getNetworkBackendForPlatform(getPlatform());
 }

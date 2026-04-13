@@ -21,6 +21,7 @@ import {
   listRuntimeStates,
   upsertRuntimeState,
 } from "./runtime/runtimeStateStore.js";
+import { getCloudManagementCapability } from "./runtime/hostCapabilities.js";
 
 type App = ReturnType<typeof buildApp>;
 
@@ -130,11 +131,18 @@ describe("api", () => {
   it("returns 200 from health endpoint", async () => {
     const response = await app.inject({ method: "GET", url: "/health" });
     expect(response.statusCode).toBe(200);
-    const payload = response.json();
-    expect(payload.ok).toBe(true);
-    expect(
-      payload.capabilities.cloudManagement.managementCloudMode,
-    ).toBeDefined();
+    const payload = response.json() as {
+      ok: boolean;
+      capabilities: {
+        cloudManagement: ReturnType<typeof getCloudManagementCapability>;
+      };
+    };
+    expect(payload).toEqual({
+      ok: true,
+      capabilities: {
+        cloudManagement: getCloudManagementCapability(),
+      },
+    });
   });
 
   it("returns built-in templates", async () => {

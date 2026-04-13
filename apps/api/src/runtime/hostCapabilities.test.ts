@@ -93,7 +93,7 @@ describe("getNetworkBackend", () => {
 
 describe("getCloudManagementCapability", () => {
   it("reports linux management values", () => {
-    expect(getCloudManagementCapability("linux" as const)).toEqual({
+    expect(getCloudManagementCapability("linux")).toEqual({
       platform: "linux",
       networkBackend: "tap",
       managementCloudMode: "linux-bridge",
@@ -101,10 +101,18 @@ describe("getCloudManagementCapability", () => {
   });
 
   it("reports macos management values", () => {
-    expect(getCloudManagementCapability("macos" as const)).toEqual({
+    expect(getCloudManagementCapability("macos")).toEqual({
       platform: "macos",
       networkBackend: "socket",
       managementCloudMode: "macos-host-only",
+    });
+  });
+
+  it("reports unsupported values for other platforms", () => {
+    expect(getCloudManagementCapability("other")).toEqual({
+      platform: "other",
+      networkBackend: "socket",
+      managementCloudMode: "unsupported",
     });
   });
 });
