@@ -77,13 +77,13 @@ If you want Linux VM labs that use TAP networking, start with:
 
 That keeps the web UI and native console bridge unprivileged, but starts the API with the privileges needed for bridge and TAP device management.
 
-For Linux cloud-node management access:
+For Linux management-cloud access:
 
 - do not point a cloud node at the host's active physical NIC directly
-- create or reuse a host Linux bridge such as `br-mgmt`
-- move the host management IP and default route onto that bridge
-- enslave the physical uplink under that bridge
-- select that bridge from the cloud node `Host Bridge` field in NetworkChum
+- create a cloud node with `Cloud Role = Management`
+- use bridge group `management` unless you intentionally want a different shared segment
+- start with `./start.sh lan --sudo-api ...` so the API can create TAP devices and managed bridges
+- if you want that managed bridge tied to a physical uplink, do that on the host OS rather than by binding a cloud directly to the active NIC
 
 That starts:
 
@@ -143,7 +143,20 @@ What to expect:
 
 - On Intel or Apple Silicon macOS, NetworkChum will use `hvf` acceleration if QEMU exposes it.
 - If `hvf` is unavailable, the app falls back to software emulation (`tcg`), which is usable for experimentation but slow for heavier VM workloads.
-- Non-Linux hosts use socket-backed networking rather than TAP devices.
+- Non-management clouds on macOS stay socket-backed rather than using TAP devices.
+
+### macOS management clouds
+
+Management clouds on macOS do not require Podman or Docker. They use the app's host-only management backend instead of Linux TAP bridging.
+
+What to expect:
+
+- the management subnet is fixed at `172.31.255.0/24`
+- the Mac host uses `172.31.255.1`
+- give nodes static management IPs in that subnet
+- SSH from the Mac host directly to those node IPs once the node is configured
+- this is host-only management, not LAN-wide bridging
+- private-circuit and ISP-carrier clouds on macOS still use the existing isolated socket-backed behavior
 
 ### Install a container runtime for container nodes
 
@@ -222,12 +235,12 @@ For the strongest macOS operator setup, install:
 - Node.js
 - Git
 - QEMU
-- Docker Desktop
+- Podman or Docker if you plan to run container nodes
 - `socat`
 - iTerm
 - the optional macOS helper
 
-Even then, Linux remains the better host for serious QEMU lab runtime performance.
+Even then, Linux remains the better host for serious QEMU lab runtime performance and for LAN-facing bridge workflows.
 
 ## Linux Setup
 

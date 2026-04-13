@@ -71,12 +71,14 @@ For runtime features:
 - `qemu-system-x86_64` for VM nodes
 - Podman or Docker for container nodes
 - Linux `ip` tooling for TAP/bridge networking on Linux hosts
-- a pre-existing Linux bridge such as `br-mgmt` for cloud-node uplinks
 
 Platform notes:
 
 - Linux is the preferred runtime host. If `/dev/kvm` is available, the backend will use KVM acceleration.
-- macOS is usable for API and UI development. If QEMU exposes `hvf`, NetworkChum will use it; otherwise it falls back to software emulation. Non-Linux hosts use socket-based networking instead of TAP.
+- macOS is usable for API and UI development. If QEMU exposes `hvf`, NetworkChum will use it; otherwise it falls back to software emulation.
+- Linux management clouds use managed TAP/bridge networking.
+- macOS management clouds use a host-only static subnet on `172.31.255.0/24`, with the host at `172.31.255.1`.
+- Non-management clouds on macOS and other non-Linux hosts stay socket-backed and isolated from the host LAN.
 
 ## Getting Started
 
@@ -118,13 +120,23 @@ For Linux TAP labs without repeated password prompts, use:
 ./start.sh lan --sudo-api --data-dir ~/networkchum-data
 ```
 
-Linux cloud-node uplinks are bridge-only:
+## Management Clouds
 
-- create or reuse a host bridge such as `br-mgmt`
-- move the host IP address and default route onto that bridge
-- enslave the physical uplink under that bridge
-- select that bridge in the cloud node `Host Bridge` field
-- let the host OS manage the bridge itself; NetworkChum only attaches VM TAPs to it
+Management clouds now depend on host platform and cloud role, not on a per-node host-bridge picker.
+
+- Linux management clouds use managed TAP/bridge networking. The default `management` bridge group maps to a managed bridge such as `nc-mgmt`.
+- macOS management clouds use a fixed host-only subnet: `172.31.255.0/24`.
+- On macOS, the host always uses `172.31.255.1` on that subnet.
+- On macOS, assign static management IPs inside `172.31.255.0/24` to the nodes you want to reach from the host.
+- On macOS, management clouds do not expose nodes directly onto the wider LAN.
+- Non-management clouds stay isolated and use the existing private cloud behavior for their bridge group.
+
+Linux operator notes:
+
+- create a cloud node with `Cloud Role = Management`
+- use bridge group `management` unless you intentionally want a separate management segment
+- run `./start.sh lan --sudo-api ...` when the API needs permission to create TAP devices and managed bridges
+- if you want a management bridge tied to a physical uplink, handle that bridge membership on the host OS rather than binding a cloud directly to the active NIC
 
 If you want that API elevation to run without an interactive sudo prompt, add a constrained `sudoers` rule for the exact API command on that host:
 

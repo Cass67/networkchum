@@ -399,17 +399,29 @@ NetworkChum intentionally behaves differently depending on the host.
 ```mermaid
 flowchart LR
   Host{"Host platform"}
-  Host -->|Linux| Tap["tap backend<br/>QEMU TAP devices<br/>Linux bridges via ip tooling"]
-  Host -->|macOS / other| Socket["socket backend<br/>QEMU socket NICs<br/>in-process virtualSwitch"]
+  Host -->|Linux| LinuxMgmt["management clouds<br/>managed TAP/bridge backend<br/>Linux bridges via ip tooling"]
+  Host -->|Linux| LinuxOther["other QEMU links<br/>tap backend"]
+  Host -->|macOS| MacMgmt["management clouds<br/>host-only backend<br/>172.31.255.0/24<br/>host 172.31.255.1"]
+  Host -->|macOS| MacOther["non-management clouds<br/>socket backend<br/>virtualSwitch"]
+  Host -->|other| Other["socket backend<br/>virtualSwitch"]
 ```
 
 What this means in practice:
 
-- **Linux** is the preferred runtime host for QEMU. If `/dev/kvm` is available, the API uses KVM acceleration and TAP-based networking.
-- **macOS** uses HVF if available, otherwise software emulation (`tcg`). Because TAP networking is not the default path there, QEMU NICs expose socket listeners and the API process forwards frames in `virtualSwitch.ts`.
+- **Linux** is the preferred runtime host for QEMU. If `/dev/kvm` is available, the API uses KVM acceleration and managed TAP/bridge networking for management clouds.
+- **macOS** uses HVF if available, otherwise software emulation (`tcg`). Management clouds use a dedicated host-only backend on `172.31.255.0/24`, with the host at `172.31.255.1`.
+- **macOS non-management clouds** still use socket NICs and the in-process `virtualSwitch.ts` forwarding path.
+- **Other non-Linux hosts** stay on the socket backend.
 - **Containers** use Docker bridge networks and are managed separately from the QEMU networking backend choice.
 
 This split is one of the most important runtime concepts in the repository. Many topology operations are shared, but network realization is not.
+
+Cloud behavior is keyed off the topology node's `cloudRole` and `bridgeGroup`.
+
+- `management` chooses the platform-specific management path.
+- `private-circuit` and `isp-carrier` choose managed private segments on Linux and socket-backed isolated segments on macOS.
+- the default management bridge group is `management`, which maps to a managed Linux bridge such as `nc-mgmt`
+- on macOS, the bridge group still identifies the cloud segment in topology, but management reachability is through the fixed host-only subnet rather than a LAN bridge
 
 ## Contributor Starting Points
 
