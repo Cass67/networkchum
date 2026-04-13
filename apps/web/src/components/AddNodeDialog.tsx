@@ -2,6 +2,11 @@ import { useState } from "react";
 
 type CloudRole = "management" | "private-circuit" | "isp-carrier";
 
+type CloudManagementCapabilities = {
+  platform: string;
+  managementCloudMode?: string;
+};
+
 type TemplateEntry = {
   id: string;
   name: string;
@@ -21,6 +26,7 @@ type ExistingNode = {
 type AddNodeDialogProps = {
   templates: TemplateEntry[];
   existingNodes: ExistingNode[];
+  cloudManagementCapabilities?: CloudManagementCapabilities | null;
   onSubmit: (input: {
     templateId: string;
     name: string;
@@ -68,6 +74,7 @@ export function AddNodeDialog({
   templates,
   existingNodes,
   hostInterfaces: _hostInterfaces,
+  cloudManagementCapabilities,
   onSubmit,
   onCancel,
 }: AddNodeDialogProps) {
@@ -94,6 +101,10 @@ export function AddNodeDialog({
   const showCloudBridgeSettings = selectedTemplate?.runtime === "cloud";
   const [cloudRole, setCloudRole] = useState<CloudRole>("management");
   const [bridgeGroup, setBridgeGroup] = useState("management");
+  const showMacOsManagementSubnetGuidance =
+    showCloudBridgeSettings &&
+    cloudRole === "management" &&
+    cloudManagementCapabilities?.platform === "macos";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -235,6 +246,11 @@ export function AddNodeDialog({
                   ? "Management clouds default to the shared `management` bridge group."
                   : "Use the same bridge group on other clouds when they should share the same managed bridge."}
               </p>
+              {showMacOsManagementSubnetGuidance ? (
+                <p className="panel-description">
+                  macOS management subnet: 172.31.255.0/24 (host 172.31.255.1).
+                </p>
+              ) : null}
             </div>
           ) : null}
           {error ? <p className="form-error">{error}</p> : null}

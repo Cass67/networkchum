@@ -2,10 +2,16 @@ import { useState } from "react";
 
 type CloudRole = "management" | "private-circuit" | "isp-carrier";
 
+type CloudManagementCapabilities = {
+  platform: string;
+  managementCloudMode?: string;
+};
+
 type CloudNodeSettingsDialogProps = {
   nodeId: string;
   nodeName: string;
   hostInterfaces: string[];
+  cloudManagementCapabilities?: CloudManagementCapabilities | null;
   initialCloudRole?: CloudRole;
   initialBridgeGroup?: string | null;
   onSave: (
@@ -19,6 +25,7 @@ export function CloudNodeSettingsDialog({
   nodeId,
   nodeName,
   hostInterfaces: _hostInterfaces,
+  cloudManagementCapabilities,
   initialCloudRole,
   initialBridgeGroup,
   onSave,
@@ -32,6 +39,9 @@ export function CloudNodeSettingsDialog({
       (initialCloudRole === "management" ? "management" : ""),
   );
   const [saving, setSaving] = useState(false);
+  const showMacOsManagementSubnetGuidance =
+    cloudRole === "management" &&
+    cloudManagementCapabilities?.platform === "macos";
 
   async function handleSave() {
     setSaving(true);
@@ -100,6 +110,11 @@ export function CloudNodeSettingsDialog({
             ? "Management clouds default to the shared `management` group."
             : "Clouds that share the same role and bridge group will reuse the same managed bridge."}
         </p>
+        {showMacOsManagementSubnetGuidance ? (
+          <p className="panel-description">
+            macOS management subnet: 172.31.255.0/24 (host 172.31.255.1).
+          </p>
+        ) : null}
 
         <div className="dialog-actions">
           <button

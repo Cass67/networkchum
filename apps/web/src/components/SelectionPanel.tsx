@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 
+type CloudManagementCapabilities = {
+  platform: string;
+  managementCloudMode?: string;
+};
+
 type SelectionPanelProps = {
   selected:
     | { type: "lab"; lab: { id: string; name: string; autoBackup?: boolean } }
@@ -9,6 +14,7 @@ type SelectionPanelProps = {
           id: string;
           name: string;
           runtime?: string;
+          config?: { cloudRole?: string; bridgeGroup?: string | null };
           interfaces?: Array<{ id: string; name: string }>;
         };
         status: string;
@@ -25,6 +31,7 @@ type SelectionPanelProps = {
         };
       }
     | null;
+  cloudManagementCapabilities?: CloudManagementCapabilities | null;
   onRenameLab?: (labId: string, name: string) => void | Promise<void>;
   onSetLabAutoBackup?: (
     labId: string,
@@ -46,6 +53,11 @@ export function SelectionPanel(props: SelectionPanelProps) {
   const { selected } = props;
   const [labName, setLabName] = useState("");
   const [savingLabName, setSavingLabName] = useState(false);
+  const showMacOsManagementSubnetGuidance =
+    selected?.type === "node" &&
+    selected.node.runtime === "cloud" &&
+    selected.node.config?.cloudRole === "management" &&
+    props.cloudManagementCapabilities?.platform === "macos";
 
   useEffect(() => {
     if (selected?.type === "lab") {
@@ -201,6 +213,11 @@ export function SelectionPanel(props: SelectionPanelProps) {
               Delete Node
             </button>
           </div>
+          {showMacOsManagementSubnetGuidance ? (
+            <p className="panel-description">
+              macOS management subnet: 172.31.255.0/24 (host 172.31.255.1).
+            </p>
+          ) : null}
         </div>
       ) : null}
       {selected?.type === "cable" ? (

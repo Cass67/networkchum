@@ -42,6 +42,18 @@ type LabSummary = {
   autoBackup?: boolean;
 };
 
+type CloudManagementCapabilities = {
+  platform: string;
+  managementCloudMode?: string;
+};
+
+type BackendHealthPayload = {
+  ok: boolean;
+  capabilities?: {
+    cloudManagement?: CloudManagementCapabilities;
+  };
+};
+
 type DeviceRoleIcon =
   | "router"
   | "switch"
@@ -995,6 +1007,8 @@ export function App({
   const [bridgeStatus, setBridgeStatus] = useState<"online" | "offline">(
     "offline",
   );
+  const [backendHealth, setBackendHealth] =
+    useState<BackendHealthPayload | null>(null);
   const [nativeConsoleError, setNativeConsoleError] = useState<string | null>(
     null,
   );
@@ -1158,6 +1172,30 @@ export function App({
       .catch(() => {
         if (!cancelled) {
           setBridgeStatus("offline");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locationLike]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const apiBaseUrl = resolveApiBaseUrl(locationLike);
+
+    void fetch(`${apiBaseUrl}/health`)
+      .then((response) =>
+        response.ok ? response.json() : Promise.reject(new Error("offline")),
+      )
+      .then((payload: BackendHealthPayload) => {
+        if (!cancelled) {
+          setBackendHealth(payload);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBackendHealth({ ok: false });
         }
       });
 
@@ -1698,6 +1736,31 @@ export function App({
             }
           : null;
 
+  const cloudManagementCapabilities =
+    backendHealth?.capabilities?.cloudManagement ?? null;
+
+  const backendLabel = (() => {
+    if (!cloudManagementCapabilities) {
+      if (backendHealth?.ok === false) return "Backend: Offline";
+      return "Backend: Unknown";
+    }
+
+    if (cloudManagementCapabilities.platform === "macos") {
+      if (
+        cloudManagementCapabilities.managementCloudMode === "macos-host-only"
+      ) {
+        return "Backend: macOS host-only management";
+      }
+      return "Backend: macOS management";
+    }
+
+    if (cloudManagementCapabilities.platform === "linux") {
+      return "Backend: Linux management";
+    }
+
+    return `Backend: ${cloudManagementCapabilities.platform} management`;
+  })();
+
   const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
   const canvasNodes = (selectedLab?.document.nodes ?? []).map((node) => {
     const catalogEntry = node.templateId
@@ -2069,6 +2132,7 @@ export function App({
         <span className="panel-description">
           Bridge: {bridgeStatus === "online" ? "Online" : "Offline"}
         </span>
+        <span className="panel-description">{backendLabel}</span>
         <button
           type="button"
           className="theme-toggle"
@@ -2311,6 +2375,7 @@ export function App({
       >
         <SelectionPanel
           selected={selection}
+          cloudManagementCapabilities={cloudManagementCapabilities}
           onRenameLab={handleRenameLab}
           onSetLabAutoBackup={handleSetLabAutoBackup}
           onDeleteLab={(labId) =>
@@ -2397,6 +2462,7 @@ export function App({
           nodeId={cloudNodeSettingsDialog.nodeId}
           nodeName={cloudNodeSettingsDialog.nodeName}
           hostInterfaces={hostInterfaces}
+          cloudManagementCapabilities={cloudManagementCapabilities}
           initialCloudRole={cloudNodeSettingsDialog.cloudRole}
           initialBridgeGroup={cloudNodeSettingsDialog.bridgeGroup}
           onSave={handleSaveCloudNodeSettings}
@@ -2612,6 +2678,7 @@ export function App({
           }
           existingNodes={selectedLab?.document.nodes ?? []}
           hostInterfaces={hostInterfaces}
+          cloudManagementCapabilities={cloudManagementCapabilities}
           onSubmit={handleAddNode}
           onCancel={() => {
             setShowAddNodeDialog(false);

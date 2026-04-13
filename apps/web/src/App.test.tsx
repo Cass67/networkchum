@@ -21,6 +21,7 @@ type DeviceRoleIcon =
 import { App } from "./App.js";
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
@@ -58,6 +59,66 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Images" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Switch to day mode" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows backend guidance for macOS host-only management capability payload", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(":4010/health")) {
+        return {
+          ok: true,
+          json: async () => ({ ok: true }),
+        } as Response;
+      }
+      if (url.includes(":4000/health")) {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            capabilities: {
+              cloudManagement: {
+                platform: "macos",
+                managementCloudMode: "macos-host-only",
+              },
+            },
+          }),
+        } as Response;
+      }
+
+      return {
+        ok: false,
+        json: async () => ({}),
+      } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    expect(
+      await screen.findByText("Backend: macOS host-only management"),
     ).toBeInTheDocument();
   });
 

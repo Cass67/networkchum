@@ -220,6 +220,29 @@ describe("AddNodeDialog", () => {
       bridgeGroup: "mpls-core",
     });
   });
+
+  it("shows macOS management subnet guidance when creating a management cloud", () => {
+    render(
+      <AddNodeDialog
+        templates={templates}
+        existingNodes={[]}
+        hostInterfaces={[]}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+        cloudManagementCapabilities={{
+          platform: "macos",
+          managementCloudMode: "macos-host-only",
+        }}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("template-select"), {
+      target: { value: "cloud" },
+    });
+
+    expect(screen.getByText(/172\.31\.255\.0\/24/)).toBeInTheDocument();
+    expect(screen.getByText(/172\.31\.255\.1/)).toBeInTheDocument();
+  });
 });
 
 describe("computeNextPosition", () => {

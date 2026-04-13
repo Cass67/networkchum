@@ -126,6 +126,30 @@ describe("SelectionPanel", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows macOS management subnet guidance for a selected management cloud", () => {
+    render(
+      <SelectionPanel
+        selected={{
+          type: "node",
+          node: {
+            id: "cloud-1",
+            name: "Cloud-1",
+            runtime: "cloud",
+            config: { cloudRole: "management", bridgeGroup: "management" },
+          },
+          status: "stopped",
+        }}
+        cloudManagementCapabilities={{
+          platform: "macos",
+          managementCloudMode: "macos-host-only",
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/172\.31\.255\.0\/24/)).toBeInTheDocument();
+    expect(screen.getByText(/172\.31\.255\.1/)).toBeInTheDocument();
+  });
+
   it("shows the auto backup checkbox for a selected lab", () => {
     render(
       <SelectionPanel
