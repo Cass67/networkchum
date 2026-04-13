@@ -12,14 +12,11 @@ import {
   getNodeAttachmentsForContainer,
 } from "../network/dockerNetworking.js";
 import { buildCommand } from "../network/buildCommands.js";
-import {
-  reconcileTopology,
-  bridgeName,
-  detectPhysicalNic,
-} from "../network/reconcileTopology.js";
+import { reconcileTopology, bridgeName } from "../network/reconcileTopology.js";
 import {
   buildBridgeTargetByNetworkId,
   isLinuxBridgeInterface,
+  resolveCloudBridge,
   shouldDetachCloudUplink,
   validateCloudBridgeTargets,
 } from "../network/cloudUplink.js";
@@ -1040,7 +1037,9 @@ export async function powerOffNode(
         const node = lab.document.nodes.find((n) => n.id === nodeId);
         if (node) {
           const physicalNic =
-            node.config.bridgeInterface ?? detectPhysicalNic();
+            resolveCloudBridge(node)?.bridgeName ??
+            node.config.bridgeInterface ??
+            null;
           if (
             physicalNic &&
             (await shouldDetachCloudUplink(

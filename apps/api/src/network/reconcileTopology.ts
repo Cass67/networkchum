@@ -46,6 +46,18 @@ export function reconcileTopology(
 ): NetworkOperation[] {
   const operations: NetworkOperation[] = [];
 
+  const managedBridgeNames = [...new Set(bridgeTargets.values())].sort();
+  for (const managedBridgeName of managedBridgeNames) {
+    operations.push({
+      kind: "create-bridge",
+      bridgeName: managedBridgeName,
+    });
+    operations.push({
+      kind: "set-interface-up",
+      interfaceName: managedBridgeName,
+    });
+  }
+
   for (const network of document.networks) {
     if (bridgeTargets.has(network.id)) {
       continue;

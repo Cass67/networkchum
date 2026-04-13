@@ -183,13 +183,13 @@ describe("AddNodeDialog", () => {
     });
   });
 
-  it("shows a host bridge selector for cloud templates and submits it", async () => {
+  it("shows cloud role and bridge group inputs for cloud templates and submits them", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
-        hostInterfaces={["br-lab", "br-mgmt"]}
+        hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
       />,
@@ -199,10 +199,14 @@ describe("AddNodeDialog", () => {
       target: { value: "cloud" },
     });
 
-    expect(screen.getByLabelText("Host Bridge")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cloud Role")).toBeInTheDocument();
+    expect(screen.getByLabelText("Bridge Group")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Host Bridge"), {
-      target: { value: "br-mgmt" },
+    fireEvent.change(screen.getByLabelText("Cloud Role"), {
+      target: { value: "private-circuit" },
+    });
+    fireEvent.change(screen.getByLabelText("Bridge Group"), {
+      target: { value: "mpls-core" },
     });
     fireEvent.click(screen.getByTestId("add-node-submit"));
 
@@ -212,7 +216,8 @@ describe("AddNodeDialog", () => {
 
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
       templateId: "cloud",
-      bridgeInterface: "br-mgmt",
+      cloudRole: "private-circuit",
+      bridgeGroup: "mpls-core",
     });
   });
 });

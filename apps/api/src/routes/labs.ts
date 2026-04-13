@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
-import { NodeBootActionSchema } from "@networkchum/shared";
+import { CloudRoleSchema, NodeBootActionSchema } from "@networkchum/shared";
 
 import {
   listLabs,
@@ -43,7 +43,7 @@ import {
   removeNodeConfig,
   setActiveConfigSet,
   setNodeBootActions,
-  setNodeBridgeInterface,
+  setCloudNodeBridgeGroup,
   setNodeConfig,
   upsertStartupConfigSet,
 } from "../topology/mutations.js";
@@ -51,11 +51,7 @@ import { deleteNode } from "../topology/nodeService.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import { listImages } from "../images/imageStore.js";
 import type { AppDependencies } from "../app.js";
-import {
-  isLinuxBridgeInterface,
-  listLinuxBridgeInterfaces,
-  validateCloudBridgeTargets,
-} from "../network/cloudUplink.js";
+import { listLinuxBridgeInterfaces } from "../network/cloudUplink.js";
 
 const createLabSchema = z.object({
   name: z.string().min(1),
@@ -71,7 +67,8 @@ const addNodeSchema = z.object({
   position: z.object({ x: z.number(), y: z.number() }),
   imageId: z.string().min(1).nullable().optional(),
   interfaceCount: z.number().int().min(1).optional(),
-  bridgeInterface: z.string().min(1).nullable().optional(),
+  cloudRole: CloudRoleSchema.optional(),
+  bridgeGroup: z.string().trim().min(1).nullable().optional(),
 });
 
 const addNetworkSchema = z.object({
@@ -90,7 +87,8 @@ const setNodeBootActionSchema = z.object({
 });
 
 const setNodeSettingsSchema = z.object({
-  bridgeInterface: z.string().min(1).nullable(),
+  cloudRole: CloudRoleSchema.optional(),
+  bridgeGroup: z.string().trim().min(1).nullable().optional(),
 });
 
 export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
@@ -146,59 +144,44 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     );
   }
 
-  async function ensureValidCloudBridgeSelection(
-    nodeName: string,
-    bridgeInterface: string | null | undefined,
-  ): Promise<string | null> {
-    if (!bridgeInterface) {
-      return null;
+  function resolveCloudRoleAndGroup(input: {
+    nodeName: string;
+    cloudRole?: z.infer<typeof CloudRoleSchema>;
+    bridgeGroup?: string | null;
+    currentCloudRole?: z.infer<typeof CloudRoleSchema>;
+    currentBridgeGroup?: string;
+  }):
+    | {
+        ok: true;
+        cloudRole: z.infer<typeof CloudRoleSchema>;
+        bridgeGroup: string;
+      }
+    | { ok: false; message: string } {
+    const cloudRole = input.cloudRole ?? input.currentCloudRole ?? "management";
+    const roleChanged =
+      input.cloudRole !== undefined &&
+      input.cloudRole !== input.currentCloudRole;
+    const requestedBridgeGroup = input.bridgeGroup?.trim() || null;
+    const currentBridgeGroup = input.currentBridgeGroup?.trim() || null;
+
+    if (cloudRole === "management") {
+      return {
+        ok: true,
+        cloudRole,
+        bridgeGroup: requestedBridgeGroup ?? currentBridgeGroup ?? "management",
+      };
     }
 
-    const validation = await validateCloudBridgeTargets(
-      {
-        id: "validation",
-        name: "validation",
-        version: 1,
-        canvas: { zoom: 1, backgroundImage: null },
-        annotations: [],
-        startupConfigSets: [],
-        nodeBootActions: [],
-        activeConfigSetId: null,
-        networks: [
-          {
-            id: "net-validation",
-            kind: "ethernet",
-            name: "validation",
-            visible: false,
-          },
-        ],
-        nodes: [
-          {
-            id: "cloud-validation",
-            name: nodeName,
-            runtime: "cloud",
-            templateId: "cloud",
-            imageId: null,
-            position: { x: 0, y: 0 },
-            config: {
-              vcpu: 0,
-              ramMb: 0,
-              interfaceCount: 1,
-              bridgeInterface,
-            },
-            state: { desiredPower: "off" },
-            interfaces: [{ id: "if-validation", name: "eth0", slot: 0 }],
-          },
-        ],
-        attachments: [
-          { interfaceId: "if-validation", networkId: "net-validation" },
-        ],
-      },
-      undefined,
-      options.runtime?.isBridgeInterface ?? isLinuxBridgeInterface,
-    );
+    const bridgeGroup =
+      requestedBridgeGroup ?? (roleChanged ? null : currentBridgeGroup);
+    if (!bridgeGroup) {
+      return {
+        ok: false,
+        message: `Cloud node '${input.nodeName}' requires a bridge group for the '${cloudRole}' role.`,
+      };
+    }
 
-    return validation.ok ? null : validation.message;
+    return { ok: true, cloudRole, bridgeGroup };
   }
 
   app.get("/labs", async () => ({ labs: await listLabs() }));
@@ -316,14 +299,16 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       return reply.code(404).send({ message: "Template not found" });
     }
 
-    if (template.runtime === "cloud") {
-      const bridgeValidationMessage = await ensureValidCloudBridgeSelection(
-        body.name,
-        body.bridgeInterface ?? null,
-      );
-      if (bridgeValidationMessage) {
-        return reply.code(400).send({ message: bridgeValidationMessage });
-      }
+    const cloudSettings =
+      template.runtime === "cloud"
+        ? resolveCloudRoleAndGroup({
+            nodeName: body.name,
+            cloudRole: body.cloudRole,
+            bridgeGroup: body.bridgeGroup,
+          })
+        : null;
+    if (cloudSettings && !cloudSettings.ok) {
+      return reply.code(400).send({ message: cloudSettings.message });
     }
 
     const acceleration = await detectAccelerationMode();
@@ -342,7 +327,8 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       position: body.position,
       imageId: resolvedImageId,
       interfaceCount: body.interfaceCount,
-      bridgeInterface: body.bridgeInterface ?? null,
+      cloudRole: cloudSettings?.ok ? cloudSettings.cloudRole : undefined,
+      bridgeGroup: cloudSettings?.ok ? cloudSettings.bridgeGroup : undefined,
       accelerationMode:
         template.runtime === "qemu"
           ? acceleration.mode
@@ -458,7 +444,17 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     const params = z
       .object({ labId: z.string().min(1), nodeId: z.string().min(1) })
       .parse(request.params);
-    const body = setNodeSettingsSchema.parse(request.body);
+    let body: z.infer<typeof setNodeSettingsSchema>;
+    try {
+      body = setNodeSettingsSchema.parse(request.body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply
+          .code(400)
+          .send({ message: error.message, issues: error.issues });
+      }
+      throw error;
+    }
     const lab = await getManagedLab(params.labId);
     if (!lab) {
       return reply.code(404).send({ message: "Lab not found" });
@@ -472,20 +468,28 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     }
 
     const node = lab.document.nodes.find((entry) => entry.id === params.nodeId);
-    if (node?.runtime === "cloud") {
-      const bridgeValidationMessage = await ensureValidCloudBridgeSelection(
-        node.name,
-        body.bridgeInterface,
-      );
-      if (bridgeValidationMessage) {
-        return reply.code(400).send({ message: bridgeValidationMessage });
-      }
+    if (!node || node.runtime !== "cloud") {
+      return reply.code(400).send({
+        message: "Cloud settings can only be updated for cloud nodes",
+      });
     }
 
-    const document = setNodeBridgeInterface(
+    const cloudSettings = resolveCloudRoleAndGroup({
+      nodeName: node.name,
+      cloudRole: body.cloudRole,
+      bridgeGroup: body.bridgeGroup,
+      currentCloudRole: node.config.cloudRole,
+      currentBridgeGroup: node.config.bridgeGroup,
+    });
+    if (!cloudSettings.ok) {
+      return reply.code(400).send({ message: cloudSettings.message });
+    }
+
+    const document = setCloudNodeBridgeGroup(
       lab.document,
       params.nodeId,
-      body.bridgeInterface,
+      cloudSettings.cloudRole,
+      cloudSettings.bridgeGroup,
     );
     const updatedLab = await updateLabDocument(params.labId, document);
     if (updatedLab) {

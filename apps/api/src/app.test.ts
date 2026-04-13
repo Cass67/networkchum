@@ -463,19 +463,7 @@ describe("api", () => {
     });
   });
 
-  it("returns host bridge interfaces for cloud uplinks", async () => {
-    const response = await app.inject({
-      method: "GET",
-      url: "/host/interfaces",
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      interfaces: ["br-lab", "br-mgmt"],
-    });
-  });
-
-  it("updates and persists a cloud node bridge interface", async () => {
+  it("updates and persists cloud role and bridge group", async () => {
     const createLabResponse = await app.inject({
       method: "POST",
       url: "/labs",
@@ -503,7 +491,10 @@ describe("api", () => {
     const patchResponse = await app.inject({
       method: "PATCH",
       url: `/labs/${labId}/nodes/${nodeId}/settings`,
-      payload: { bridgeInterface: "br-mgmt" },
+      payload: {
+        cloudRole: "private-circuit",
+        bridgeGroup: "mpls-core",
+      },
     });
 
     expect(patchResponse.statusCode).toBe(200);
@@ -513,7 +504,10 @@ describe("api", () => {
           nodes: expect.arrayContaining([
             expect.objectContaining({
               id: nodeId,
-              config: expect.objectContaining({ bridgeInterface: "br-mgmt" }),
+              config: expect.objectContaining({
+                cloudRole: "private-circuit",
+                bridgeGroup: "mpls-core",
+              }),
             }),
           ]),
         }),
@@ -531,7 +525,10 @@ describe("api", () => {
           nodes: expect.arrayContaining([
             expect.objectContaining({
               id: nodeId,
-              config: expect.objectContaining({ bridgeInterface: "br-mgmt" }),
+              config: expect.objectContaining({
+                cloudRole: "private-circuit",
+                bridgeGroup: "mpls-core",
+              }),
             }),
           ]),
         }),
@@ -539,7 +536,7 @@ describe("api", () => {
     });
   });
 
-  it("rejects updating a cloud node with a raw host interface", async () => {
+  it("rejects updating a private cloud without a bridge group", async () => {
     const createLabResponse = await app.inject({
       method: "POST",
       url: "/labs",
@@ -567,18 +564,21 @@ describe("api", () => {
     const patchResponse = await app.inject({
       method: "PATCH",
       url: `/labs/${labId}/nodes/${nodeId}/settings`,
-      payload: { bridgeInterface: "eno1" },
+      payload: {
+        cloudRole: "private-circuit",
+        bridgeGroup: null,
+      },
     });
 
     expect(patchResponse.statusCode).toBe(400);
     expect(patchResponse.json()).toEqual(
       expect.objectContaining({
-        message: expect.stringContaining("pre-existing Linux bridge"),
+        message: expect.stringContaining("bridge group"),
       }),
     );
   });
 
-  it("creates a cloud node with a configured bridge interface", async () => {
+  it("creates a cloud node with management role defaults", async () => {
     const createLabResponse = await app.inject({
       method: "POST",
       url: "/labs",
@@ -593,7 +593,8 @@ describe("api", () => {
         templateId: "cloud",
         name: "cloud-1",
         position: { x: 10, y: 10 },
-        bridgeInterface: "br-mgmt",
+        cloudRole: "management",
+        bridgeGroup: "management",
       },
     });
 
@@ -604,7 +605,10 @@ describe("api", () => {
           nodes: expect.arrayContaining([
             expect.objectContaining({
               name: "cloud-1",
-              config: expect.objectContaining({ bridgeInterface: "br-mgmt" }),
+              config: expect.objectContaining({
+                cloudRole: "management",
+                bridgeGroup: "management",
+              }),
             }),
           ]),
         }),
@@ -612,7 +616,7 @@ describe("api", () => {
     });
   });
 
-  it("rejects creating a cloud node with a raw host interface", async () => {
+  it("rejects creating a private cloud without a bridge group", async () => {
     const createLabResponse = await app.inject({
       method: "POST",
       url: "/labs",
@@ -627,14 +631,14 @@ describe("api", () => {
         templateId: "cloud",
         name: "cloud-1",
         position: { x: 10, y: 10 },
-        bridgeInterface: "eno1",
+        cloudRole: "private-circuit",
       },
     });
 
     expect(addNodeResponse.statusCode).toBe(400);
     expect(addNodeResponse.json()).toEqual(
       expect.objectContaining({
-        message: expect.stringContaining("pre-existing Linux bridge"),
+        message: expect.stringContaining("bridge group"),
       }),
     );
   });

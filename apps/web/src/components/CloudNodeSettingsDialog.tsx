@@ -1,31 +1,48 @@
 import { useState } from "react";
 
+type CloudRole = "management" | "private-circuit" | "isp-carrier";
+
 type CloudNodeSettingsDialogProps = {
   nodeId: string;
   nodeName: string;
   hostInterfaces: string[];
-  initialBridgeInterface: string | null | undefined;
-  onSave: (nodeId: string, bridgeInterface: string | null) => Promise<void>;
+  initialCloudRole?: CloudRole;
+  initialBridgeGroup?: string | null;
+  onSave: (
+    nodeId: string,
+    settings: { cloudRole: CloudRole; bridgeGroup: string },
+  ) => Promise<void>;
   onClose: () => void;
 };
 
 export function CloudNodeSettingsDialog({
   nodeId,
   nodeName,
-  hostInterfaces,
-  initialBridgeInterface,
+  hostInterfaces: _hostInterfaces,
+  initialCloudRole,
+  initialBridgeGroup,
   onSave,
   onClose,
 }: CloudNodeSettingsDialogProps) {
-  const [bridgeInterface, setBridgeInterface] = useState(
-    initialBridgeInterface ?? "",
+  const [cloudRole, setCloudRole] = useState<CloudRole>(
+    initialCloudRole ?? "management",
+  );
+  const [bridgeGroup, setBridgeGroup] = useState(
+    initialBridgeGroup ??
+      (initialCloudRole === "management" ? "management" : ""),
   );
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
     try {
-      await onSave(nodeId, bridgeInterface || null);
+      await onSave(nodeId, {
+        cloudRole,
+        bridgeGroup:
+          cloudRole === "management"
+            ? bridgeGroup.trim() || "management"
+            : bridgeGroup.trim(),
+      });
       onClose();
     } finally {
       setSaving(false);
@@ -39,29 +56,49 @@ export function CloudNodeSettingsDialog({
           <p className="panel-eyebrow">Cloud Settings</p>
           <h2>{nodeName}</h2>
           <p className="panel-description">
-            Select the pre-existing Linux bridge this cloud node should use.
+            Choose the cloud role and bridge group NetworkChum should use for
+            this cloud node.
           </p>
         </div>
 
         <label className="field">
-          <span className="field-label">Host Bridge</span>
+          <span className="field-label">Cloud Role</span>
           <select
             className="field-input"
-            aria-label="Host Bridge"
-            value={bridgeInterface}
-            onChange={(event) => setBridgeInterface(event.target.value)}
+            aria-label="Cloud Role"
+            value={cloudRole}
+            onChange={(event) => {
+              const nextRole = event.target.value as CloudRole;
+              setCloudRole(nextRole);
+              if (nextRole === "management") {
+                setBridgeGroup((current) => current.trim() || "management");
+                return;
+              }
+
+              setBridgeGroup((current) =>
+                current === "management" ? "" : current,
+              );
+            }}
           >
-            <option value="">No Host Bridge</option>
-            {hostInterfaces.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
+            <option value="management">Management</option>
+            <option value="private-circuit">Private Circuit</option>
+            <option value="isp-carrier">ISP Carrier</option>
           </select>
         </label>
+        <label className="field">
+          <span className="field-label">Bridge Group</span>
+          <input
+            className="field-input"
+            aria-label="Bridge Group"
+            type="text"
+            value={bridgeGroup}
+            onChange={(event) => setBridgeGroup(event.target.value)}
+          />
+        </label>
         <p className="panel-description">
-          NetworkChum only attaches cloud-connected TAPs to an existing host
-          bridge such as `br-mgmt`.
+          {cloudRole === "management"
+            ? "Management clouds default to the shared `management` group."
+            : "Clouds that share the same role and bridge group will reuse the same managed bridge."}
         </p>
 
         <div className="dialog-actions">
@@ -71,7 +108,9 @@ export function CloudNodeSettingsDialog({
             onClick={() => {
               void handleSave();
             }}
-            disabled={saving}
+            disabled={
+              saving || (cloudRole !== "management" && !bridgeGroup.trim())
+            }
           >
             {saving ? "Saving..." : "Save"}
           </button>

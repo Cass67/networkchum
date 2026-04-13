@@ -1,4 +1,5 @@
 import type {
+  CloudRole,
   LabDocument,
   LabNode,
   NodeBootAction,
@@ -15,6 +16,8 @@ type AddNodeInput = {
   interfaceCount?: number;
   accelerationMode?: string;
   bridgeInterface?: string | null;
+  cloudRole?: CloudRole;
+  bridgeGroup?: string;
 };
 
 export function addNode(
@@ -46,6 +49,8 @@ export function addNode(
       accelerationMode:
         input.accelerationMode ?? input.template.boot.acceleration,
       bridgeInterface: input.bridgeInterface ?? null,
+      cloudRole: input.cloudRole,
+      bridgeGroup: input.bridgeGroup,
     },
     state: {
       desiredPower: "off",
@@ -115,6 +120,30 @@ export function setNodeBridgeInterface(
             config: {
               ...node.config,
               bridgeInterface,
+            },
+          }
+        : node,
+    ),
+  };
+}
+
+export function setCloudNodeBridgeGroup(
+  document: LabDocument,
+  nodeId: string,
+  cloudRole: CloudRole,
+  bridgeGroup: string,
+): LabDocument {
+  return {
+    ...document,
+    nodes: document.nodes.map((node) =>
+      node.id === nodeId
+        ? {
+            ...node,
+            config: {
+              ...node.config,
+              cloudRole,
+              bridgeGroup,
+              bridgeInterface: null,
             },
           }
         : node,

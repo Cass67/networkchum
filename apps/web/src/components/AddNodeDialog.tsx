@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+type CloudRole = "management" | "private-circuit" | "isp-carrier";
+
 type TemplateEntry = {
   id: string;
   name: string;
@@ -24,7 +26,8 @@ type AddNodeDialogProps = {
     name: string;
     position: { x: number; y: number };
     interfaceCount?: number;
-    bridgeInterface?: string | null;
+    cloudRole?: CloudRole;
+    bridgeGroup?: string | null;
   }) => Promise<void>;
   hostInterfaces: string[];
   onCancel: () => void;
@@ -64,7 +67,7 @@ function computeNextPosition(existingNodes: ExistingNode[]): {
 export function AddNodeDialog({
   templates,
   existingNodes,
-  hostInterfaces,
+  hostInterfaces: _hostInterfaces,
   onSubmit,
   onCancel,
 }: AddNodeDialogProps) {
@@ -88,8 +91,9 @@ export function AddNodeDialog({
   const [interfaceCount, setInterfaceCount] = useState(
     templates[0]?.configSchema?.interfaceCount.default,
   );
-  const showBridgeInterface = selectedTemplate?.runtime === "cloud";
-  const [bridgeInterface, setBridgeInterface] = useState<string>("");
+  const showCloudBridgeSettings = selectedTemplate?.runtime === "cloud";
+  const [cloudRole, setCloudRole] = useState<CloudRole>("management");
+  const [bridgeGroup, setBridgeGroup] = useState("management");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -102,7 +106,12 @@ export function AddNodeDialog({
         name,
         position,
         interfaceCount: showInterfaceCount ? interfaceCount : undefined,
-        bridgeInterface: showBridgeInterface ? bridgeInterface || null : null,
+        cloudRole: showCloudBridgeSettings ? cloudRole : undefined,
+        bridgeGroup: showCloudBridgeSettings
+          ? cloudRole === "management"
+            ? bridgeGroup.trim() || "management"
+            : bridgeGroup.trim() || null
+          : undefined,
       });
     } catch {
       setError("Failed to add node");
@@ -116,7 +125,8 @@ export function AddNodeDialog({
     const template = templates.find((t) => t.id === newTemplateId);
     if (template) {
       setInterfaceCount(template.configSchema?.interfaceCount.default);
-      setBridgeInterface("");
+      setCloudRole("management");
+      setBridgeGroup("management");
       const base = template.id
         .replace(/-/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase())
@@ -178,27 +188,52 @@ export function AddNodeDialog({
               </label>
             </div>
           ) : null}
-          {showBridgeInterface ? (
+          {showCloudBridgeSettings ? (
             <div className="field">
               <label>
-                <span className="field-label">Host Bridge</span>
+                <span className="field-label">Cloud Role</span>
                 <select
-                  value={bridgeInterface}
-                  onChange={(e) => setBridgeInterface(e.target.value)}
+                  value={cloudRole}
+                  onChange={(e) => {
+                    const nextRole = e.target.value as CloudRole;
+                    setCloudRole(nextRole);
+                    if (nextRole === "management") {
+                      setBridgeGroup(
+                        (current) => current.trim() || "management",
+                      );
+                      return;
+                    }
+
+                    setBridgeGroup((current) =>
+                      current === "management" ? "" : current,
+                    );
+                  }}
                   className="field-input"
-                  aria-label="Host Bridge"
-                  data-testid="bridge-interface-select"
+                  aria-label="Cloud Role"
                 >
-                  <option value="">No Host Bridge</option>
-                  {hostInterfaces.map((iface) => (
-                    <option key={iface} value={iface}>
-                      {iface}
-                    </option>
-                  ))}
+                  <option value="management">Management</option>
+                  <option value="private-circuit">Private Circuit</option>
+                  <option value="isp-carrier">ISP Carrier</option>
                 </select>
               </label>
+            </div>
+          ) : null}
+          {showCloudBridgeSettings ? (
+            <div className="field">
+              <label>
+                <span className="field-label">Bridge Group</span>
+                <input
+                  type="text"
+                  value={bridgeGroup}
+                  onChange={(e) => setBridgeGroup(e.target.value)}
+                  className="field-input"
+                  aria-label="Bridge Group"
+                />
+              </label>
               <p className="panel-description">
-                Select a pre-existing Linux bridge such as `br-mgmt`.
+                {cloudRole === "management"
+                  ? "Management clouds default to the shared `management` bridge group."
+                  : "Use the same bridge group on other clouds when they should share the same managed bridge."}
               </p>
             </div>
           ) : null}
@@ -215,7 +250,13 @@ export function AddNodeDialog({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={submitting || !name.trim()}
+              disabled={
+                submitting ||
+                !name.trim() ||
+                (showCloudBridgeSettings &&
+                  cloudRole !== "management" &&
+                  !bridgeGroup.trim())
+              }
               data-testid="add-node-submit"
             >
               {submitting ? "Adding..." : "Add Node"}

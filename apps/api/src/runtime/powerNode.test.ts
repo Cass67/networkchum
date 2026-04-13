@@ -335,7 +335,8 @@ describe("powerOnNode", () => {
             vcpu: 0,
             ramMb: 0,
             interfaceCount: 1,
-            bridgeInterface: "br-mgmt",
+            cloudRole: "management",
+            bridgeGroup: "management",
           },
           state: { desiredPower: "off" },
           interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
@@ -367,7 +368,7 @@ describe("powerOnNode", () => {
       },
       async () => true,
       undefined,
-      async (interfaceName) => interfaceName === "br-mgmt",
+      async () => false,
     );
 
     expect(result.ok).toBe(true);
@@ -383,24 +384,33 @@ describe("powerOnNode", () => {
     expect(commands).toContainEqual([
       "ip",
       "link",
+      "add",
+      "name",
+      "nc-mgmt",
+      "type",
+      "bridge",
+    ]);
+    expect(commands).toContainEqual([
+      "ip",
+      "link",
       "set",
       "dev",
       "tap-c123-odea-0",
       "master",
-      "br-mgmt",
+      "nc-mgmt",
     ]);
     expect(commands).not.toContainEqual([
       "ip",
       "link",
       "set",
       "dev",
-      "br-mgmt",
+      "nc-mgmt",
       "master",
       "nc-br-net1",
     ]);
   });
 
-  it("fails when a cloud-backed network points at a raw host NIC instead of a bridge", async () => {
+  it("fails when a private cloud-backed network has no bridge group", async () => {
     const document: LabDocument = {
       id: "lab-abc123",
       name: "Test Lab",
@@ -425,7 +435,7 @@ describe("powerOnNode", () => {
             vcpu: 0,
             ramMb: 0,
             interfaceCount: 1,
-            bridgeInterface: "enp6s18",
+            cloudRole: "private-circuit",
           },
           state: { desiredPower: "off" },
           interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
@@ -458,9 +468,9 @@ describe("powerOnNode", () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) {
-      throw new Error("expected raw cloud uplink validation to fail");
+      throw new Error("expected cloud bridge-group validation to fail");
     }
-    expect(result.message).toContain("pre-existing Linux bridge");
+    expect(result.message).toContain("bridge group");
   });
 
   it("chooses a serial base where both serial and monitor ports are free", async () => {

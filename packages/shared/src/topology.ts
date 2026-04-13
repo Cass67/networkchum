@@ -2,12 +2,83 @@ import { z } from "zod";
 
 export const RuntimeKindSchema = z.enum(["qemu", "container", "cloud"]);
 export const DesiredPowerSchema = z.enum(["on", "off"]);
+export const CloudRoleSchema = z.enum([
+  "management",
+  "private-circuit",
+  "isp-carrier",
+]);
 
 export const NodeInterfaceSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   slot: z.number().int().nonnegative(),
 });
+
+function normalizeLegacyCloudBridge(
+  bridgeInterface: string | null | undefined,
+): { cloudRole: z.infer<typeof CloudRoleSchema>; bridgeGroup: string } | null {
+  if (!bridgeInterface) {
+    return null;
+  }
+
+  if (bridgeInterface === "br-mgmt" || bridgeInterface === "nc-mgmt") {
+    return { cloudRole: "management", bridgeGroup: "management" };
+  }
+
+  const managedManagementMatch = bridgeInterface.match(/^nc-mgmt-(.+)$/);
+  if (managedManagementMatch?.[1]) {
+    return {
+      cloudRole: "management",
+      bridgeGroup: managedManagementMatch[1],
+    };
+  }
+
+  const privateMatch = bridgeInterface.match(/^nc-priv-(.+)$/);
+  if (privateMatch?.[1]) {
+    return {
+      cloudRole: "private-circuit",
+      bridgeGroup: privateMatch[1],
+    };
+  }
+
+  const carrierMatch = bridgeInterface.match(/^nc-isp-(.+)$/);
+  if (carrierMatch?.[1]) {
+    return {
+      cloudRole: "isp-carrier",
+      bridgeGroup: carrierMatch[1],
+    };
+  }
+
+  return null;
+}
+
+function normalizeCloudConfig<
+  T extends {
+    bridgeInterface?: string | null;
+    cloudRole?: z.infer<typeof CloudRoleSchema>;
+    bridgeGroup?: string;
+  },
+>(config: T): T {
+  const normalized = { ...config };
+
+  if (normalized.cloudRole === "management" && !normalized.bridgeGroup) {
+    normalized.bridgeGroup = "management";
+  }
+
+  const legacy = normalizeLegacyCloudBridge(normalized.bridgeInterface);
+  if (!legacy) {
+    return normalized;
+  }
+
+  if (!normalized.cloudRole) {
+    normalized.cloudRole = legacy.cloudRole;
+  }
+  if (!normalized.bridgeGroup) {
+    normalized.bridgeGroup = legacy.bridgeGroup;
+  }
+
+  return normalized;
+}
 
 export const NodeConfigSchema = z.object({
   vcpu: z.number().int().nonnegative(),
@@ -16,19 +87,30 @@ export const NodeConfigSchema = z.object({
   nicModel: z.string().min(1).optional(),
   accelerationMode: z.string().min(1).optional(),
   bridgeInterface: z.string().min(1).nullable().optional(),
+  cloudRole: CloudRoleSchema.optional(),
+  bridgeGroup: z.string().min(1).optional(),
 });
 
-export const LabNodeSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  runtime: RuntimeKindSchema,
-  templateId: z.string().min(1),
-  imageId: z.string().min(1).nullable().optional(),
-  position: z.object({ x: z.number(), y: z.number() }),
-  config: NodeConfigSchema,
-  state: z.object({ desiredPower: DesiredPowerSchema }),
-  interfaces: z.array(NodeInterfaceSchema),
-});
+export const LabNodeSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    runtime: RuntimeKindSchema,
+    templateId: z.string().min(1),
+    imageId: z.string().min(1).nullable().optional(),
+    position: z.object({ x: z.number(), y: z.number() }),
+    config: NodeConfigSchema,
+    state: z.object({ desiredPower: DesiredPowerSchema }),
+    interfaces: z.array(NodeInterfaceSchema),
+  })
+  .transform((node) =>
+    node.runtime === "cloud"
+      ? {
+          ...node,
+          config: normalizeCloudConfig(node.config),
+        }
+      : node,
+  );
 
 export const NetworkSegmentSchema = z.object({
   id: z.string().min(1),
@@ -116,6 +198,7 @@ export type LabNode = z.infer<typeof LabNodeSchema>;
 export type Attachment = z.infer<typeof AttachmentSchema>;
 export type StartupConfigSet = z.infer<typeof StartupConfigSetSchema>;
 export type NodeBootAction = z.infer<typeof NodeBootActionSchema>;
+export type CloudRole = z.infer<typeof CloudRoleSchema>;
 export type NodeBootActionState = {
   nodeId: string;
   startupConfig: NodeBootAction;

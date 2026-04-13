@@ -7,6 +7,7 @@ import { ensureTapNetworking } from "../runtime/powerNode.js";
 import { tapName } from "../runtime/qemu/buildQemuCommand.js";
 import {
   isLinuxBridgeInterface,
+  resolveCloudBridge,
   shouldDetachCloudUplink,
 } from "./cloudUplink.js";
 
@@ -101,7 +102,9 @@ async function ensureRunningNodeTapTopology(
 
 function resolveCloudUplink(node: LabNode | undefined): string | null {
   if (!node) return null;
-  return node.config.bridgeInterface ?? null;
+  return (
+    resolveCloudBridge(node)?.bridgeName ?? node.config.bridgeInterface ?? null
+  );
 }
 
 async function detachInterfaceFromBridge(

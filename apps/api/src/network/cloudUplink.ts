@@ -1,19 +1,22 @@
 import { access, readdir } from "node:fs/promises";
 
-import type { LabDocument } from "@networkchum/shared";
+import type { CloudRole, LabDocument, LabNode } from "@networkchum/shared";
 
 export type BridgeInterfaceDetector = (
   interfaceName: string,
 ) => Promise<boolean>;
 
+type ResolvedCloudBridge = {
+  cloudRole: CloudRole;
+  bridgeGroup: string;
+  bridgeName: string;
+};
+
 function cloudBridgeRequirementMessage(
   nodeName: string,
-  uplink: string | null,
+  reason: string,
 ): string {
-  const suffix = uplink
-    ? ` '${uplink}' is not a Linux bridge.`
-    : " no host bridge is configured.";
-  return `Cloud node '${nodeName}' must use a pre-existing Linux bridge when TAP networking is enabled;${suffix} Create a host bridge such as 'br-mgmt', move the host uplink under it, then select that bridge in NetworkChum.`;
+  return `Cloud node '${nodeName}' is missing valid bridge settings: ${reason}. Choose a cloud role and bridge group so NetworkChum can create or reuse the managed bridge automatically.`;
 }
 
 export async function isLinuxBridgeInterface(
@@ -46,9 +49,99 @@ export async function listLinuxBridgeInterfaces(): Promise<string[]> {
   }
 }
 
+function normalizeLegacyBridgeInterface(
+  bridgeInterface: string | null | undefined,
+): Pick<ResolvedCloudBridge, "cloudRole" | "bridgeGroup"> | null {
+  if (!bridgeInterface) {
+    return null;
+  }
+
+  if (bridgeInterface === "br-mgmt" || bridgeInterface === "nc-mgmt") {
+    return {
+      cloudRole: "management",
+      bridgeGroup: "management",
+    };
+  }
+
+  const managementMatch = bridgeInterface.match(/^nc-mg-(.+)$/);
+  if (managementMatch?.[1]) {
+    return {
+      cloudRole: "management",
+      bridgeGroup: managementMatch[1],
+    };
+  }
+
+  const privateMatch = bridgeInterface.match(/^nc-pv-(.+)$/);
+  if (privateMatch?.[1]) {
+    return {
+      cloudRole: "private-circuit",
+      bridgeGroup: privateMatch[1],
+    };
+  }
+
+  const carrierMatch = bridgeInterface.match(/^nc-is-(.+)$/);
+  if (carrierMatch?.[1]) {
+    return {
+      cloudRole: "isp-carrier",
+      bridgeGroup: carrierMatch[1],
+    };
+  }
+
+  return null;
+}
+
+function sanitizeBridgeGroupToken(value: string): string {
+  const cleaned = value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return cleaned.replace(/^-+|-+$/g, "") || "group";
+}
+
+export function managedBridgeNameFor(
+  cloudRole: CloudRole,
+  bridgeGroup: string,
+): string {
+  const token = sanitizeBridgeGroupToken(bridgeGroup);
+  if (cloudRole === "management" && token === "management") {
+    return "nc-mgmt";
+  }
+
+  switch (cloudRole) {
+    case "management":
+      return `nc-mg-${token.slice(0, 9)}`;
+    case "private-circuit":
+      return `nc-pv-${token.slice(0, 9)}`;
+    case "isp-carrier":
+      return `nc-is-${token.slice(0, 9)}`;
+  }
+}
+
+export function resolveCloudBridge(
+  node: Pick<LabNode, "config" | "runtime">,
+): ResolvedCloudBridge | null {
+  if (node.runtime !== "cloud") {
+    return null;
+  }
+
+  const legacy = normalizeLegacyBridgeInterface(node.config.bridgeInterface);
+  const cloudRole = node.config.cloudRole ?? legacy?.cloudRole;
+  const bridgeGroup =
+    node.config.bridgeGroup ??
+    (cloudRole === "management" ? "management" : undefined) ??
+    legacy?.bridgeGroup;
+
+  if (!cloudRole || !bridgeGroup) {
+    return null;
+  }
+
+  return {
+    cloudRole,
+    bridgeGroup,
+    bridgeName: managedBridgeNameFor(cloudRole, bridgeGroup),
+  };
+}
+
 export async function buildBridgeTargetByNetworkId(
   document: LabDocument,
-  isBridgeInterface: BridgeInterfaceDetector = isLinuxBridgeInterface,
+  _isBridgeInterface: BridgeInterfaceDetector = isLinuxBridgeInterface,
 ): Promise<Map<string, string>> {
   const attachmentByInterfaceId = new Map(
     document.attachments.map((attachment) => [
@@ -62,15 +155,15 @@ export async function buildBridgeTargetByNetworkId(
   for (const node of document.nodes) {
     if (node.runtime !== "cloud") continue;
 
-    const uplink = node.config.bridgeInterface ?? null;
-    if (!uplink || !(await isBridgeInterface(uplink))) {
+    const resolvedBridge = resolveCloudBridge(node);
+    if (!resolvedBridge) {
       continue;
     }
 
     for (const iface of node.interfaces) {
       const networkId = attachmentByInterfaceId.get(iface.id);
       if (!networkId || targets.has(networkId)) continue;
-      targets.set(networkId, uplink);
+      targets.set(networkId, resolvedBridge.bridgeName);
     }
   }
 
@@ -114,11 +207,17 @@ export async function validateCloudBridgeTargets(
       continue;
     }
 
-    const uplink = node.config.bridgeInterface ?? null;
-    if (!uplink || !(await isBridgeInterface(uplink))) {
+    const resolvedBridge = resolveCloudBridge(node);
+    if (!resolvedBridge) {
+      const hasCloudRole =
+        Boolean(node.config.cloudRole) ||
+        Boolean(normalizeLegacyBridgeInterface(node.config.bridgeInterface));
+      const reason = hasCloudRole
+        ? "a bridge group is required for this cloud role"
+        : "a cloud role and bridge group are required";
       return {
         ok: false,
-        message: cloudBridgeRequirementMessage(node.name, uplink),
+        message: cloudBridgeRequirementMessage(node.name, reason),
       };
     }
   }
@@ -131,6 +230,10 @@ export async function shouldDetachCloudUplink(
   isBridgeInterface: BridgeInterfaceDetector = isLinuxBridgeInterface,
 ): Promise<boolean> {
   if (!interfaceName) {
+    return false;
+  }
+
+  if (/^nc-(mgmt|mg-|pv-|is-)/.test(interfaceName)) {
     return false;
   }
 

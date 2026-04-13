@@ -1,5 +1,9 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import type { NodeBootAction, NodeBootActionState } from "@networkchum/shared";
+import type {
+  CloudRole,
+  NodeBootAction,
+  NodeBootActionState,
+} from "@networkchum/shared";
 
 import "./theme.css";
 
@@ -73,7 +77,8 @@ type LabNodeData = {
   position?: { x: number; y: number };
   interfaces?: Array<{ id: string; name: string; slot: number }>;
   config?: {
-    bridgeInterface?: string | null;
+    cloudRole?: CloudRole;
+    bridgeGroup?: string | null;
   };
   state?: { desiredPower: string };
 };
@@ -138,7 +143,9 @@ type ApiClient = {
       templateId: string;
       name: string;
       position: { x: number; y: number };
-      bridgeInterface?: string | null;
+      interfaceCount?: number;
+      cloudRole?: CloudRole;
+      bridgeGroup?: string | null;
     },
   ) => Promise<{
     id: string;
@@ -236,7 +243,7 @@ type ApiClient = {
   setNodeSettings?: (
     labId: string,
     nodeId: string,
-    settings: { bridgeInterface: string | null },
+    settings: { cloudRole?: CloudRole; bridgeGroup?: string | null },
   ) => Promise<{ id: string; name: string; document: LabDocumentData }>;
   moveNode?: (
     labId: string,
@@ -594,7 +601,8 @@ const defaultApi: ApiClient = browserApi ?? {
       name: string;
       position: { x: number; y: number };
       interfaceCount?: number;
-      bridgeInterface?: string | null;
+      cloudRole?: CloudRole;
+      bridgeGroup?: string | null;
     },
   ) {
     return {
@@ -666,7 +674,10 @@ const defaultApi: ApiClient = browserApi ?? {
             id: "node-demo",
             name: "cloud-demo",
             runtime: "cloud",
-            config: { bridgeInterface: settings.bridgeInterface },
+            config: {
+              cloudRole: settings.cloudRole ?? "management",
+              bridgeGroup: settings.bridgeGroup ?? "management",
+            },
           },
         ],
         networks: [],
@@ -903,7 +914,8 @@ export function App({
   const [cloudNodeSettingsDialog, setCloudNodeSettingsDialog] = useState<{
     nodeId: string;
     nodeName: string;
-    bridgeInterface: string | null | undefined;
+    cloudRole?: CloudRole;
+    bridgeGroup?: string | null;
   } | null>(null);
   const [hostInterfaces, setHostInterfaces] = useState<string[]>([]);
 
@@ -1183,7 +1195,8 @@ export function App({
     name: string;
     position: { x: number; y: number };
     interfaceCount?: number;
-    bridgeInterface?: string | null;
+    cloudRole?: CloudRole;
+    bridgeGroup?: string | null;
   }) {
     if (!selectedLabId) {
       return;
@@ -1609,22 +1622,9 @@ export function App({
     setCloudNodeSettingsDialog({
       nodeId,
       nodeName: node.name,
-      bridgeInterface: node.config?.bridgeInterface,
+      cloudRole: node.config?.cloudRole,
+      bridgeGroup: node.config?.bridgeGroup,
     });
-
-    if (!api.listHostInterfaces) {
-      setHostInterfaces([]);
-      return;
-    }
-
-    void api
-      .listHostInterfaces()
-      .then((interfaces) => {
-        setHostInterfaces(interfaces);
-      })
-      .catch(() => {
-        setHostInterfaces([]);
-      });
   }
 
   async function handleSaveStartupConfig(
@@ -1673,15 +1673,13 @@ export function App({
 
   async function handleSaveCloudNodeSettings(
     nodeId: string,
-    bridgeInterface: string | null,
+    settings: { cloudRole: CloudRole; bridgeGroup: string },
   ) {
     if (!selectedLabId || !api.setNodeSettings) {
       return;
     }
 
-    const nextLab = await api.setNodeSettings(selectedLabId, nodeId, {
-      bridgeInterface,
-    });
+    const nextLab = await api.setNodeSettings(selectedLabId, nodeId, settings);
     applyLabUpdate(nextLab);
   }
 
@@ -2200,7 +2198,8 @@ export function App({
           nodeId={cloudNodeSettingsDialog.nodeId}
           nodeName={cloudNodeSettingsDialog.nodeName}
           hostInterfaces={hostInterfaces}
-          initialBridgeInterface={cloudNodeSettingsDialog.bridgeInterface}
+          initialCloudRole={cloudNodeSettingsDialog.cloudRole}
+          initialBridgeGroup={cloudNodeSettingsDialog.bridgeGroup}
           onSave={handleSaveCloudNodeSettings}
           onClose={() => setCloudNodeSettingsDialog(null)}
         />

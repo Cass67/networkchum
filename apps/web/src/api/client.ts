@@ -1,4 +1,8 @@
-import type { NodeBootAction, NodeBootActionState } from "@networkchum/shared";
+import type {
+  CloudRole,
+  NodeBootAction,
+  NodeBootActionState,
+} from "@networkchum/shared";
 
 type LabSummary = {
   id: string;
@@ -56,7 +60,8 @@ type LabDocumentSummary = {
     position?: { x: number; y: number };
     interfaces?: Array<{ id: string; name: string; slot: number }>;
     config?: {
-      bridgeInterface?: string | null;
+      cloudRole?: CloudRole;
+      bridgeGroup?: string | null;
     };
     state?: { desiredPower: string };
   }>;
@@ -266,7 +271,8 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
         name: string;
         position: { x: number; y: number };
         interfaceCount?: number;
-        bridgeInterface?: string | null;
+        cloudRole?: CloudRole;
+        bridgeGroup?: string | null;
       },
     ): Promise<LabDetails> {
       const response = await fetcher(`${baseUrl}/labs/${labId}/nodes`, {
@@ -580,7 +586,7 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
     async setNodeSettings(
       labId: string,
       nodeId: string,
-      settings: { bridgeInterface: string | null },
+      settings: { cloudRole?: CloudRole; bridgeGroup?: string | null },
     ): Promise<LabDetails> {
       const response = await fetcher(
         `${baseUrl}/labs/${labId}/nodes/${nodeId}/settings`,

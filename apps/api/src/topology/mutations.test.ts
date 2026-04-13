@@ -158,6 +158,34 @@ describe("addNode", () => {
     expect(result.nodes[0]?.config.interfaceCount).toBe(3);
     expect(result.nodes[0]?.interfaces).toHaveLength(3);
   });
+
+  it("stores cloud role and bridge group on new cloud nodes", () => {
+    const result = addNode(makeDocument(), {
+      template: {
+        id: "cloud",
+        runtime: "cloud",
+        displayName: "Cloud",
+        vendor: "NetworkChum",
+        deviceRoleIcon: "cloud",
+        boot: {
+          console: "none",
+          acceleration: "n/a",
+        },
+        configSchema: {
+          ramMb: { default: 0, min: 0, max: 0 },
+          vcpu: { default: 0, min: 0, max: 0 },
+          interfaceCount: { default: 10, min: 1, max: 24 },
+        },
+      },
+      name: "cloud-1",
+      position: { x: 0, y: 0 },
+      cloudRole: "isp-carrier",
+      bridgeGroup: "carrier-a",
+    });
+
+    expect(result.nodes[0]?.config.cloudRole).toBe("isp-carrier");
+    expect(result.nodes[0]?.config.bridgeGroup).toBe("carrier-a");
+  });
 });
 
 describe("removeNode", () => {
@@ -359,5 +387,46 @@ describe("node boot action", () => {
       false,
     );
     expect(updatedAEntry?.updatedAt).not.toBe(originalTimestamp);
+  });
+});
+
+describe("cloud settings", () => {
+  it("updates cloud role and bridge group without touching other config", () => {
+    const doc = makeDocument({
+      nodes: [
+        {
+          id: "node-a",
+          name: "cloud-a",
+          runtime: "cloud",
+          templateId: "cloud",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 2,
+            cloudRole: "management",
+            bridgeGroup: "management",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [],
+        },
+      ],
+    });
+
+    const updated = mutations.setCloudNodeBridgeGroup(
+      doc,
+      "node-a",
+      "private-circuit",
+      "mpls-core",
+    );
+
+    expect(updated.nodes[0]?.config).toMatchObject({
+      vcpu: 0,
+      ramMb: 0,
+      interfaceCount: 2,
+      cloudRole: "private-circuit",
+      bridgeGroup: "mpls-core",
+    });
   });
 });

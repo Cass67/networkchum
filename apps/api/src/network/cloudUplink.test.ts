@@ -4,6 +4,7 @@ import type { LabDocument } from "@networkchum/shared";
 
 import {
   buildBridgeTargetByNetworkId,
+  validateCloudBridgeTargets,
   shouldDetachCloudUplink,
 } from "./cloudUplink.js";
 
@@ -25,7 +26,7 @@ function makeLab(overrides: Partial<LabDocument> = {}): LabDocument {
 }
 
 describe("cloudUplink", () => {
-  it("uses a pre-existing host bridge as the target bridge for a cloud-backed network", async () => {
+  it("uses the managed management bridge for management cloud networks", async () => {
     const lab = makeLab({
       networks: [
         { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
@@ -41,7 +42,8 @@ describe("cloudUplink", () => {
             vcpu: 0,
             ramMb: 0,
             interfaceCount: 1,
-            bridgeInterface: "br-mgmt",
+            cloudRole: "management",
+            bridgeGroup: "management",
           },
           state: { desiredPower: "off" },
           interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
@@ -50,15 +52,12 @@ describe("cloudUplink", () => {
       attachments: [{ interfaceId: "if-cloud-0", networkId: "net-1" }],
     });
 
-    const result = await buildBridgeTargetByNetworkId(
-      lab,
-      async (interfaceName) => interfaceName === "br-mgmt",
-    );
+    const result = await buildBridgeTargetByNetworkId(lab);
 
-    expect(result).toEqual(new Map([["net-1", "br-mgmt"]]));
+    expect(result).toEqual(new Map([["net-1", "nc-mgmt"]]));
   });
 
-  it("ignores cloud uplinks that are raw host interfaces instead of bridges", async () => {
+  it("uses separate managed bridge names for private circuit groups", async () => {
     const lab = makeLab({
       networks: [
         { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
@@ -74,7 +73,8 @@ describe("cloudUplink", () => {
             vcpu: 0,
             ramMb: 0,
             interfaceCount: 1,
-            bridgeInterface: "enp6s18",
+            cloudRole: "private-circuit",
+            bridgeGroup: "mpls-core",
           },
           state: { desiredPower: "off" },
           interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
@@ -83,17 +83,46 @@ describe("cloudUplink", () => {
       attachments: [{ interfaceId: "if-cloud-0", networkId: "net-1" }],
     });
 
-    const result = await buildBridgeTargetByNetworkId(lab, async () => false);
+    const result = await buildBridgeTargetByNetworkId(lab);
 
-    expect(result).toEqual(new Map());
+    expect(result.get("net-1")).toMatch(/^nc-pv-/);
   });
 
-  it("does not detach a host bridge during cloud power-off", async () => {
-    await expect(
-      shouldDetachCloudUplink(
-        "br-mgmt",
-        async (interfaceName) => interfaceName === "br-mgmt",
-      ),
-    ).resolves.toBe(false);
+  it("rejects private clouds that do not define a bridge group", async () => {
+    const lab = makeLab({
+      networks: [
+        { id: "net-1", kind: "ethernet", name: "LAN", visible: false },
+      ],
+      nodes: [
+        {
+          id: "cloud-a",
+          name: "mpls",
+          runtime: "cloud",
+          templateId: "cloud",
+          position: { x: 0, y: 0 },
+          config: {
+            vcpu: 0,
+            ramMb: 0,
+            interfaceCount: 1,
+            cloudRole: "private-circuit",
+          },
+          state: { desiredPower: "off" },
+          interfaces: [{ id: "if-cloud-0", name: "eth0", slot: 0 }],
+        },
+      ],
+      attachments: [{ interfaceId: "if-cloud-0", networkId: "net-1" }],
+    });
+
+    const result = await validateCloudBridgeTargets(lab, undefined);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("expected missing bridge group validation to fail");
+    }
+    expect(result.message).toContain("bridge group");
+  });
+
+  it("does not detach managed cloud bridges during cloud power-off", async () => {
+    await expect(shouldDetachCloudUplink("nc-mgmt")).resolves.toBe(false);
   });
 });

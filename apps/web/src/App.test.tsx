@@ -2188,7 +2188,7 @@ describe("App", () => {
   });
 
   describe("Cloud Settings", () => {
-    it("opens cloud settings and saves the selected host bridge", async () => {
+    it("opens cloud settings and saves the selected role and bridge group", async () => {
       const lab = {
         id: "lab-1",
         name: "Cloud Lab",
@@ -2204,7 +2204,8 @@ describe("App", () => {
                 vcpu: 0,
                 ramMb: 0,
                 interfaceCount: 1,
-                bridgeInterface: null,
+                cloudRole: "management",
+                bridgeGroup: "management",
               },
               interfaces: [{ id: "if-1", name: "eth0", slot: 0 }],
             },
@@ -2226,7 +2227,8 @@ describe("App", () => {
               ...lab.document.nodes[0],
               config: {
                 ...lab.document.nodes[0].config,
-                bridgeInterface: "br-mgmt",
+                cloudRole: "private-circuit",
+                bridgeGroup: "mpls-core",
               },
             },
           ],
@@ -2246,7 +2248,6 @@ describe("App", () => {
           connectCommand: undefined,
           message: null,
         }),
-        listHostInterfaces: async () => ["br-lab", "br-mgmt"],
         setNodeSettings,
       };
 
@@ -2262,20 +2263,24 @@ describe("App", () => {
       fireEvent.click(screen.getByRole("button", { name: "Cloud Settings" }));
       await screen.findByRole("dialog", { name: "Cloud Settings" });
 
-      fireEvent.change(screen.getByLabelText("Host Bridge"), {
-        target: { value: "br-mgmt" },
+      fireEvent.change(screen.getByLabelText("Cloud Role"), {
+        target: { value: "private-circuit" },
+      });
+      fireEvent.change(screen.getByLabelText("Bridge Group"), {
+        target: { value: "mpls-core" },
       });
       fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
       await waitFor(() => {
         expect(setNodeSettings).toHaveBeenCalledWith("lab-1", "node-1", {
-          bridgeInterface: "br-mgmt",
+          cloudRole: "private-circuit",
+          bridgeGroup: "mpls-core",
         });
       });
     });
   });
 
-  it("creates a cloud node with the selected host bridge", async () => {
+  it("creates a cloud node with the selected role and bridge group", async () => {
     const addNode = vi.fn(
       async (
         _labId: string,
@@ -2284,7 +2289,8 @@ describe("App", () => {
           name: string;
           position: { x: number; y: number };
           interfaceCount?: number;
-          bridgeInterface?: string | null;
+          cloudRole?: string;
+          bridgeGroup?: string | null;
         },
       ) => ({
         id: "lab-1",
@@ -2300,7 +2306,8 @@ describe("App", () => {
                 vcpu: 0,
                 ramMb: 0,
                 interfaceCount: input.interfaceCount ?? 10,
-                bridgeInterface: input.bridgeInterface ?? null,
+                cloudRole: input.cloudRole ?? "management",
+                bridgeGroup: input.bridgeGroup ?? "management",
               },
               interfaces: [{ id: "if-1", name: "eth0", slot: 0 }],
             },
@@ -2338,7 +2345,6 @@ describe("App", () => {
         },
       }),
       listRuntimeStates: async () => [],
-      listHostInterfaces: async () => ["br-lab", "br-mgmt"],
       addNode,
       powerOnNode: async () => ({
         nodeId: "node-cloud-1",
@@ -2358,8 +2364,11 @@ describe("App", () => {
     fireEvent.change(screen.getByTestId("template-select"), {
       target: { value: "cloud" },
     });
-    fireEvent.change(screen.getByLabelText("Host Bridge"), {
-      target: { value: "br-mgmt" },
+    fireEvent.change(screen.getByLabelText("Cloud Role"), {
+      target: { value: "isp-carrier" },
+    });
+    fireEvent.change(screen.getByLabelText("Bridge Group"), {
+      target: { value: "carrier-a" },
     });
     fireEvent.click(screen.getByTestId("add-node-submit"));
 
@@ -2368,7 +2377,8 @@ describe("App", () => {
         "lab-1",
         expect.objectContaining({
           templateId: "cloud",
-          bridgeInterface: "br-mgmt",
+          cloudRole: "isp-carrier",
+          bridgeGroup: "carrier-a",
         }),
       );
     });
