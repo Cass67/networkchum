@@ -26,22 +26,6 @@ export async function getCatalog(): Promise<CatalogEntry[]> {
     ];
   });
 
-  const boundTemplateIds = new Set(boundVmEntries.map((e) => e.template.id));
-
-  // Include all VM templates even without a bound image so they appear in the
-  // upload dialog dropdown and can be targeted before an image is uploaded.
-  const unboundVmEntries = templates
-    .filter(
-      (template) =>
-        template.runtime === "qemu" && !boundTemplateIds.has(template.id),
-    )
-    .map((template) => ({
-      id: template.id,
-      template,
-      image: null,
-      source: "built-in" as const,
-    }));
-
   const containerEntries = templates
     .filter((template) => template.runtime === "container")
     .map((template) => ({
@@ -60,10 +44,5 @@ export async function getCatalog(): Promise<CatalogEntry[]> {
       source: "built-in" as const,
     }));
 
-  return [
-    ...boundVmEntries,
-    ...unboundVmEntries,
-    ...containerEntries,
-    ...cloudEntries,
-  ];
+  return [...boundVmEntries, ...containerEntries, ...cloudEntries];
 }

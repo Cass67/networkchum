@@ -54,6 +54,11 @@ describe("getCatalog", () => {
           entry.image === null,
       ),
     ).toBe(true);
+    expect(
+      entries.some(
+        (entry) => entry.template.id === "cisco-iosv" && entry.image === null,
+      ),
+    ).toBe(false);
   });
 
   it("returns cloud template as built-in entry", async () => {
