@@ -550,6 +550,22 @@ type LocationLike = {
   protocol: string;
   hostname: string;
 };
+type BridgeLaunchRequest =
+  | {
+      terminal: "iterm" | "terminal-app" | "custom";
+      host: string;
+      port: number;
+      template?: string;
+      relayHost?: string;
+      relayUser?: string;
+    }
+  | {
+      terminal: "iterm" | "terminal-app" | "custom";
+      execCommand: string[];
+      template?: string;
+      relayHost?: string;
+      relayUser?: string;
+    };
 
 function readStoredTheme(): ThemeMode {
   if (typeof window === "undefined") {
@@ -563,6 +579,16 @@ function readStoredTheme(): ThemeMode {
   } catch {
     return "dark";
   }
+}
+
+function shellSingleQuote(value: string) {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+function shellWord(value: string) {
+  return /^[A-Za-z0-9._/:=@%+,-]+$/.test(value)
+    ? value
+    : shellSingleQuote(value);
 }
 
 function readStoredNativeConsolePreference(): NativeConsolePreference {
@@ -1480,33 +1506,55 @@ export function App({
   }
 
   function handleConnectNode(nodeId: string) {
-    const command = nodeConnectCommands[nodeId];
-    if (!command?.length) return;
-
-    if (command[0] === "telnet") {
-      const node = selectedLab?.document.nodes.find((n) => n.id === nodeId);
-      setConsoleNode({ nodeId, nodeName: node?.name ?? nodeId });
-    } else {
-      window.alert(command.join(" "));
-    }
+    void handleOpenNativeConsole(nodeId);
   }
 
-  function buildItermHelperUrl(command: string[]) {
-    if (command[0] !== "telnet" || !command[1] || !command[2]) {
+  function buildBridgeLaunchRequest(
+    command: string[],
+  ): BridgeLaunchRequest | null {
+    if (!command.length) {
       return null;
     }
 
-    const request: {
-      terminal: MacOsTerminalPreference;
-      host: string;
-      port: number;
-      relayHost?: string;
-      relayUser?: string;
-    } = {
-      terminal: macOsTerminalPreference,
-      host: command[1],
-      port: Number(command[2]),
-    };
+    const request: BridgeLaunchRequest = selectedCustomTerminal
+      ? {
+          terminal: "custom",
+          template: selectedCustomTerminal.template,
+          execCommand: command,
+        }
+      : macOsTerminalPreference === "terminal-app"
+        ? { terminal: "terminal-app", execCommand: command }
+        : { terminal: "iterm", execCommand: command };
+
+    if (command[0] === "telnet" && command[1] && command[2]) {
+      const telnetRequest: BridgeLaunchRequest = selectedCustomTerminal
+        ? {
+            terminal: "custom",
+            template: selectedCustomTerminal.template,
+            host: command[1],
+            port: Number(command[2]),
+          }
+        : macOsTerminalPreference === "terminal-app"
+          ? {
+              terminal: "terminal-app",
+              host: command[1],
+              port: Number(command[2]),
+            }
+          : {
+              terminal: "iterm",
+              host: command[1],
+              port: Number(command[2]),
+            };
+
+      if (!isLocalPageHost(locationLike.hostname)) {
+        telnetRequest.relayHost = locationLike.hostname;
+        if (remoteSshUser.trim()) {
+          telnetRequest.relayUser = remoteSshUser.trim();
+        }
+      }
+
+      return telnetRequest;
+    }
 
     if (!isLocalPageHost(locationLike.hostname)) {
       request.relayHost = locationLike.hostname;
@@ -1519,11 +1567,14 @@ export function App({
   }
 
   function buildNativeConsoleCommand(command: string[]) {
-    if (command[0] !== "telnet" || !command[1] || !command[2]) {
+    if (!command.length) {
       return null;
     }
 
-    const localCommand = `socat STDIO,rawer,echo=0 TCP:${command[1]}:${command[2]}`;
+    const localCommand =
+      command[0] === "telnet" && command[1] && command[2]
+        ? `socat STDIO,rawer,echo=0 TCP:${command[1]}:${command[2]}`
+        : command.map(shellWord).join(" ");
     if (isLocalPageHost(locationLike.hostname)) {
       return localCommand;
     }
@@ -1531,7 +1582,7 @@ export function App({
     const relayTarget = remoteSshUser.trim()
       ? `${remoteSshUser.trim()}@${locationLike.hostname}`
       : locationLike.hostname;
-    return `ssh -t ${relayTarget} '${localCommand}'`;
+    return `ssh -t ${relayTarget} ${shellSingleQuote(localCommand)}`;
   }
 
   function promptForNativeConsoleCommand(nativeCommand: string) {
@@ -1548,26 +1599,26 @@ export function App({
 
   async function handleOpenNativeConsole(nodeId: string) {
     const command = nodeConnectCommands[nodeId];
-    if (
-      !command?.length ||
-      command[0] !== "telnet" ||
-      !command[1] ||
-      !command[2]
-    ) {
+    if (!command?.length) {
       return;
     }
 
-    if (nativeConsolePreference === "web-console") {
+    const isTelnetConsole = command[0] === "telnet" && command[1] && command[2];
+
+    if (nativeConsolePreference === "web-console" && isTelnetConsole) {
       openWebConsole(nodeId);
       return;
     }
 
-    if (nativeConsolePreference === "copy-command") {
+    if (
+      nativeConsolePreference === "copy-command" ||
+      nativeConsolePreference === "web-console"
+    ) {
       await handleCopyNativeCommand(nodeId);
       return;
     }
 
-    const helperRequest = buildItermHelperUrl(command);
+    const helperRequest = buildBridgeLaunchRequest(command);
     if (helperRequest) {
       const bridgeBaseUrl = resolveBridgeBaseUrl(locationLike);
       if (!bridgeBaseUrl) {

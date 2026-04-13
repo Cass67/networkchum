@@ -1063,6 +1063,87 @@ describe("App", () => {
     );
   });
 
+  it("calls the native console bridge for container connect commands on remote hosts", async () => {
+    const fetchSpy = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true }),
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        {
+          id: "linux-alpine-container",
+          name: "Alpine Container",
+          source: "built-in",
+        },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "alpine-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["podman", "exec", "-it", "alpine-1", "sh"],
+          message: null,
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["podman", "exec", "-it", "alpine-1", "sh"],
+        message: null,
+      }),
+    };
+
+    render(
+      <App
+        api={api}
+        locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
+      />,
+    );
+
+    await screen.findByRole("button", { name: "Connect alpine-1" });
+    fireEvent.change(screen.getByLabelText("SSH Relay User"), {
+      target: { value: "cass" },
+    });
+    fireEvent.change(screen.getByLabelText("Native Console Preference"), {
+      target: { value: "iterm-helper" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect alpine-1" }));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://127.0.0.1:4010/open-console",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          terminal: "iterm",
+          execCommand: ["podman", "exec", "-it", "alpine-1", "sh"],
+          relayHost: "192.168.2.57",
+          relayUser: "cass",
+        }),
+      }),
+    );
+  });
+
   it("copies the native telnet command on double-click when preference is copy command", async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -1250,6 +1331,77 @@ describe("App", () => {
 
     expect(writeText).toHaveBeenCalledWith(
       "ssh -t cass@192.168.2.57 'socat STDIO,rawer,echo=0 TCP:127.0.0.1:5004'",
+    );
+  });
+
+  it("copies remote container connect commands instead of alerting", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fetched Lab" }],
+      listCatalog: async () => [
+        {
+          id: "linux-alpine-container",
+          name: "Alpine Container",
+          source: "built-in",
+        },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "alpine-1", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [
+        {
+          nodeId: "node-1",
+          status: "running",
+          connectCommand: ["docker", "exec", "-it", "alpine-1", "sh"],
+          message: null,
+        },
+      ],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fetched Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "alpine-1", "sh"],
+        message: null,
+      }),
+    };
+
+    render(
+      <App
+        api={api}
+        locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
+      />,
+    );
+
+    await screen.findByRole("button", { name: "Connect alpine-1" });
+    fireEvent.change(screen.getByLabelText("SSH Relay User"), {
+      target: { value: "cass" },
+    });
+    fireEvent.change(screen.getByLabelText("Native Console Preference"), {
+      target: { value: "copy-command" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect alpine-1" }));
+
+    expect(writeText).toHaveBeenCalledWith(
+      "ssh -t cass@192.168.2.57 'docker exec -it alpine-1 sh'",
     );
   });
 

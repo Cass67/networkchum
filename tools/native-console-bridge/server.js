@@ -10,6 +10,10 @@ function defaultHasBinary(name) {
   return searchPath.some((entry) => existsSync(`${entry}/${name}`));
 }
 
+function isSafeExecToken(value) {
+  return typeof value === "string" && /^[A-Za-z0-9._/:=@%+,-]+$/.test(value);
+}
+
 function validatePayload(payload) {
   if (!payload || typeof payload !== "object") {
     throw new Error("Invalid payload");
@@ -20,16 +24,6 @@ function validatePayload(payload) {
     payload.terminal !== "custom"
   ) {
     throw new Error("Unsupported terminal");
-  }
-  if (payload.host !== "127.0.0.1" && payload.host !== "localhost") {
-    throw new Error("Unsupported host");
-  }
-  if (
-    !Number.isInteger(payload.port) ||
-    payload.port < 1 ||
-    payload.port > 65535
-  ) {
-    throw new Error("Invalid port");
   }
   if (
     payload.relayHost !== undefined &&
@@ -46,6 +40,37 @@ function validatePayload(payload) {
     throw new Error("Invalid relay user");
   }
 
+  const hasTelnetTarget =
+    typeof payload.host === "string" && payload.port !== undefined;
+  const hasExecCommand = Array.isArray(payload.execCommand);
+
+  if (hasTelnetTarget === hasExecCommand) {
+    throw new Error("Invalid console target");
+  }
+
+  if (hasTelnetTarget) {
+    if (payload.host !== "127.0.0.1" && payload.host !== "localhost") {
+      throw new Error("Unsupported host");
+    }
+    if (
+      !Number.isInteger(payload.port) ||
+      payload.port < 1 ||
+      payload.port > 65535
+    ) {
+      throw new Error("Invalid port");
+    }
+  }
+
+  if (hasExecCommand) {
+    if (
+      payload.execCommand.length < 2 ||
+      !["docker", "podman"].includes(payload.execCommand[0]) ||
+      !payload.execCommand.every(isSafeExecToken)
+    ) {
+      throw new Error("Invalid exec command");
+    }
+  }
+
   return payload;
 }
 
@@ -53,24 +78,45 @@ function shellSingleQuote(value) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
+function shellWord(value) {
+  return isSafeExecToken(value) ? value : shellSingleQuote(value);
+}
+
+function buildExecShellCommand(tokens) {
+  return tokens.map(shellWord).join(" ");
+}
+
 export function buildNativeCommand(payload, options = {}) {
-  const { host, port, terminal, template, relayHost, relayUser } =
+  const { host, port, terminal, template, relayHost, relayUser, execCommand } =
     validatePayload(payload);
   const hasBinary = options.hasBinary ?? defaultHasBinary;
   let command = "";
 
   if (terminal === "custom") {
-    if (
-      typeof template !== "string" ||
-      !template.includes("{host}") ||
-      !template.includes("{port}")
-    ) {
-      throw new Error("Invalid custom terminal template");
-    }
+    if (execCommand) {
+      if (typeof template !== "string" || !template.includes("{command}")) {
+        throw new Error("Invalid custom terminal template");
+      }
 
-    command = template
-      .replaceAll("{host}", host)
-      .replaceAll("{port}", String(port));
+      command = template.replaceAll(
+        "{command}",
+        buildExecShellCommand(execCommand),
+      );
+    } else {
+      if (
+        typeof template !== "string" ||
+        !template.includes("{host}") ||
+        !template.includes("{port}")
+      ) {
+        throw new Error("Invalid custom terminal template");
+      }
+
+      command = template
+        .replaceAll("{host}", host)
+        .replaceAll("{port}", String(port));
+    }
+  } else if (execCommand) {
+    command = buildExecShellCommand(execCommand);
   } else if (hasBinary("socat")) {
     command = `socat STDIO,rawer,echo=0 TCP:${host}:${port}`;
   } else {

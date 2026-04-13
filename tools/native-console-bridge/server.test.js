@@ -58,6 +58,28 @@ test("buildNativeCommand includes relayUser in the ssh target when provided", ()
   );
 });
 
+test("buildNativeCommand supports constrained exec commands", () => {
+  assert.equal(
+    buildNativeCommand({
+      terminal: "iterm",
+      execCommand: ["podman", "exec", "-it", "ol10", "bash"],
+    }),
+    "podman exec -it ol10 bash",
+  );
+});
+
+test("buildNativeCommand wraps exec commands in ssh when relayHost is provided", () => {
+  assert.equal(
+    buildNativeCommand({
+      terminal: "iterm",
+      execCommand: ["podman", "exec", "-it", "ol10", "bash"],
+      relayHost: "192.168.2.57",
+      relayUser: "cass",
+    }),
+    "ssh -t cass@192.168.2.57 'podman exec -it ol10 bash'",
+  );
+});
+
 test("buildNativeCommand rejects unsupported terminals", () => {
   assert.throws(
     () =>
@@ -92,6 +114,17 @@ test("buildNativeCommand rejects malformed custom templates", () => {
         port: 5004,
       }),
     /Invalid custom terminal template/,
+  );
+});
+
+test("buildNativeCommand expands custom terminal templates for exec commands", () => {
+  assert.equal(
+    buildNativeCommand({
+      terminal: "custom",
+      template: "ghostty -e sh -lc {command}",
+      execCommand: ["docker", "exec", "-it", "toolbox-1", "sh"],
+    }),
+    "ghostty -e sh -lc docker exec -it toolbox-1 sh",
   );
 });
 
@@ -171,6 +204,29 @@ test("bridge returns command in dry run mode", async () => {
   const payload = await response.json();
   assert.equal(response.status, 200);
   assert.equal(payload.command, "/usr/bin/nc 127.0.0.1 5004");
+
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+});
+
+test("bridge returns exec commands in dry run mode", async () => {
+  const server = createBridgeServer({ dryRun: true, hasBinary: () => false });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+
+  const response = await fetch(`http://127.0.0.1:${port}/open-console`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      terminal: "iterm",
+      execCommand: ["docker", "exec", "-it", "toolbox-1", "sh"],
+    }),
+  });
+
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(payload.command, "docker exec -it toolbox-1 sh");
 
   await new Promise((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
