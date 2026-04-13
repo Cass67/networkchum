@@ -55,9 +55,19 @@ describe("App", () => {
     expect(
       screen.getByRole("button", { name: "Containers" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Images" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Switch to day mode" }),
     ).toBeInTheDocument();
+  });
+
+  it("wraps the workspace tabs so all sections remain accessible", () => {
+    render(<App />);
+
+    const tabs = document.querySelector(".sidebar-tabs");
+
+    expect(tabs).not.toBeNull();
+    expect(getComputedStyle(tabs!).display).toBe("grid");
   });
 
   it("uses dedicated scroll containers for the side panels", () => {

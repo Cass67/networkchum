@@ -2093,7 +2093,13 @@ export function App({
         className="left-sidebar"
         style={{ display: "flex", flexDirection: "column", minHeight: "0px" }}
       >
-        <div className="sidebar-tabs">
+        <div
+          className="sidebar-tabs"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          }}
+        >
           {(["labs", "devices", "containers", "images"] as const).map((tab) => (
             <button
               key={tab}
