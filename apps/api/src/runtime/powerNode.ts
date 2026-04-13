@@ -1057,6 +1057,10 @@ export async function powerOnNode(
   let nicBackends: Array<{ kind: "macos-management" }> | undefined;
   let nicBackendKinds: Array<"macos-management" | null> | undefined;
   if (platform === "macos") {
+    nicBackendKinds = Array.from(
+      { length: node.config.interfaceCount },
+      () => null,
+    );
     const rolesByNetworkId = buildCloudRoleByNetworkId(lab.document);
     const networkIdByInterfaceId = new Map(
       lab.document.attachments.map((attachment) => [
@@ -1071,10 +1075,6 @@ export async function powerOnNode(
       if (rolesByNetworkId.get(networkId) !== "management") continue;
       nicBackends ??= [];
       nicBackends[iface.slot] = { kind: "macos-management" };
-      nicBackendKinds ??= Array.from(
-        { length: node.config.interfaceCount },
-        () => null,
-      );
       nicBackendKinds[iface.slot] = "macos-management";
     }
   }

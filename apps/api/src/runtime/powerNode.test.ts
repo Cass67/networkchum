@@ -942,6 +942,50 @@ describe("powerOnNode", () => {
     }
   });
 
+  it("persists an explicit null-filled nicBackends array for macos socket launches without management NICs", async () => {
+    const platformSpy = vi.spyOn(os, "platform").mockReturnValue("darwin");
+    try {
+      const tempDir = await mkdtemp(
+        path.join(os.tmpdir(), "networkchum-runtime-"),
+      );
+      tempDirs.push(tempDir);
+      process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+      const registry = new TemplateRegistry();
+      const lab = await createLab("macos socket-only backend lab");
+      const template = registry.get("cisco-iosv")!;
+      const document = addNode(lab.document, {
+        template,
+        name: "vm-1",
+        position: { x: 0, y: 0 },
+        imageId: "/tmp/vm.qcow2",
+      });
+      const nodeId = document.nodes[0]!.id;
+      await updateLabDocument(lab.id, document);
+
+      const state = await powerOnNode(lab.id, nodeId, {
+        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+        hasBinary: async () => true,
+        findAvailablePort: async (port) => port,
+        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+      });
+
+      expect(state?.status).toBe("running");
+      const interfaceCount = document.nodes[0]!.config.interfaceCount;
+      const expectedNullBackends = Array.from(
+        { length: interfaceCount },
+        () => null,
+      );
+      expect(state?.nicBackends).toEqual(expectedNullBackends);
+
+      const savedStates = await listRuntimeStates(lab.id);
+      const saved = savedStates.find((entry) => entry.nodeId === nodeId);
+      expect(saved?.nicBackends).toEqual(expectedNullBackends);
+    } finally {
+      platformSpy.mockRestore();
+    }
+  });
+
   it("clears inject-once boot action after launch attempt", async () => {
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), "networkchum-runtime-"),
