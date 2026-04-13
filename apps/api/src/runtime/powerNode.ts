@@ -41,7 +41,7 @@ import {
   injectVeosFlash,
 } from "./configInjectors.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
-import { setNodeBootAction } from "../topology/mutations.js";
+import { setNodeBootActions } from "../topology/mutations.js";
 import type { LabDocument, LabNode, NodeBootAction } from "@networkchum/shared";
 
 const execFileAsync = promisify(execFile);
@@ -57,7 +57,7 @@ type ScheduleRunningConfigBackupParams = {
   nodeId: string;
   node: LabNode;
   runtimeState: RuntimeState;
-  bootAction: NodeBootAction;
+  runningConfigBackupAction: NodeBootAction;
 };
 
 type RuntimeDependencies = {
@@ -73,6 +73,41 @@ type RuntimeDependencies = {
     params: ScheduleRunningConfigBackupParams,
   ) => Promise<unknown>;
 };
+
+function resolveNodeBootSettings(
+  bootActions: Array<
+    | {
+        nodeId: string;
+        startupConfig?: NodeBootAction;
+        runningConfigBackup?: NodeBootAction;
+      }
+    | {
+        nodeId: string;
+        action?: "none" | "backup-once" | "inject-once";
+      }
+  >,
+  nodeId: string,
+) {
+  const entry = bootActions.find((candidate) => candidate.nodeId === nodeId);
+  if (!entry) {
+    return {
+      startupConfig: "none" as const,
+      runningConfigBackup: "none" as const,
+    };
+  }
+
+  if ("action" in entry && entry.action) {
+    return {
+      startupConfig: entry.action === "inject-once" ? "once" : "none",
+      runningConfigBackup: entry.action === "backup-once" ? "once" : "none",
+    };
+  }
+
+  return {
+    startupConfig: entry.startupConfig ?? "none",
+    runningConfigBackup: entry.runningConfigBackup ?? "none",
+  };
+}
 
 function isAlreadyExistsError(stderr: string): boolean {
   return /already exists|File exists|Device or resource busy/i.test(stderr);
@@ -368,14 +403,31 @@ export async function powerOnNode(
   );
 
   const bootActions = lab.document.nodeBootActions ?? [];
-  const nodeBootAction = (bootActions.find((entry) => entry.nodeId === nodeId)
-    ?.action ?? "none") as NodeBootAction;
+  const nodeBootSettings = resolveNodeBootSettings(bootActions, nodeId);
   const clearOneShotBootAction = async () => {
-    if (nodeBootAction === "none") {
+    const nextActions = {
+      startupConfig:
+        nodeBootSettings.startupConfig === "once"
+          ? ("none" as const)
+          : nodeBootSettings.startupConfig,
+      runningConfigBackup:
+        nodeBootSettings.runningConfigBackup === "once"
+          ? ("none" as const)
+          : nodeBootSettings.runningConfigBackup,
+    };
+
+    if (
+      nextActions.startupConfig === nodeBootSettings.startupConfig &&
+      nextActions.runningConfigBackup === nodeBootSettings.runningConfigBackup
+    ) {
       return;
     }
 
-    const clearedDocument = setNodeBootAction(lab.document, nodeId, "none");
+    const clearedDocument = setNodeBootActions(
+      lab.document,
+      nodeId,
+      nextActions,
+    );
     try {
       await updateLabDocument(labId, clearedDocument);
     } catch (error) {
@@ -390,7 +442,7 @@ export async function powerOnNode(
   const scheduleRunningConfigBackup = dependencies.scheduleRunningConfigBackup;
   const scheduleBackupIfNeeded = (runtimeState: RuntimeState) => {
     if (
-      nodeBootAction !== "backup-once" ||
+      nodeBootSettings.runningConfigBackup === "none" ||
       runtimeState.status !== "running" ||
       !scheduleRunningConfigBackup
     ) {
@@ -403,7 +455,7 @@ export async function powerOnNode(
         nodeId,
         node,
         runtimeState,
-        bootAction: nodeBootAction,
+        runningConfigBackupAction: nodeBootSettings.runningConfigBackup,
       });
       Promise.resolve(maybePromise).catch((error) => {
         console.warn(
@@ -525,6 +577,7 @@ export async function powerOnNode(
       };
       await upsertRuntimeState(state);
       scheduleBackupIfNeeded(state);
+      await clearOneShotBootAction();
       return state;
     }
 
@@ -624,6 +677,7 @@ export async function powerOnNode(
     };
     await upsertRuntimeState(state);
     scheduleBackupIfNeeded(state);
+    await clearOneShotBootAction();
     return state;
   }
 
@@ -699,11 +753,10 @@ export async function powerOnNode(
   const hasStartupConfigText =
     typeof startupConfig === "string" && startupConfig.trim().length > 0;
   const shouldInjectStartupConfig =
-    nodeBootAction === "inject-once" && hasStartupConfigText;
+    nodeBootSettings.startupConfig !== "none" && hasStartupConfigText;
 
-  // Day-0 FAT disk injection (iosv-vfat, csr1000v-vfat) now requires both an
-  // explicit `inject-once` boot action and non-blank startup config text so the
-  // overlay can be reset safely for the injected data.
+  // Day-0 FAT disk injection now requires an explicit startup-config inject
+  // mode and non-blank startup config text so the overlay can be reset safely.
   const needsFreshOverlay =
     shouldInjectStartupConfig &&
     (configInjectMethod === "iosv-vfat" ||

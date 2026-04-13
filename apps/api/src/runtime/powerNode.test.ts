@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LabDocument } from "@networkchum/shared";
 
 import { createLab, getLab, updateLabDocument } from "../labs/labStore.js";
-import { addNode, setNodeBootAction } from "../topology/mutations.js";
+import { addNode, setNodeBootActions } from "../topology/mutations.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import {
   ensureTapNetworking,
@@ -371,7 +371,10 @@ describe("powerOnNode", () => {
       position: { x: 10, y: 10 },
     });
     const nodeId = document.nodes[0]!.id;
-    document = setNodeBootAction(document, nodeId, "inject-once");
+    document = setNodeBootActions(document, nodeId, {
+      startupConfig: "once",
+      runningConfigBackup: "none",
+    });
     await updateLabDocument(lab.id, document);
 
     const state = await powerOnNode(lab.id, nodeId, {
@@ -404,7 +407,10 @@ describe("powerOnNode", () => {
       position: { x: 10, y: 10 },
     });
     const nodeId = document.nodes[0]!.id;
-    document = setNodeBootAction(document, nodeId, "backup-once");
+    document = setNodeBootActions(document, nodeId, {
+      startupConfig: "none",
+      runningConfigBackup: "once",
+    });
     await updateLabDocument(lab.id, document);
 
     const state = await powerOnNode(lab.id, nodeId, {
@@ -437,7 +443,10 @@ describe("powerOnNode", () => {
       position: { x: 10, y: 10 },
     });
     const nodeId = document.nodes[0]!.id;
-    document = setNodeBootAction(document, nodeId, "backup-once");
+    document = setNodeBootActions(document, nodeId, {
+      startupConfig: "none",
+      runningConfigBackup: "once",
+    });
     await updateLabDocument(lab.id, document);
 
     const scheduleBackup = vi.fn(async () => undefined);
@@ -458,6 +467,51 @@ describe("powerOnNode", () => {
     expect(scheduleBackup).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves always boot policies after launch attempt", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const registry = new TemplateRegistry();
+    const lab = await createLab("Always Boot Policy Lab");
+    const template = registry.get("linux-alpine-container")!;
+    let document = addNode(lab.document, {
+      template,
+      name: "always-policy",
+      position: { x: 10, y: 10 },
+    });
+    const nodeId = document.nodes[0]!.id;
+    document = setNodeBootActions(document, nodeId, {
+      startupConfig: "always",
+      runningConfigBackup: "always",
+    });
+    await updateLabDocument(lab.id, document);
+
+    const scheduleBackup = vi.fn(async () => undefined);
+    const state = await powerOnNode(lab.id, nodeId, {
+      runCommand: async (_command, _args) => ({
+        ok: true,
+        stdout: "container-id-123",
+        stderr: "",
+      }),
+      hasBinary: async () => true,
+      scheduleRunningConfigBackup: scheduleBackup,
+    });
+
+    expect(state?.status).toBe("running");
+    expect(scheduleBackup).toHaveBeenCalledTimes(1);
+    const updatedLab = await getLab(lab.id);
+    expect(updatedLab?.document.nodeBootActions).toEqual([
+      expect.objectContaining({
+        nodeId,
+        startupConfig: "always",
+        runningConfigBackup: "always",
+      }),
+    ]);
+  });
+
   it("clears inject-once boot action even when startup config is blank", async () => {
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), "networkchum-runtime-"),
@@ -474,7 +528,10 @@ describe("powerOnNode", () => {
       position: { x: 10, y: 10 },
     });
     const nodeId = document.nodes[0]!.id;
-    document = setNodeBootAction(document, nodeId, "inject-once");
+    document = setNodeBootActions(document, nodeId, {
+      startupConfig: "once",
+      runningConfigBackup: "none",
+    });
     document = {
       ...document,
       startupConfigSets: [
@@ -551,7 +608,10 @@ describe("powerOnNode", () => {
         imageId: "/tmp/csr.qcow2",
       });
       const nodeId = document.nodes[0]!.id;
-      document = setNodeBootAction(document, nodeId, "inject-once");
+      document = setNodeBootActions(document, nodeId, {
+        startupConfig: "once",
+        runningConfigBackup: "none",
+      });
       await updateLabDocument(lab.id, {
         ...document,
         startupConfigSets: [
@@ -608,7 +668,10 @@ describe("powerOnNode", () => {
         imageId: "/tmp/csr.qcow2",
       });
       const nodeId = document.nodes[0]!.id;
-      document = setNodeBootAction(document, nodeId, "inject-once");
+      document = setNodeBootActions(document, nodeId, {
+        startupConfig: "once",
+        runningConfigBackup: "none",
+      });
       await updateLabDocument(lab.id, {
         ...document,
         startupConfigSets: [
@@ -742,7 +805,10 @@ describe("powerOnNode", () => {
         imageId: "/tmp/csr.qcow2",
       });
       const nodeId = document.nodes[0]!.id;
-      document = setNodeBootAction(document, nodeId, "inject-once");
+      document = setNodeBootActions(document, nodeId, {
+        startupConfig: "once",
+        runningConfigBackup: "none",
+      });
       await updateLabDocument(lab.id, {
         ...document,
         startupConfigSets: [
@@ -797,7 +863,10 @@ describe("powerOnNode", () => {
         imageId: "/tmp/csr.qcow2",
       });
       const nodeId = document.nodes[0]!.id;
-      document = setNodeBootAction(document, nodeId, "inject-once");
+      document = setNodeBootActions(document, nodeId, {
+        startupConfig: "once",
+        runningConfigBackup: "none",
+      });
       await updateLabDocument(lab.id, {
         ...document,
         startupConfigSets: [
@@ -852,7 +921,10 @@ describe("powerOnNode", () => {
       });
       const nodeId = document.nodes[0]!.id;
       if (withBootAction) {
-        document = setNodeBootAction(document, nodeId, "inject-once");
+        document = setNodeBootActions(document, nodeId, {
+          startupConfig: "once",
+          runningConfigBackup: "none",
+        });
       }
       await updateLabDocument(lab.id, {
         ...document,
@@ -919,7 +991,10 @@ describe("powerOnNode", () => {
         imageId: "/tmp/csr.qcow2",
       });
       const nodeId = document.nodes[0]!.id;
-      document = setNodeBootAction(document, nodeId, "inject-once");
+      document = setNodeBootActions(document, nodeId, {
+        startupConfig: "once",
+        runningConfigBackup: "none",
+      });
       await updateLabDocument(lab.id, {
         ...document,
         startupConfigSets: [

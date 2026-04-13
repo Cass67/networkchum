@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
+import type { NodeBootAction, NodeBootActionState } from "@networkchum/shared";
 
 import "./theme.css";
 
@@ -65,13 +66,6 @@ type StartupConfigSetData = {
   id: string;
   name: string;
   nodeConfigs: Array<{ nodeId: string; config: string }>;
-};
-
-type NodeBootAction = "none" | "backup-once" | "inject-once";
-type NodeBootActionState = {
-  nodeId: string;
-  action: NodeBootAction;
-  updatedAt?: string;
 };
 
 type LabDocumentData = {
@@ -211,7 +205,10 @@ type ApiClient = {
   setNodeBootAction?: (
     labId: string,
     nodeId: string,
-    action: NodeBootAction,
+    actions: {
+      startupConfig: NodeBootAction;
+      runningConfigBackup: NodeBootAction;
+    },
   ) => Promise<{ id: string; name: string; document: LabDocumentData }>;
   moveNode?: (
     labId: string,
@@ -300,6 +297,36 @@ type ApiClient = {
     };
   }>;
 };
+
+function resolveBootActionState(
+  entry:
+    | NodeBootActionState
+    | {
+        nodeId: string;
+        action?: "none" | "backup-once" | "inject-once";
+      }
+    | undefined,
+): Pick<NodeBootActionState, "startupConfig" | "runningConfigBackup"> {
+  if (!entry) {
+    return { startupConfig: "none", runningConfigBackup: "none" };
+  }
+
+  if ("action" in entry && entry.action) {
+    return {
+      startupConfig: entry.action === "inject-once" ? "once" : "none",
+      runningConfigBackup: entry.action === "backup-once" ? "once" : "none",
+    };
+  }
+
+  if (!("startupConfig" in entry) || !("runningConfigBackup" in entry)) {
+    return { startupConfig: "none", runningConfigBackup: "none" };
+  }
+
+  return {
+    startupConfig: entry.startupConfig ?? "none",
+    runningConfigBackup: entry.runningConfigBackup ?? "none",
+  };
+}
 
 const demoLabs: LabSummary[] = [];
 const demoCatalog: CatalogSummary[] = [
@@ -1465,7 +1492,10 @@ export function App({
   async function handleSaveStartupConfig(
     nodeId: string,
     config: string,
-    action: NodeBootAction,
+    actions: {
+      startupConfig: NodeBootAction;
+      runningConfigBackup: NodeBootAction;
+    },
   ) {
     if (!selectedLabId || !selectedLab || !api.setNodeConfig) return;
 
@@ -1498,9 +1528,19 @@ export function App({
       config,
     );
     const finalLab = api.setNodeBootAction
-      ? await api.setNodeBootAction(selectedLabId, nodeId, action)
+      ? await api.setNodeBootAction(selectedLabId, nodeId, actions)
       : nextLab;
     applyLabUpdate(finalLab);
+  }
+
+  function resolveNodeBootActions(
+    nodeId: string,
+  ): Pick<NodeBootActionState, "startupConfig" | "runningConfigBackup"> {
+    return resolveBootActionState(
+      selectedLab?.document.nodeBootActions?.find(
+        (candidate) => candidate.nodeId === nodeId,
+      ),
+    );
   }
 
   async function handleConfirm() {
@@ -1995,14 +2035,9 @@ export function App({
               )?.config ?? ""
             );
           })()}
-          initialBootAction={(() => {
-            const doc = selectedLab?.document;
-            return (
-              doc?.nodeBootActions?.find(
-                (entry) => entry.nodeId === startupConfigDialog.nodeId,
-              )?.action ?? "none"
-            );
-          })()}
+          initialBootActions={resolveNodeBootActions(
+            startupConfigDialog.nodeId,
+          )}
           onSave={handleSaveStartupConfig}
           onClose={() => setStartupConfigDialog(null)}
         />

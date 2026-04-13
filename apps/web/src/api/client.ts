@@ -528,14 +528,17 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
     async setNodeBootAction(
       labId: string,
       nodeId: string,
-      action: NodeBootAction,
+      actions: {
+        startupConfig: NodeBootAction;
+        runningConfigBackup: NodeBootAction;
+      },
     ): Promise<LabDetails> {
       const response = await fetcher(
         `${baseUrl}/labs/${labId}/nodes/${nodeId}/boot-action`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify(actions),
         },
       );
       const payload = await parseResponse<{ lab: LabDetails }>(

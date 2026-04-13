@@ -36,7 +36,7 @@ import {
   moveNode,
   removeNodeConfig,
   setActiveConfigSet,
-  setNodeBootAction,
+  setNodeBootActions,
   setNodeConfig,
   upsertStartupConfigSet,
 } from "../topology/mutations.js";
@@ -71,7 +71,8 @@ const attachSchema = z.object({
 });
 
 const setNodeBootActionSchema = z.object({
-  action: NodeBootActionSchema,
+  startupConfig: NodeBootActionSchema,
+  runningConfigBackup: NodeBootActionSchema,
 });
 
 export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
@@ -345,11 +346,7 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
         return reply.code(404).send({ message: "Node not found" });
       }
 
-      const document = setNodeBootAction(
-        lab.document,
-        params.nodeId,
-        body.action,
-      );
+      const document = setNodeBootActions(lab.document, params.nodeId, body);
       const updatedLab = await updateLabDocument(params.labId, document);
       if (updatedLab) {
         await writeLabBackup(updatedLab);

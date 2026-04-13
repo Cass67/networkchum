@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { NodeBootAction } from "@networkchum/shared";
+import type { NodeBootActionState } from "@networkchum/shared";
 import { App } from "./App.js";
 afterEach(() => {
   cleanup();
@@ -2037,7 +2037,12 @@ describe("App", () => {
   });
 
   describe("Startup Config", () => {
-    const createLabDocument = (action: NodeBootAction) => ({
+    const createLabDocument = (
+      actions: Pick<
+        NodeBootActionState,
+        "startupConfig" | "runningConfigBackup"
+      >,
+    ) => ({
       nodes: [
         {
           id: "node-1",
@@ -2054,23 +2059,28 @@ describe("App", () => {
           nodeConfigs: [],
         },
       ],
-      nodeBootActions: [{ nodeId: "node-1", action }],
+      nodeBootActions: [{ nodeId: "node-1", ...actions }],
       activeConfigSetId: "set-default",
     });
 
-    const buildApi = (action: NodeBootAction) => {
+    const buildApi = (
+      actions: Pick<
+        NodeBootActionState,
+        "startupConfig" | "runningConfigBackup"
+      >,
+    ) => {
       const lab = {
         id: "lab-1",
         name: "Startup Lab",
         autoBackup: false,
-        document: createLabDocument(action),
+        document: createLabDocument(actions),
       };
       const setNodeConfig = vi.fn(async () => lab);
-      const setNodeBootAction = vi.fn(async (_labId, _nodeId, nextAction) => ({
+      const setNodeBootAction = vi.fn(async (_labId, _nodeId, nextActions) => ({
         ...lab,
         document: {
           ...lab.document,
-          nodeBootActions: [{ nodeId: "node-1", action: nextAction }],
+          nodeBootActions: [{ nodeId: "node-1", ...nextActions }],
         },
       }));
 
@@ -2105,39 +2115,49 @@ describe("App", () => {
       await screen.findByRole("dialog", { name: "Startup Config" });
     };
 
-    it("renders the Next Power-Up Action dropdown with the queued action", async () => {
-      const { api } = buildApi("backup-once");
+    it("renders separate dropdowns for config inject and backups", async () => {
+      const { api } = buildApi({
+        startupConfig: "always",
+        runningConfigBackup: "once",
+      });
       render(<App api={api} />);
 
       await openStartupConfigDialog();
 
-      expect(screen.getByLabelText("Next Power-Up Action")).toHaveValue(
-        "backup-once",
+      expect(screen.getByLabelText("Startup Config Action")).toHaveValue(
+        "always",
+      );
+      expect(screen.getByLabelText("Running Config Backup")).toHaveValue(
+        "once",
       );
     });
 
     it.each([
-      ["No Boot Action", "none"],
-      ["Backup Running Config Once", "backup-once"],
-      ["Inject Startup Config Once", "inject-once"],
+      ["always", "none"],
+      ["once", "always"],
     ] as const)(
-      "save with %s calls setNodeBootAction(..., %s)",
-      async (_label, action) => {
-        const { api, setNodeBootAction } = buildApi("none");
+      "save with startup=%s and backup=%s calls setNodeBootAction with split actions",
+      async (startupConfig, runningConfigBackup) => {
+        const { api, setNodeBootAction } = buildApi({
+          startupConfig: "none",
+          runningConfigBackup: "none",
+        });
         render(<App api={api} />);
 
         await openStartupConfigDialog();
-        fireEvent.change(screen.getByLabelText("Next Power-Up Action"), {
-          target: { value: action },
+        fireEvent.change(screen.getByLabelText("Startup Config Action"), {
+          target: { value: startupConfig },
+        });
+        fireEvent.change(screen.getByLabelText("Running Config Backup"), {
+          target: { value: runningConfigBackup },
         });
         fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
         await waitFor(() => {
-          expect(setNodeBootAction).toHaveBeenCalledWith(
-            "lab-1",
-            "node-1",
-            action,
-          );
+          expect(setNodeBootAction).toHaveBeenCalledWith("lab-1", "node-1", {
+            startupConfig,
+            runningConfigBackup,
+          });
         });
       },
     );

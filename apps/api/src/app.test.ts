@@ -56,12 +56,15 @@ async function createLabWithNode(nodeName: string) {
 async function patchBootAction(
   labId: string,
   nodeId: string,
-  action: NodeBootAction,
+  actions: {
+    startupConfig: NodeBootAction;
+    runningConfigBackup: NodeBootAction;
+  },
 ) {
   const response = await app.inject({
     method: "PATCH",
     url: `/labs/${labId}/nodes/${nodeId}/boot-action`,
-    payload: { action },
+    payload: actions,
   });
   expect(response.statusCode).toBe(200);
   return response.json() as {
@@ -286,12 +289,19 @@ describe("api", () => {
 
   it("returns the updated lab when setting a boot action", async () => {
     const { labId, nodeId } = await createLabWithNode("node-boot");
-    const patchPayload = await patchBootAction(labId, nodeId, "inject-once");
+    const patchPayload = await patchBootAction(labId, nodeId, {
+      startupConfig: "once",
+      runningConfigBackup: "none",
+    });
 
     expect(Array.isArray(patchPayload.lab.document.nodeBootActions)).toBe(true);
     expect(patchPayload.lab.document.nodeBootActions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ nodeId, action: "inject-once" }),
+        expect.objectContaining({
+          nodeId,
+          startupConfig: "once",
+          runningConfigBackup: "none",
+        }),
       ]),
     );
 
@@ -314,10 +324,35 @@ describe("api", () => {
 
   it("records a backup-once boot action", async () => {
     const { labId, nodeId } = await createLabWithNode("node-backup");
-    const patchPayload = await patchBootAction(labId, nodeId, "backup-once");
+    const patchPayload = await patchBootAction(labId, nodeId, {
+      startupConfig: "none",
+      runningConfigBackup: "once",
+    });
     expect(patchPayload.lab.document.nodeBootActions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ nodeId, action: "backup-once" }),
+        expect.objectContaining({
+          nodeId,
+          startupConfig: "none",
+          runningConfigBackup: "once",
+        }),
+      ]),
+    );
+  });
+
+  it("records always boot policies", async () => {
+    const { labId, nodeId } = await createLabWithNode("node-always");
+    const patchPayload = await patchBootAction(labId, nodeId, {
+      startupConfig: "always",
+      runningConfigBackup: "always",
+    });
+
+    expect(patchPayload.lab.document.nodeBootActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId,
+          startupConfig: "always",
+          runningConfigBackup: "always",
+        }),
       ]),
     );
   });
@@ -352,8 +387,14 @@ describe("api", () => {
 
   it("clears boot actions when the payload uses action none", async () => {
     const { labId, nodeId } = await createLabWithNode("node-boot-clear");
-    await patchBootAction(labId, nodeId, "inject-once");
-    const clearPayload = await patchBootAction(labId, nodeId, "none");
+    await patchBootAction(labId, nodeId, {
+      startupConfig: "once",
+      runningConfigBackup: "none",
+    });
+    const clearPayload = await patchBootAction(labId, nodeId, {
+      startupConfig: "none",
+      runningConfigBackup: "none",
+    });
 
     expect(
       clearPayload.lab.document.nodeBootActions.some(
@@ -385,7 +426,10 @@ describe("api", () => {
     const response = await app.inject({
       method: "PATCH",
       url: `/labs/${labId}/nodes/${nodeId}/boot-action`,
-      payload: { action: "invalid-action" },
+      payload: {
+        startupConfig: "invalid-action",
+        runningConfigBackup: "none",
+      },
     });
 
     expect(response.statusCode).toBe(400);
@@ -398,7 +442,7 @@ describe("api", () => {
     const response = await app.inject({
       method: "PATCH",
       url: `/labs/nonexistent-lab/nodes/node-missing/boot-action`,
-      payload: { action: "inject-once" },
+      payload: { startupConfig: "once", runningConfigBackup: "none" },
     });
 
     expect(response.statusCode).toBe(404);
@@ -416,7 +460,7 @@ describe("api", () => {
     const response = await app.inject({
       method: "PATCH",
       url: `/labs/${labId}/nodes/nonexistent-node/boot-action`,
-      payload: { action: "inject-once" },
+      payload: { startupConfig: "once", runningConfigBackup: "none" },
     });
 
     expect(response.statusCode).toBe(404);

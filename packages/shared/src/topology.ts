@@ -59,17 +59,39 @@ export const StartupConfigSetSchema = z.object({
   ),
 });
 
-export const NodeBootActionSchema = z.enum([
-  "none",
-  "backup-once",
-  "inject-once",
-]);
+export const NodeBootActionSchema = z.enum(["none", "once", "always"]);
 
-export const NodeBootActionStateSchema = z.object({
-  nodeId: z.string().min(1),
-  action: NodeBootActionSchema,
-  updatedAt: z.string().min(1).optional(),
-});
+const NodeBootActionStateV2Schema = z
+  .object({
+    nodeId: z.string().min(1),
+    startupConfig: NodeBootActionSchema.default("none"),
+    runningConfigBackup: NodeBootActionSchema.default("none"),
+    updatedAt: z.string().min(1).optional(),
+  })
+  .strict();
+
+const LegacyNodeBootActionStateSchema = z
+  .object({
+    nodeId: z.string().min(1),
+    action: z.enum(["none", "backup-once", "inject-once"]),
+    updatedAt: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const NodeBootActionStateSchema = z
+  .union([LegacyNodeBootActionStateSchema, NodeBootActionStateV2Schema])
+  .transform((value) => {
+    if ("action" in value) {
+      return {
+        nodeId: value.nodeId,
+        startupConfig: value.action === "inject-once" ? "once" : "none",
+        runningConfigBackup: value.action === "backup-once" ? "once" : "none",
+        updatedAt: value.updatedAt,
+      };
+    }
+
+    return value;
+  });
 
 export const LabDocumentSchema = z.object({
   id: z.string().min(1),
@@ -93,4 +115,9 @@ export type LabNode = z.infer<typeof LabNodeSchema>;
 export type Attachment = z.infer<typeof AttachmentSchema>;
 export type StartupConfigSet = z.infer<typeof StartupConfigSetSchema>;
 export type NodeBootAction = z.infer<typeof NodeBootActionSchema>;
-export type NodeBootActionState = z.infer<typeof NodeBootActionStateSchema>;
+export type NodeBootActionState = {
+  nodeId: string;
+  startupConfig: NodeBootAction;
+  runningConfigBackup: NodeBootAction;
+  updatedAt?: string;
+};

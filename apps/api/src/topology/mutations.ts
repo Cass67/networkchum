@@ -2,6 +2,7 @@ import type {
   LabDocument,
   LabNode,
   NodeBootAction,
+  NodeBootActionState,
   StartupConfigSet,
   Template,
 } from "@networkchum/shared";
@@ -135,16 +136,19 @@ export function removeNode(document: LabDocument, nodeId: string): LabDocument {
   };
 }
 
-export function setNodeBootAction(
+export function setNodeBootActions(
   document: LabDocument,
   nodeId: string,
-  action: NodeBootAction,
+  actions: Pick<NodeBootActionState, "startupConfig" | "runningConfigBackup">,
 ): LabDocument {
   const bootActions = (document.nodeBootActions ?? []).filter(
     (entry) => entry.nodeId !== nodeId,
   );
 
-  if (action === "none") {
+  if (
+    actions.startupConfig === "none" &&
+    actions.runningConfigBackup === "none"
+  ) {
     return { ...document, nodeBootActions: bootActions };
   }
 
@@ -152,7 +156,12 @@ export function setNodeBootAction(
     ...document,
     nodeBootActions: [
       ...bootActions,
-      { nodeId, action, updatedAt: new Date().toISOString() },
+      {
+        nodeId,
+        startupConfig: actions.startupConfig,
+        runningConfigBackup: actions.runningConfigBackup,
+        updatedAt: new Date().toISOString(),
+      },
     ],
   };
 }

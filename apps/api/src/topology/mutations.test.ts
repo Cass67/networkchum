@@ -213,15 +213,33 @@ describe("node boot action", () => {
       nodeBootActions: [],
     });
 
-    const updated = mutations.setNodeBootAction(doc, "node-a", "inject-once");
+    const updated = mutations.setNodeBootActions(doc, "node-a", {
+      startupConfig: "once",
+      runningConfigBackup: "none",
+    });
     expect(
-      updated.nodeBootActions.map(({ nodeId, action }) => ({ nodeId, action })),
-    ).toEqual([{ nodeId: "node-a", action: "inject-once" }]);
+      updated.nodeBootActions.map(
+        ({ nodeId, startupConfig, runningConfigBackup }) => ({
+          nodeId,
+          startupConfig,
+          runningConfigBackup,
+        }),
+      ),
+    ).toEqual([
+      {
+        nodeId: "node-a",
+        startupConfig: "once",
+        runningConfigBackup: "none",
+      },
+    ]);
     const [updatedEntry] = updated.nodeBootActions;
     expect(updatedEntry?.updatedAt).toBeDefined();
     expect(Number.isNaN(Date.parse(updatedEntry?.updatedAt ?? ""))).toBe(false);
 
-    const cleared = mutations.setNodeBootAction(updated, "node-a", "none");
+    const cleared = mutations.setNodeBootActions(updated, "node-a", {
+      startupConfig: "none",
+      runningConfigBackup: "none",
+    });
     expect(cleared.nodeBootActions).toEqual([]);
   });
 
@@ -254,12 +272,14 @@ describe("node boot action", () => {
       nodeBootActions: [
         {
           nodeId: "node-a",
-          action: "inject-once",
+          startupConfig: "once",
+          runningConfigBackup: "none",
           updatedAt: "2020-01-01T00:00:00.000Z",
         },
         {
           nodeId: "node-b",
-          action: "backup-once",
+          startupConfig: "none",
+          runningConfigBackup: "once",
           updatedAt: "2020-01-01T00:00:01.000Z",
         },
       ],
@@ -269,18 +289,33 @@ describe("node boot action", () => {
       doc.nodeBootActions.find((entry) => entry.nodeId === "node-a")
         ?.updatedAt ?? null;
 
-    const updated = mutations.setNodeBootAction(doc, "node-a", "backup-once");
+    const updated = mutations.setNodeBootActions(doc, "node-a", {
+      startupConfig: "always",
+      runningConfigBackup: "once",
+    });
 
     expect(
       updated.nodeBootActions
         .filter((entry) => entry.nodeId !== "node-a")
-        .map(({ nodeId, action }) => ({ nodeId, action })),
-    ).toContainEqual({ nodeId: "node-b", action: "backup-once" });
+        .map(({ nodeId, startupConfig, runningConfigBackup }) => ({
+          nodeId,
+          startupConfig,
+          runningConfigBackup,
+        })),
+    ).toContainEqual({
+      nodeId: "node-b",
+      startupConfig: "none",
+      runningConfigBackup: "once",
+    });
     const [updatedAEntry] = updated.nodeBootActions.filter(
       (entry) => entry.nodeId === "node-a",
     );
     expect(updatedAEntry).toEqual(
-      expect.objectContaining({ nodeId: "node-a", action: "backup-once" }),
+      expect.objectContaining({
+        nodeId: "node-a",
+        startupConfig: "always",
+        runningConfigBackup: "once",
+      }),
     );
     expect(updatedAEntry?.updatedAt).toBeDefined();
     expect(Number.isNaN(Date.parse(updatedAEntry?.updatedAt ?? ""))).toBe(

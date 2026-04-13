@@ -1,15 +1,21 @@
 import { useState } from "react";
-import type { NodeBootAction } from "@networkchum/shared";
+import type { NodeBootAction, NodeBootActionState } from "@networkchum/shared";
 
 type StartupConfigDialogProps = {
   nodeId: string;
   nodeName: string;
   initialConfig: string;
-  initialBootAction: NodeBootAction;
+  initialBootActions: Pick<
+    NodeBootActionState,
+    "startupConfig" | "runningConfigBackup"
+  >;
   onSave: (
     nodeId: string,
     config: string,
-    action: NodeBootAction,
+    actions: {
+      startupConfig: NodeBootAction;
+      runningConfigBackup: NodeBootAction;
+    },
   ) => Promise<void>;
   onClose: () => void;
 };
@@ -18,18 +24,26 @@ export function StartupConfigDialog({
   nodeId,
   nodeName,
   initialConfig,
-  initialBootAction,
+  initialBootActions,
   onSave,
   onClose,
 }: StartupConfigDialogProps) {
   const [config, setConfig] = useState(initialConfig);
-  const [bootAction, setBootAction] = useState(initialBootAction);
+  const [startupConfigAction, setStartupConfigAction] = useState(
+    initialBootActions.startupConfig,
+  );
+  const [runningConfigBackupAction, setRunningConfigBackupAction] = useState(
+    initialBootActions.runningConfigBackup,
+  );
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
     try {
-      await onSave(nodeId, config, bootAction);
+      await onSave(nodeId, config, {
+        startupConfig: startupConfigAction,
+        runningConfigBackup: runningConfigBackupAction,
+      });
       onClose();
     } finally {
       setSaving(false);
@@ -54,18 +68,35 @@ export function StartupConfigDialog({
             Saved as a cdrom drive attached on power-on.
           </p>
           <label className="field" style={{ marginTop: 0 }}>
-            <span className="field-label">Next Power-Up Action</span>
+            <span className="field-label">Startup Config Action</span>
             <select
               className="field-input"
-              aria-label="Next Power-Up Action"
-              value={bootAction}
+              aria-label="Startup Config Action"
+              value={startupConfigAction}
               onChange={(event) =>
-                setBootAction(event.target.value as NodeBootAction)
+                setStartupConfigAction(event.target.value as NodeBootAction)
               }
             >
-              <option value="none">No Boot Action</option>
-              <option value="backup-once">Backup Running Config Once</option>
-              <option value="inject-once">Inject Startup Config Once</option>
+              <option value="none">No Config Inject</option>
+              <option value="once">Inject Once</option>
+              <option value="always">Inject Every Boot</option>
+            </select>
+          </label>
+          <label className="field" style={{ marginTop: 0 }}>
+            <span className="field-label">Running Config Backup</span>
+            <select
+              className="field-input"
+              aria-label="Running Config Backup"
+              value={runningConfigBackupAction}
+              onChange={(event) =>
+                setRunningConfigBackupAction(
+                  event.target.value as NodeBootAction,
+                )
+              }
+            >
+              <option value="none">No Action</option>
+              <option value="once">Backup Once</option>
+              <option value="always">Backup Every Boot</option>
             </select>
           </label>
         </div>
