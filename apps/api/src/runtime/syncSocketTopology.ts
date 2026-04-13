@@ -51,6 +51,10 @@ export async function syncSocketTopology({
     qemuNodes += 1;
 
     for (const iface of node.interfaces) {
+      if (state.nicBackends?.[iface.slot] === "macos-management") {
+        continue;
+      }
+
       const port = state.nicPorts[iface.slot];
       if (port === undefined) {
         continue;

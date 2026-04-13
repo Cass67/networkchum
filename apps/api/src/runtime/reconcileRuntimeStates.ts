@@ -21,6 +21,7 @@ function stopState(state: RuntimeState, message: string): RuntimeState {
     connectCommand: undefined,
     consolePort: null,
     nicPorts: undefined,
+    nicBackends: undefined,
     message,
     updatedAt: new Date().toISOString(),
   };
@@ -93,6 +94,24 @@ async function reconcileRuntimeState(
   }
 
   if (state.externalId === "cloud-tap") {
+    return state;
+  }
+
+  if (state.cloudBackend === "tap") {
+    return state;
+  }
+
+  if (state.cloudBackend === "macos-management") {
+    return state;
+  }
+
+  // Backward-compat for early macOS host-only management states: these were
+  // persisted without a stable externalId and should remain running.
+  if (
+    !state.externalId &&
+    state.commandPreview.length === 0 &&
+    !state.message
+  ) {
     return state;
   }
 

@@ -12,9 +12,17 @@ export type RuntimeState = {
   runtime: "qemu" | "container" | "cloud";
   accelerationMode: string | null;
   externalId?: string | null;
+  // For cloud nodes, disambiguate non-container backends (linux TAP, macOS host-only management)
+  // from the NAT-helper container fallback. This allows reconciliation/power-off logic to behave
+  // correctly even when externalId is null (macOS host-only).
+  cloudBackend?: "tap" | "container-nat" | "macos-management";
   connectCommand?: string[];
   consolePort?: number | null;
   nicPorts?: number[];
+  // Per-NIC backend hints for socket topology rebuild. On macOS, management NICs
+  // use vmnet-host and should not be registered as socket ports.
+  // Slots not explicitly overridden are stored as null.
+  nicBackends?: Array<"macos-management" | null>;
   message?: string | null;
   commandPreview: string[];
   updatedAt: string;

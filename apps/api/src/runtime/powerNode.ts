@@ -648,6 +648,7 @@ export async function powerOnNode(
         accelerationMode: null,
         // Avoid container cleanup on power-off; host-only backend has no external ID.
         externalId: null,
+        cloudBackend: "macos-management" as const,
         connectCommand: undefined,
         consolePort: null,
         nicPorts: undefined,
@@ -700,6 +701,7 @@ export async function powerOnNode(
         runtime: "cloud" as const,
         accelerationMode: null,
         externalId: ok ? "cloud-tap" : null,
+        cloudBackend: "tap" as const,
         connectCommand: undefined,
         consolePort: null,
         nicPorts: undefined,
@@ -803,6 +805,7 @@ export async function powerOnNode(
       runtime: "cloud" as const,
       accelerationMode: null,
       externalId: result.ok ? result.stdout.trim() || containerName : null,
+      cloudBackend: "container-nat" as const,
       connectCommand: undefined,
       consolePort: null,
       nicPorts: undefined,
@@ -904,6 +907,7 @@ export async function powerOnNode(
   const lockedQemu = await findRunningQemuForDisk(overlayPath, runCommand);
   if (lockedQemu) {
     const savedNicPorts = existingState?.nicPorts;
+    const savedNicBackends = existingState?.nicBackends;
 
     const recoveredState = {
       labId,
@@ -917,6 +921,7 @@ export async function powerOnNode(
         : undefined,
       consolePort: lockedQemu.consolePort,
       nicPorts: savedNicPorts,
+      nicBackends: savedNicBackends,
       message:
         "Recovered existing QEMU process that was already holding the node disk image.",
       commandPreview: existingState?.commandPreview ?? [],
@@ -1050,6 +1055,7 @@ export async function powerOnNode(
   // switch connects to all of them and forwards frames between attached ports,
   // so the cable topology can change at runtime without rebooting VMs.
   let nicBackends: Array<{ kind: "macos-management" }> | undefined;
+  let nicBackendKinds: Array<"macos-management" | null> | undefined;
   if (platform === "macos") {
     const rolesByNetworkId = buildCloudRoleByNetworkId(lab.document);
     const networkIdByInterfaceId = new Map(
@@ -1065,6 +1071,11 @@ export async function powerOnNode(
       if (rolesByNetworkId.get(networkId) !== "management") continue;
       nicBackends ??= [];
       nicBackends[iface.slot] = { kind: "macos-management" };
+      nicBackendKinds ??= Array.from(
+        { length: node.config.interfaceCount },
+        () => null,
+      );
+      nicBackendKinds[iface.slot] = "macos-management";
     }
   }
 
@@ -1127,6 +1138,7 @@ export async function powerOnNode(
       : undefined,
     consolePort: result.ok ? serialPort : null,
     nicPorts: result.ok ? nicPorts : undefined,
+    nicBackends: result.ok ? nicBackendKinds : undefined,
     message: result.ok ? null : result.stderr,
     commandPreview,
     updatedAt: new Date().toISOString(),
