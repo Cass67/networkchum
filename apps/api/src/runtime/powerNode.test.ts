@@ -21,7 +21,12 @@ import {
   powerOffNode,
   powerOnNode,
 } from "./powerNode.js";
-import { listRuntimeStates, upsertRuntimeState } from "./runtimeStateStore.js";
+import {
+  listRuntimeStates,
+  upsertRuntimeState,
+  type RuntimeState,
+} from "./runtimeStateStore.js";
+import { virtualSwitch } from "./virtualSwitch.js";
 
 const tempDirs: string[] = [];
 
@@ -860,6 +865,18 @@ describe("powerOnNode", () => {
       };
       await updateLabDocument(lab.id, document);
 
+      // powerOnNode() triggers syncSocketTopology() on success for socket backends.
+      // Stub the virtual switch to avoid real TCP connection attempts.
+      const resetSpy = vi
+        .spyOn(virtualSwitch, "reset")
+        .mockImplementation(() => {});
+      const addNicSpy = vi
+        .spyOn(virtualSwitch, "addNic")
+        .mockImplementation(() => {});
+      const syncAttachmentsSpy = vi
+        .spyOn(virtualSwitch, "syncAttachments")
+        .mockImplementation(() => {});
+
       const state = await powerOnNode(lab.id, nodeId, {
         runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
         hasBinary: async () => true,
@@ -867,11 +884,59 @@ describe("powerOnNode", () => {
         launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
       });
 
+      expect(state?.runtime).toBe("qemu");
+      const qemuState = state as RuntimeState;
+
       expect(state?.status).toBe("running");
-      expect(state?.commandPreview.join(" ")).toContain("vmnet-host,id=net0");
-      expect(state?.commandPreview.join(" ")).toContain(
+      // Template interfaceCount may exceed 2; powerOnNode() persists a null-filled
+      // backend hint array with explicit management overrides.
+      expect(qemuState.nicBackends).toEqual([
+        "macos-management",
+        null,
+        null,
+        null,
+      ]);
+      expect(qemuState.commandPreview.join(" ")).toContain(
+        "vmnet-host,id=net0",
+      );
+      expect(qemuState.commandPreview.join(" ")).toContain(
         "socket,id=net1,listen=127.0.0.1:20001",
       );
+
+      const savedStates = await listRuntimeStates(lab.id);
+      const saved = savedStates.find((entry) => entry.nodeId === nodeId);
+      expect(saved?.nicBackends).toEqual([
+        "macos-management",
+        null,
+        null,
+        null,
+      ]);
+
+      expect(resetSpy).toHaveBeenCalledTimes(1);
+      // syncSocketTopology() should skip slot 0 (management-backed) but register
+      // remaining NIC socket ports.
+      expect(addNicSpy).toHaveBeenCalledTimes(3);
+      expect(addNicSpy).toHaveBeenCalledWith(
+        document.nodes[0]!.interfaces[1]!.id,
+        20001,
+      );
+      expect(addNicSpy).toHaveBeenCalledWith(
+        document.nodes[0]!.interfaces[2]!.id,
+        20002,
+      );
+      expect(addNicSpy).toHaveBeenCalledWith(
+        document.nodes[0]!.interfaces[3]!.id,
+        20003,
+      );
+      expect(addNicSpy).not.toHaveBeenCalledWith(
+        document.nodes[0]!.interfaces[0]!.id,
+        20000,
+      );
+      expect(syncAttachmentsSpy).toHaveBeenCalledTimes(1);
+
+      resetSpy.mockRestore();
+      addNicSpy.mockRestore();
+      syncAttachmentsSpy.mockRestore();
     } finally {
       platformSpy.mockRestore();
     }
