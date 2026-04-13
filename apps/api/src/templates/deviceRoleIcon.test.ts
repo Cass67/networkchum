@@ -92,4 +92,14 @@ describe("guessDeviceRoleIcon", () => {
       }),
     ).toBe("router");
   });
+
+  it("avoids switch false positives from unrelated substrings", () => {
+    expect(
+      guessDeviceRoleIcon({
+        runtime: "qemu",
+        name: "CoreOS Server",
+        vendor: "Linux",
+      }),
+    ).toBe("host");
+  });
 });

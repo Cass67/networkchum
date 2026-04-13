@@ -117,7 +117,7 @@ export class TemplateRegistry {
       if (defaults.deviceRoleIcon !== baseDeviceRoleIcon) {
         nextOverride.deviceRoleIcon = defaults.deviceRoleIcon;
       }
-    } else if (existingOverride?.deviceRoleIcon) {
+    } else if (existingOverride?.deviceRoleIcon !== undefined) {
       nextOverride.deviceRoleIcon = existingOverride.deviceRoleIcon;
     }
 

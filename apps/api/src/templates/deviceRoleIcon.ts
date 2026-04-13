@@ -1,6 +1,16 @@
 import type { Template } from "@networkchum/shared";
+import { z } from "zod";
 
 export type DeviceRoleIcon = Template["deviceRoleIcon"];
+
+export const DeviceRoleIconSchema = z.enum([
+  "router",
+  "switch",
+  "firewall",
+  "cloud",
+  "host",
+  "client",
+]);
 
 type DeviceRoleGuessInput = {
   runtime?: Template["runtime"] | null;
@@ -52,20 +62,19 @@ function normalize(value: string): string {
     .trim();
 }
 
-function compact(value: string): string {
-  return value.replace(/\s+/g, "");
-}
+function matchesKeywords(normalizedValue: string, keywords: string[]): boolean {
+  const valueTokens = normalizedValue.split(" ").filter(Boolean);
 
-function matchesKeywords(
-  normalizedValue: string,
-  compactValue: string,
-  keywords: string[],
-): boolean {
   return keywords.some((keyword) => {
-    if (keyword.includes(" ")) {
-      return normalizedValue.includes(keyword);
+    const normalizedKeyword = normalize(keyword);
+    if (normalizedKeyword.includes(" ")) {
+      return normalizedValue.includes(normalizedKeyword);
     }
-    return compactValue.includes(keyword);
+
+    return valueTokens.some(
+      (token) =>
+        token === normalizedKeyword || token.startsWith(normalizedKeyword),
+    );
   });
 }
 
@@ -85,35 +94,33 @@ export function guessDeviceRoleIcon(
   const runtime = input.runtime ?? undefined;
 
   const nameNormalized = normalize(name);
-  const nameCompact = compact(nameNormalized);
   const templateNormalized = normalize(templateId);
 
   const combinedNormalized = normalize(`${vendor} ${name} ${templateId}`);
-  const combinedCompact = compact(combinedNormalized);
 
   if (
     runtime === "cloud" ||
     templateNormalized.includes("cloud") ||
-    matchesKeywords(nameNormalized, nameCompact, CLOUD_KEYWORDS)
+    matchesKeywords(nameNormalized, CLOUD_KEYWORDS)
   ) {
     return "cloud";
   }
 
-  if (matchesKeywords(combinedNormalized, combinedCompact, FIREWALL_KEYWORDS)) {
+  if (matchesKeywords(combinedNormalized, FIREWALL_KEYWORDS)) {
     return "firewall";
   }
 
-  if (matchesKeywords(combinedNormalized, combinedCompact, SWITCH_KEYWORDS)) {
+  if (matchesKeywords(combinedNormalized, SWITCH_KEYWORDS)) {
     return "switch";
   }
 
-  if (matchesKeywords(combinedNormalized, combinedCompact, ROUTER_KEYWORDS)) {
+  if (matchesKeywords(combinedNormalized, ROUTER_KEYWORDS)) {
     return "router";
   }
 
   if (
     runtime === "container" ||
-    matchesKeywords(nameNormalized, nameCompact, HOST_KEYWORDS)
+    matchesKeywords(nameNormalized, HOST_KEYWORDS)
   ) {
     return "host";
   }
