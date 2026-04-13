@@ -6,6 +6,14 @@ describe("guessDeviceRoleIcon", () => {
   it("classifies common device names deterministically", () => {
     expect(
       guessDeviceRoleIcon({
+        runtime: "cloud",
+        name: "Cloud",
+        vendor: "NetworkChum",
+      }),
+    ).toBe("cloud");
+
+    expect(
+      guessDeviceRoleIcon({
         runtime: "qemu",
         name: "Mgmt Network",
         vendor: "NetworkChum",
@@ -19,6 +27,14 @@ describe("guessDeviceRoleIcon", () => {
         vendor: "Cisco",
       }),
     ).toBe("firewall");
+
+    expect(
+      guessDeviceRoleIcon({
+        runtime: "qemu",
+        name: "Arista vEOS 4.33",
+        vendor: "Arista",
+      }),
+    ).toBe("switch");
 
     expect(
       guessDeviceRoleIcon({
@@ -48,6 +64,14 @@ describe("guessDeviceRoleIcon", () => {
       guessDeviceRoleIcon({
         runtime: "container",
         name: "Alpine Container",
+        vendor: "Linux",
+      }),
+    ).toBe("host");
+
+    expect(
+      guessDeviceRoleIcon({
+        runtime: "container",
+        name: "Ubuntu 22.04 Container",
         vendor: "Linux",
       }),
     ).toBe("host");
