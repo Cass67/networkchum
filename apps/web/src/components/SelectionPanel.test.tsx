@@ -121,6 +121,9 @@ describe("SelectionPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cloud Settings" }));
 
     expect(onEditCloudSettings).toHaveBeenCalledWith("cloud-1");
+    expect(
+      screen.queryByRole("button", { name: "Startup Config" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the auto backup checkbox for a selected lab", () => {

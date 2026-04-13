@@ -175,13 +175,15 @@ export function SelectionPanel(props: SelectionPanelProps) {
                 Power On
               </button>
             )}
-            <button
-              type="button"
-              className="btn"
-              onClick={() => props.onEditStartupConfig?.(selected.node.id)}
-            >
-              Startup Config
-            </button>
+            {selected.node.runtime !== "cloud" ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => props.onEditStartupConfig?.(selected.node.id)}
+              >
+                Startup Config
+              </button>
+            ) : null}
             {selected.node.runtime === "cloud" ? (
               <button
                 type="button"
