@@ -32,7 +32,6 @@ export function getCloudManagementCapability(
   platform: Platform = getPlatform(),
 ) {
   const networkBackend = getNetworkBackendForPlatform(platform);
-
   if (platform === "linux") {
     return {
       platform,
