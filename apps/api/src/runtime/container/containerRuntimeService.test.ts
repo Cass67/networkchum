@@ -12,14 +12,49 @@ describe("containerRuntimeService", () => {
     const hasBinary = vi.fn(async (command: string) =>
       ["podman", "docker"].includes(command),
     );
+    const runCommand = vi.fn(async (command: string) => ({
+      ok: ["podman", "docker"].includes(command),
+      stdout: "{}",
+      stderr: "",
+    }));
 
-    await expect(detectContainerEngine(hasBinary)).resolves.toBe("podman");
+    await expect(detectContainerEngine(hasBinary, runCommand)).resolves.toBe(
+      "podman",
+    );
   });
 
   it("falls back to docker when podman is unavailable", async () => {
     const hasBinary = vi.fn(async (command: string) => command === "docker");
+    const runCommand = vi.fn(async (command: string) => ({
+      ok: command === "docker",
+      stdout: "{}",
+      stderr: "",
+    }));
 
-    await expect(detectContainerEngine(hasBinary)).resolves.toBe("docker");
+    await expect(detectContainerEngine(hasBinary, runCommand)).resolves.toBe(
+      "docker",
+    );
+  });
+
+  it("falls back to docker when podman is installed but unreachable", async () => {
+    const hasBinary = vi.fn(async (command: string) =>
+      ["podman", "docker"].includes(command),
+    );
+    const runCommand = vi.fn(async (command: string) => {
+      if (command === "podman") {
+        return {
+          ok: false,
+          stdout: "",
+          stderr: "Cannot connect to Podman socket",
+        };
+      }
+
+      return { ok: true, stdout: "{}", stderr: "" };
+    });
+
+    await expect(detectContainerEngine(hasBinary, runCommand)).resolves.toBe(
+      "docker",
+    );
   });
 
   it("lists local images from the detected runtime", async () => {
