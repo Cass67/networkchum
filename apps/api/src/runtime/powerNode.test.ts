@@ -971,12 +971,13 @@ describe("powerOnNode", () => {
       });
 
       expect(state?.status).toBe("running");
+      const qemuState = state as RuntimeState | null;
       const interfaceCount = document.nodes[0]!.config.interfaceCount;
       const expectedNullBackends = Array.from(
         { length: interfaceCount },
         () => null,
       );
-      expect(state?.nicBackends).toEqual(expectedNullBackends);
+      expect(qemuState?.nicBackends).toEqual(expectedNullBackends);
 
       const savedStates = await listRuntimeStates(lab.id);
       const saved = savedStates.find((entry) => entry.nodeId === nodeId);
