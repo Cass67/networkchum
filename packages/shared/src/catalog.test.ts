@@ -20,6 +20,7 @@ describe("TemplateSchema", () => {
         vcpu: { default: 4, min: 2, max: 8 },
         interfaceCount: { default: 8, min: 4, max: 24 },
       },
+      deviceRoleIcon: "router",
     });
 
     expect(result.runtime).toBe("qemu");
@@ -40,9 +41,31 @@ describe("TemplateSchema", () => {
         vcpu: { default: 0, min: 0, max: 0 },
         interfaceCount: { default: 10, min: 1, max: 24 },
       },
+      deviceRoleIcon: "cloud",
     });
 
     expect(result.runtime).toBe("cloud");
+  });
+
+  it("preserves a deviceRoleIcon value", () => {
+    const result = TemplateSchema.parse({
+      id: "router-template",
+      runtime: "qemu",
+      displayName: "Router Template",
+      vendor: "NetworkChum",
+      boot: {
+        console: "serial",
+        acceleration: "kvm",
+      },
+      configSchema: {
+        ramMb: { default: 4096, min: 2048, max: 8192 },
+        vcpu: { default: 2, min: 1, max: 4 },
+        interfaceCount: { default: 4, min: 2, max: 8 },
+      },
+      deviceRoleIcon: "router",
+    });
+
+    expect(result.deviceRoleIcon).toBe("router");
   });
 });
 

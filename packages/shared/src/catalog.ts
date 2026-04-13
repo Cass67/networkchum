@@ -2,6 +2,15 @@ import { z } from "zod";
 
 import { RuntimeKindSchema } from "./topology.js";
 
+export const DeviceRoleIconSchema = z.enum([
+  "router",
+  "switch",
+  "firewall",
+  "cloud",
+  "host",
+  "client",
+]);
+
 const NumberLimitSchema = z.object({
   default: z.number().int().nonnegative(),
   min: z.number().int().nonnegative(),
@@ -13,6 +22,7 @@ export const TemplateSchema = z.object({
   runtime: RuntimeKindSchema,
   displayName: z.string().min(1),
   vendor: z.string().min(1),
+  deviceRoleIcon: DeviceRoleIconSchema,
   boot: z.object({
     console: z.enum(["serial", "vnc", "none"]),
     machineType: z.string().min(1).optional(),
