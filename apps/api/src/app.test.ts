@@ -150,6 +150,7 @@ describe("api", () => {
         vcpu: 2,
         ramMb: 1024,
         interfaceCount: 3,
+        deviceRoleIcon: "firewall",
       },
     });
 
@@ -162,6 +163,7 @@ describe("api", () => {
     const templatesPayload = templatesResponse.json() as {
       templates: Array<{
         id: string;
+        deviceRoleIcon?: string;
         configSchema: {
           ramMb: { default: number };
           vcpu: { default: number };
@@ -176,6 +178,7 @@ describe("api", () => {
     expect(updatedTemplate?.configSchema.vcpu.default).toBe(2);
     expect(updatedTemplate?.configSchema.ramMb.default).toBe(1024);
     expect(updatedTemplate?.configSchema.interfaceCount.default).toBe(3);
+    expect(updatedTemplate?.deviceRoleIcon).toBe("firewall");
 
     const catalogResponse = await app.inject({
       method: "GET",

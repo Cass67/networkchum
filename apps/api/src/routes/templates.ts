@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastifyPluginAsync } from "fastify";
 
 import { TemplateRegistry } from "../templates/templateRegistry.js";
+import { DeviceRoleIconSchema } from "../templates/deviceRoleIcon.js";
 
 export const templateRoutes: FastifyPluginAsync = async (app) => {
   const registry = new TemplateRegistry();
@@ -35,6 +36,7 @@ export const templateRoutes: FastifyPluginAsync = async (app) => {
           .int()
           .min(template.configSchema.interfaceCount.min)
           .max(template.configSchema.interfaceCount.max),
+        deviceRoleIcon: DeviceRoleIconSchema.optional(),
       })
       .parse(request.body);
 
