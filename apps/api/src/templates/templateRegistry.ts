@@ -12,6 +12,7 @@ type TemplateDefaults = {
   ramMb: number;
   vcpu: number;
   interfaceCount: number;
+  deviceRoleIcon?: Template["deviceRoleIcon"];
 };
 
 function applyTemplateOverride(
@@ -99,11 +100,24 @@ export class TemplateRegistry {
       return undefined;
     }
 
+    const baseDeviceRoleIcon =
+      baseTemplate.deviceRoleIcon ??
+      guessDeviceRoleIcon({
+        runtime: baseTemplate.runtime,
+        vendor: baseTemplate.vendor,
+        name: baseTemplate.displayName,
+        templateId: baseTemplate.id,
+      });
+
     const overrides = listTemplateOverrides();
     const existingOverride = overrides[templateId];
     const nextOverride: TemplateDefaultsOverride = {};
 
-    if (existingOverride?.deviceRoleIcon) {
+    if (defaults.deviceRoleIcon !== undefined) {
+      if (defaults.deviceRoleIcon !== baseDeviceRoleIcon) {
+        nextOverride.deviceRoleIcon = defaults.deviceRoleIcon;
+      }
+    } else if (existingOverride?.deviceRoleIcon) {
       nextOverride.deviceRoleIcon = existingOverride.deviceRoleIcon;
     }
 
