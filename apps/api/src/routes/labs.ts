@@ -22,6 +22,11 @@ import {
 } from "../labs/labService.js";
 import { getNodeAttachmentsForContainer } from "../network/dockerNetworking.js";
 import { deleteCable } from "../network/cableService.js";
+import {
+  detachRunningInterfaceFromBridge,
+  syncRunningCloudNodeBridgeInterface,
+  syncRunningNodesForInterfaces,
+} from "../network/liveTapTopology.js";
 import { detectAccelerationMode } from "../runtime/hostCapabilities.js";
 import { powerOffNode, powerOnNode } from "../runtime/powerNode.js";
 import { syncSocketTopology } from "../runtime/syncSocketTopology.js";
@@ -306,6 +311,12 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     const updatedLab = await updateLabDocument(params.labId, document);
     if (updatedLab) {
       await writeLabBackup(updatedLab);
+      await syncRunningNodesForInterfaces(
+        params.labId,
+        updatedLab.document,
+        body.interfaceIds,
+        options.runtime ?? {},
+      );
     }
     if (updatedLab) {
       await syncSocketTopology();
@@ -394,6 +405,13 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     const updatedLab = await updateLabDocument(params.labId, document);
     if (updatedLab) {
       await writeLabBackup(updatedLab);
+      await syncRunningCloudNodeBridgeInterface(
+        params.labId,
+        lab.document,
+        updatedLab.document,
+        params.nodeId,
+        options.runtime ?? {},
+      );
     }
     return reply.send({ lab: updatedLab });
   });
@@ -413,6 +431,12 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       const updatedLab = await updateLabDocument(params.labId, document);
       if (updatedLab) {
         void writeLabBackup(updatedLab);
+        await detachRunningInterfaceFromBridge(
+          params.labId,
+          lab.document,
+          params.interfaceId,
+          options.runtime ?? {},
+        );
       }
       if (updatedLab) {
         await syncSocketTopology();
@@ -438,9 +462,26 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     const params = z
       .object({ labId: z.string().min(1), networkId: z.string().min(1) })
       .parse(request.params);
+    const existingLab = await getManagedLab(params.labId);
+    if (!existingLab) {
+      return reply.code(404).send({ message: "Lab not found" });
+    }
+
+    const detachedInterfaceIds = existingLab.document.attachments
+      .filter((attachment) => attachment.networkId === params.networkId)
+      .map((attachment) => attachment.interfaceId);
     const lab = await deleteCable(params.labId, params.networkId);
     if (!lab) {
       return reply.code(404).send({ message: "Network not found" });
+    }
+
+    for (const interfaceId of detachedInterfaceIds) {
+      await detachRunningInterfaceFromBridge(
+        params.labId,
+        existingLab.document,
+        interfaceId,
+        options.runtime ?? {},
+      );
     }
 
     await syncSocketTopology();
