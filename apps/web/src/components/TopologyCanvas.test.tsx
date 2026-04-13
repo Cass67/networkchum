@@ -498,6 +498,30 @@ describe("TopologyCanvas", () => {
       ).toBeInTheDocument();
     });
 
+    it("closes the node context menu on a normal click elsewhere", () => {
+      render(
+        <TopologyCanvas labName="Lab" labId="lab-1" nodes={nodesWithIface} />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.contextMenu(screen.getByTestId("node-n1"), {
+        clientX: 100,
+        clientY: 98,
+      });
+
+      expect(
+        screen.getByRole("menuitem", { name: "Add Cable" }),
+      ).toBeInTheDocument();
+
+      fireEvent.mouseDown(svg, { clientX: 20, clientY: 20 });
+
+      expect(
+        screen.queryByRole("menuitem", { name: "Add Cable" }),
+      ).not.toBeInTheDocument();
+    });
+
     it("starts cable drawing from a node context-menu action", () => {
       render(
         <TopologyCanvas labName="Lab" labId="lab-1" nodes={nodesWithIface} />,
