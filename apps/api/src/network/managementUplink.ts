@@ -218,6 +218,35 @@ async function queryDefaultRoutes(
   return parseJsonArray<RouteInfo>(result.stdout);
 }
 
+async function queryBridgeMembers(
+  runCommand: RunCommand,
+  bridgeName: string,
+): Promise<LinkInfo[] | null> {
+  const result = await runCommand("ip", [
+    "-json",
+    "link",
+    "show",
+    "master",
+    bridgeName,
+  ]);
+  if (!result.ok) {
+    return null;
+  }
+
+  return parseJsonArray<LinkInfo>(result.stdout);
+}
+
+function isLikelyHostUplinkInterface(
+  interfaceName: string,
+  bridgeName: string,
+): boolean {
+  if (!interfaceName || interfaceName === bridgeName) {
+    return false;
+  }
+
+  return !/^(lo|tap|tun|veth|docker|virbr|vnet|nc-|br-)/.test(interfaceName);
+}
+
 async function resolveUplinkName(
   runCommand: RunCommand,
   bridgeName: string,
@@ -237,7 +266,24 @@ async function resolveUplinkName(
       candidate.dev &&
       candidate.dev !== bridgeName,
   );
-  return route?.dev ?? null;
+  if (route?.dev) {
+    return route.dev;
+  }
+
+  const bridgeRoute = routes?.find(
+    (candidate) =>
+      (candidate.dst === "default" || candidate.dst === undefined) &&
+      candidate.dev === bridgeName,
+  );
+  if (!bridgeRoute) {
+    return null;
+  }
+
+  const bridgeMembers = await queryBridgeMembers(runCommand, bridgeName);
+  const member = bridgeMembers?.find((candidate) =>
+    isLikelyHostUplinkInterface(candidate.ifname, bridgeName),
+  );
+  return member?.ifname ?? null;
 }
 
 export async function ensureManagementBridgeUplink(
@@ -255,6 +301,20 @@ export async function ensureManagementBridgeUplink(
   const bridgeName = "nc-mgmt";
   const uplinkName = await resolveUplinkName(runCommand, bridgeName);
   if (!uplinkName) {
+    const [bridgeAddresses, defaultRoutes] = await Promise.all([
+      queryAddressInfo(runCommand, bridgeName),
+      queryDefaultRoutes(runCommand),
+    ]);
+
+    if (
+      bridgeAddresses &&
+      defaultRoutes &&
+      ipv4Cidrs(bridgeAddresses).length > 0 &&
+      defaultRoutesForInterface(defaultRoutes, bridgeName).length > 0
+    ) {
+      return { ok: true };
+    }
+
     return {
       ok: false,
       message:
