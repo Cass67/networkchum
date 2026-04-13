@@ -61,10 +61,9 @@ type TopologyCanvasProps = {
 const NODE_WIDTH = 100;
 const NODE_HEIGHT = 48;
 const NODE_GLYPH_SIZE = 40;
-const NODE_GLYPH_RADIUS = NODE_GLYPH_SIZE / 2;
 const NODE_LABEL_GAP = 16;
 const NODE_STATUS_GAP = 14;
-const NODE_ICON_SIZE = 16;
+const NODE_ICON_BASE_SIZE = 16;
 function getNodeCenter(node: CanvasNode): { x: number; y: number } {
   return {
     x: (node.position?.x ?? 32) + NODE_WIDTH / 2,
@@ -835,8 +834,6 @@ export function TopologyCanvas({
               const x = node.position?.x ?? 32;
               const y = node.position?.y ?? 32;
               const center = getNodeCenter(node);
-              const labelY = center.y + NODE_GLYPH_RADIUS + NODE_LABEL_GAP;
-              const statusY = labelY + NODE_STATUS_GAP;
               const status =
                 nodeStatuses[node.id] ??
                 (node.state?.desiredPower === "on" ? "running" : "stopped");
@@ -853,6 +850,10 @@ export function TopologyCanvas({
                 : borderColor;
               const glowColor =
                 isSelected || status === "running" ? outlineColor : null;
+              const labelY = center.y + NODE_GLYPH_SIZE / 2 + NODE_LABEL_GAP;
+              const statusY = labelY + NODE_STATUS_GAP;
+              const hitboxHeight = statusY - y + 10;
+              const iconScale = NODE_GLYPH_SIZE / NODE_ICON_BASE_SIZE;
 
               return (
                 <g
@@ -865,27 +866,20 @@ export function TopologyCanvas({
                     x={x}
                     y={y}
                     width={NODE_WIDTH}
-                    height={NODE_HEIGHT}
+                    height={hitboxHeight}
                     fill="transparent"
                     data-testid={`node-hitbox-${node.id}`}
                   />
-                  <circle
-                    cx={center.x}
-                    cy={center.y}
-                    r={NODE_GLYPH_RADIUS}
-                    fill="var(--canvas-node-fill)"
-                    stroke={outlineColor}
-                    strokeWidth={isSelected ? 3 : 2}
-                    data-testid={`node-body-${node.id}`}
-                    style={
-                      glowColor
-                        ? { filter: `drop-shadow(0 0 6px ${glowColor})` }
-                        : undefined
-                    }
-                  />
                   <g
-                    transform={`translate(${center.x - NODE_ICON_SIZE / 2} ${center.y - NODE_ICON_SIZE / 2})`}
-                    style={{ color: "var(--canvas-node-text)" }}
+                    data-testid={`node-body-${node.id}`}
+                    data-outline-color={outlineColor}
+                    transform={`translate(${center.x - NODE_GLYPH_SIZE / 2} ${center.y - NODE_GLYPH_SIZE / 2}) scale(${iconScale})`}
+                    style={{
+                      color: outlineColor,
+                      filter: glowColor
+                        ? `drop-shadow(0 0 6px ${glowColor})`
+                        : undefined,
+                    }}
                     pointerEvents="none"
                   >
                     {node.deviceRoleIcon ? (
@@ -907,7 +901,6 @@ export function TopologyCanvas({
                     dominantBaseline="central"
                     fontSize={12}
                     fill="var(--canvas-node-text)"
-                    pointerEvents="none"
                   >
                     {node.name}
                   </text>
@@ -918,7 +911,6 @@ export function TopologyCanvas({
                     fontSize={10}
                     fill={borderColor}
                     data-testid={`status-${node.id}`}
-                    pointerEvents="none"
                   >
                     {status}
                   </text>

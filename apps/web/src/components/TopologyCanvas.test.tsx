@@ -108,7 +108,7 @@ describe("TopologyCanvas", () => {
 
     expect(screen.getByTestId("status-n1")).toHaveTextContent("running");
     expect(screen.getByTestId("status-n2")).toHaveTextContent("stopped");
-    expect(screen.getByTestId("status-n1")).toHaveAttribute("y", "124");
+    expect(Number(screen.getByTestId("status-n1").getAttribute("y"))).toBe(124);
   });
 
   it("shows default stopped status when no nodeStatuses", () => {
@@ -154,9 +154,10 @@ describe("TopologyCanvas", () => {
     expect(
       screen.getByTestId("canvas-node-firewall-node-1"),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("node-body-node-1").tagName.toLowerCase()).toBe(
-      "circle",
-    );
+    const nodeGroup = screen.getByTestId("node-node-1");
+    expect(
+      nodeGroup.querySelector('rect[fill="var(--canvas-node-fill)"]'),
+    ).toBeNull();
   });
 
   it("renders cloud icon for cloud nodes", () => {
@@ -291,7 +292,26 @@ describe("TopologyCanvas", () => {
     );
 
     const body = screen.getByTestId("node-body-n1");
-    expect(body).toHaveAttribute("stroke", "var(--canvas-node-selected)");
+    expect(body).toHaveAttribute(
+      "data-outline-color",
+      "var(--canvas-node-selected)",
+    );
+  });
+
+  it("keeps node labels clickable for selection", () => {
+    const onSelectNode = vi.fn();
+    render(
+      <TopologyCanvas
+        labName="Lab"
+        labId="lab-1"
+        nodes={nodes}
+        onSelectNode={onSelectNode}
+      />,
+    );
+
+    fireEvent.mouseDown(screen.getByText("Router-1"));
+
+    expect(onSelectNode).toHaveBeenCalledWith("n1");
   });
 
   describe("drag", () => {
