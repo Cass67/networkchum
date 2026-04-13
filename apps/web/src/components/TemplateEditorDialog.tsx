@@ -30,7 +30,7 @@ type TemplateEditorDialogProps = {
     vcpu: number;
     ramMb: number;
     interfaceCount: number;
-    deviceRoleIcon: DeviceRoleIcon;
+    deviceRoleIcon?: DeviceRoleIcon;
   }) => Promise<void>;
   onCancel: () => void;
 };
@@ -50,18 +50,26 @@ export function TemplateEditorDialog({
   const [deviceRoleIcon, setDeviceRoleIcon] = useState<DeviceRoleIcon>(
     template.deviceRoleIcon ?? roleIconOptions[0],
   );
+  const [roleIconTouched, setRoleIconTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    const nextValues = {
+    const nextValues: {
+      vcpu: number;
+      ramMb: number;
+      interfaceCount: number;
+      deviceRoleIcon?: DeviceRoleIcon;
+    } = {
       vcpu: Number.parseInt(vcpu, 10),
       ramMb: Number.parseInt(ramMb, 10),
       interfaceCount: Number.parseInt(interfaceCount, 10),
-      deviceRoleIcon,
     };
+    if (roleIconTouched) {
+      nextValues.deviceRoleIcon = deviceRoleIcon;
+    }
 
     if (
       Number.isNaN(nextValues.vcpu) ||
@@ -78,6 +86,7 @@ export function TemplateEditorDialog({
       await onSubmit(nextValues);
     } catch {
       setError("Failed to save template");
+    } finally {
       setSaving(false);
     }
   }
@@ -103,9 +112,10 @@ export function TemplateEditorDialog({
               <span className="field-label">Role Icon</span>
               <select
                 value={deviceRoleIcon}
-                onChange={(event) =>
-                  setDeviceRoleIcon(event.target.value as DeviceRoleIcon)
-                }
+                onChange={(event) => {
+                  setDeviceRoleIcon(event.target.value as DeviceRoleIcon);
+                  setRoleIconTouched(true);
+                }}
                 className="field-input"
                 disabled={saving}
               >

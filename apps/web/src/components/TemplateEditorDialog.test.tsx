@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -41,7 +42,7 @@ describe("TemplateEditorDialog", () => {
     const roleSelect = screen.getByLabelText("Role Icon");
     expect(roleSelect).toBeInTheDocument();
     expect(
-      screen
+      within(roleSelect)
         .getAllByRole("option")
         .map((option) => option.getAttribute("value")),
     ).toEqual(["router", "switch", "firewall", "cloud", "host", "client"]);
@@ -55,6 +56,39 @@ describe("TemplateEditorDialog", () => {
         ramMb: 2048,
         interfaceCount: 4,
         deviceRoleIcon: "firewall",
+      });
+    });
+  });
+
+  it("omits deviceRoleIcon when the selection is unchanged", async () => {
+    const onSubmit = vi.fn(async () => {});
+
+    render(
+      <TemplateEditorDialog
+        template={{
+          id: "template-2",
+          name: "Generic VM",
+          source: "built-in",
+          vendor: "NetCorp",
+          runtime: "qemu",
+          configSchema: {
+            ramMb: { default: 1024, min: 512, max: 4096 },
+            vcpu: { default: 1, min: 1, max: 4 },
+            interfaceCount: { default: 2, min: 1, max: 16 },
+          },
+        }}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save Template" }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({
+        vcpu: 1,
+        ramMb: 1024,
+        interfaceCount: 2,
       });
     });
   });

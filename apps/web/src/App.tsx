@@ -1562,7 +1562,8 @@ export function App({
               vendor: nextTemplate.vendor,
               runtime: nextTemplate.runtime,
               configSchema: nextTemplate.configSchema,
-              deviceRoleIcon: nextTemplate.deviceRoleIcon,
+              deviceRoleIcon:
+                nextTemplate.deviceRoleIcon ?? entry.deviceRoleIcon,
             }
           : entry,
       ),
@@ -2413,7 +2414,7 @@ export function App({
           template={editingTemplate}
           onSubmit={async (input) => {
             if (!api.updateTemplate) {
-              return;
+              throw new Error("Template updates unavailable");
             }
             const nextTemplate = await api.updateTemplate(
               editingTemplate.id,
