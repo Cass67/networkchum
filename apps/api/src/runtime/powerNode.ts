@@ -599,11 +599,10 @@ export async function powerOnNode(
 
     if (result.ok) {
       console.log(`[powerNode] container started: ${result.stdout.trim()}`);
-      const containerId = result.stdout.trim() || containerName;
       for (let i = 1; i < attachments.length; i += 1) {
         const connectCmd = buildDockerNetworkConnectCommand(
           attachments[i]!.networkId,
-          containerId,
+          containerName,
           engine,
         );
         await runCommand(connectCmd[0]!, connectCmd.slice(1));
@@ -620,7 +619,7 @@ export async function powerOnNode(
       accelerationMode: node.config.accelerationMode ?? null,
       externalId: result.ok ? result.stdout.trim() || containerName : null,
       connectCommand: result.ok
-        ? [engine, "exec", "-it", result.stdout.trim() || containerName, shell]
+        ? [engine, "exec", "-it", containerName, shell]
         : undefined,
       message: result.ok ? null : result.stderr,
       commandPreview: spec.command,

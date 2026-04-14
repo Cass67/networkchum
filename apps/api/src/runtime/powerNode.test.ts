@@ -682,7 +682,7 @@ describe("powerOnNode", () => {
       "docker",
       "exec",
       "-it",
-      "container-id-123",
+      `networkchum-${lab.id}-${nodeId}`,
       "sh",
     ]);
   });
