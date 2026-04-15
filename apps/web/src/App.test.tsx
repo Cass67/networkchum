@@ -375,6 +375,76 @@ describe("App", () => {
     });
   });
 
+  it("shows full qemu template choices in the upload image dialog even when the devices catalog is filtered", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [
+        {
+          id: "cloud",
+          name: "Cloud (External Network)",
+          source: "built-in",
+          runtime: "cloud",
+        },
+      ],
+      listTemplates: async () => [
+        {
+          id: "cisco-iosv",
+          name: "Cisco IOSv",
+          source: "built-in",
+          runtime: "qemu",
+        },
+        {
+          id: "arista-veos",
+          name: "Arista vEOS",
+          source: "built-in",
+          runtime: "qemu",
+        },
+        {
+          id: "cloud",
+          name: "Cloud (External Network)",
+          source: "built-in",
+          runtime: "cloud",
+        },
+      ],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Images" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upload Image" }));
+
+    const deviceType = await screen.findByLabelText("Device type");
+
+    expect(deviceType).toHaveValue("cisco-iosv");
+    expect(
+      screen.getByRole("option", { name: "Cisco IOSv" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Arista vEOS" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Cloud (External Network)" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows running-config backup summary for a focused node", async () => {
     const listRunningConfigBackups = vi.fn(async () => [
       {

@@ -82,6 +82,25 @@ type CatalogSummary = {
   };
 };
 
+type TemplateSummary = {
+  id: string;
+  name: string;
+  vendor?: string;
+  runtime?: string;
+  deviceRoleIcon?: DeviceRoleIcon;
+  container?: {
+    imageRef: string;
+    registry: string;
+    engine?: ContainerEngine;
+    defaultShell?: string;
+  };
+  configSchema?: {
+    ramMb: { default: number; min: number; max: number };
+    vcpu: { default: number; min: number; max: number };
+    interfaceCount: { default: number; min: number; max: number };
+  };
+};
+
 type EditableCatalogSummary = CatalogSummary & {
   configSchema: {
     ramMb: { default: number; min: number; max: number };
@@ -127,6 +146,7 @@ type LabDocumentData = {
 type ApiClient = {
   listLabs: () => Promise<LabSummary[]>;
   listCatalog: () => Promise<CatalogSummary[]>;
+  listTemplates?: () => Promise<TemplateSummary[]>;
   getContainerRuntime?: () => Promise<{
     engine: ContainerEngine | null;
     available: boolean;
@@ -674,6 +694,26 @@ function hasEditableConfig(
   return entry.configSchema !== undefined;
 }
 
+function deriveImageBindableTemplates(
+  templates: Array<TemplateSummary | CatalogSummary>,
+) {
+  const uniqueTemplates = new Map<string, { id: string; name: string }>();
+  for (const template of templates) {
+    if (template.runtime !== "qemu") {
+      continue;
+    }
+
+    if (!uniqueTemplates.has(template.id)) {
+      uniqueTemplates.set(template.id, {
+        id: template.id,
+        name: template.name,
+      });
+    }
+  }
+
+  return [...uniqueTemplates.values()];
+}
+
 function resolveEffectiveContainerDetails(
   node: LabNodeData,
   catalog: CatalogSummary[],
@@ -711,6 +751,9 @@ const defaultApi: ApiClient = browserApi ?? {
     return demoLabs;
   },
   async listCatalog() {
+    return demoCatalog;
+  },
+  async listTemplates() {
     return demoCatalog;
   },
   async getContainerRuntime() {
@@ -1087,6 +1130,9 @@ export function App({
   const [newTerminalTemplate, setNewTerminalTemplate] = useState("");
   const [labs, setLabs] = useState<LabSummary[]>([]);
   const [catalog, setCatalog] = useState<CatalogSummary[]>(demoCatalog);
+  const [imageBindableTemplates, setImageBindableTemplates] = useState<
+    Array<{ id: string; name: string }>
+  >(deriveImageBindableTemplates(demoCatalog));
   const [nodeStatuses, setNodeStatuses] = useState<Record<string, string>>({});
   const [nodeConnectCommands, setNodeConnectCommands] = useState<
     Record<string, string[]>
@@ -1278,15 +1324,21 @@ export function App({
     void Promise.all([
       api.listLabs(),
       api.listCatalog(),
+      api.listTemplates?.() ?? Promise.resolve([]),
       api.listImages?.() ?? Promise.resolve([]),
     ])
-      .then(([nextLabs, nextCatalog, nextImages]) => {
+      .then(([nextLabs, nextCatalog, nextTemplates, nextImages]) => {
         if (cancelled) {
           return;
         }
 
         setLabs(nextLabs);
         setCatalog(nextCatalog);
+        setImageBindableTemplates(
+          deriveImageBindableTemplates(
+            nextTemplates.length > 0 ? nextTemplates : nextCatalog,
+          ),
+        );
         setImages(nextImages);
         setSelectedLabId((current) => {
           if (current && nextLabs.length === 0) {
@@ -1307,6 +1359,7 @@ export function App({
 
         setLabs(demoLabs);
         setCatalog(demoCatalog);
+        setImageBindableTemplates(deriveImageBindableTemplates(demoCatalog));
         setImages([]);
       });
 
@@ -1923,6 +1976,13 @@ export function App({
           : entry,
       ),
     );
+    setImageBindableTemplates((current) =>
+      current.map((entry) =>
+        entry.id === nextTemplate.id
+          ? { id: entry.id, name: nextTemplate.name }
+          : entry,
+      ),
+    );
   }
 
   async function handlePowerOffNode(nodeId: string) {
@@ -2369,10 +2429,7 @@ export function App({
           {leftTab === "images" && (
             <ImageLibrary
               images={images}
-              templates={catalog.map((entry) => ({
-                id: entry.id,
-                name: entry.name,
-              }))}
+              templates={imageBindableTemplates}
               onSelectImage={(imageId) => {
                 setSelectedImageId(imageId);
                 setSelectedNodeId(null);

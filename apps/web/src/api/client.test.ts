@@ -45,6 +45,43 @@ describe("createApiClient", () => {
     ]);
   });
 
+  it("loads the full template registry from the backend", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        templates: [
+          {
+            id: "cisco-iosv",
+            displayName: "Cisco IOSv",
+            vendor: "Cisco",
+            runtime: "qemu",
+            configSchema: {
+              ramMb: { default: 2048, min: 1024, max: 8192 },
+              vcpu: { default: 1, min: 1, max: 4 },
+              interfaceCount: { default: 4, min: 1, max: 16 },
+            },
+          },
+        ],
+      }),
+    }));
+
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+
+    await expect(client.listTemplates()).resolves.toEqual([
+      {
+        id: "cisco-iosv",
+        name: "Cisco IOSv",
+        vendor: "Cisco",
+        runtime: "qemu",
+        configSchema: {
+          ramMb: { default: 2048, min: 1024, max: 8192 },
+          vcpu: { default: 1, min: 1, max: 4 },
+          interfaceCount: { default: 4, min: 1, max: 16 },
+        },
+      },
+    ]);
+  });
+
   it("loads labs from the backend", async () => {
     const fetcher = vi.fn(async () => ({
       ok: true,

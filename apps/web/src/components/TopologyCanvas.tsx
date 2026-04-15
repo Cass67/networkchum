@@ -988,8 +988,6 @@ export function TopologyCanvas({
               const outlineColor = isSelected
                 ? "var(--canvas-node-selected)"
                 : borderColor;
-              const glowColor =
-                isSelected || status === "running" ? outlineColor : null;
               const labelY = center.y + NODE_GLYPH_SIZE / 2 + NODE_LABEL_GAP;
               const statusY = getNodeStatusY(node);
               const hitboxHeight = statusY - y + 10;
@@ -1016,9 +1014,6 @@ export function TopologyCanvas({
                     transform={`translate(${center.x - NODE_GLYPH_SIZE / 2} ${center.y - NODE_GLYPH_SIZE / 2}) scale(${iconScale})`}
                     style={{
                       color: outlineColor,
-                      filter: glowColor
-                        ? `drop-shadow(0 0 6px ${glowColor})`
-                        : undefined,
                     }}
                     pointerEvents="none"
                   >

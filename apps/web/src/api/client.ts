@@ -61,6 +61,25 @@ type CatalogSummary = {
   };
 };
 
+type TemplateSummary = {
+  id: string;
+  name: string;
+  vendor?: string;
+  runtime?: string;
+  deviceRoleIcon?: DeviceRoleIcon;
+  container?: {
+    imageRef: string;
+    registry: string;
+    engine?: ContainerEngine;
+    defaultShell?: string;
+  };
+  configSchema?: {
+    ramMb: { default: number; min: number; max: number };
+    vcpu: { default: number; min: number; max: number };
+    interfaceCount: { default: number; min: number; max: number };
+  };
+};
+
 type ImageRecordSummary = {
   id: string;
   name: string;
@@ -188,6 +207,15 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
         ...mapTemplateSummary(entry.template),
         source: entry.source,
       }));
+    },
+
+    async listTemplates(): Promise<TemplateSummary[]> {
+      const response = await fetcher(`${baseUrl}/templates`);
+      const payload = await parseResponse<{
+        templates: TemplatePayload[];
+      }>(response as Response);
+
+      return payload.templates.map((template) => mapTemplateSummary(template));
     },
 
     async getContainerRuntime(): Promise<{
