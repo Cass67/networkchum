@@ -1014,6 +1014,7 @@ export function TopologyCanvas({
                     transform={`translate(${center.x - NODE_GLYPH_SIZE / 2} ${center.y - NODE_GLYPH_SIZE / 2}) scale(${iconScale})`}
                     style={{
                       color: outlineColor,
+                      filter: "none",
                     }}
                     pointerEvents="none"
                   >

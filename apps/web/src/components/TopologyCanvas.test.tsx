@@ -352,7 +352,7 @@ describe("TopologyCanvas", () => {
       "data-outline-color",
       "var(--canvas-node-selected)",
     );
-    expect(body.getAttribute("style") ?? "").not.toContain("filter:");
+    expect(body.getAttribute("style") ?? "").toContain("filter: none;");
   });
 
   it("keeps node labels clickable for selection", () => {
