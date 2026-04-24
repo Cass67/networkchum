@@ -4,6 +4,7 @@ import type { LabDocument } from "@networkchum/shared";
 
 import {
   addNode,
+  attachInterfaces,
   detachInterface,
   moveNode,
   removeNetwork,
@@ -126,6 +127,36 @@ describe("detachInterface", () => {
     expect(result.attachments).toEqual([
       { interfaceId: "if-1", networkId: "net-1" },
       { interfaceId: "if-3", networkId: "net-1" },
+    ]);
+  });
+});
+
+describe("attachInterfaces", () => {
+  it("does not move an interface that is already attached to another network", () => {
+    const doc = makeDocument({
+      attachments: [{ interfaceId: "if-1", networkId: "net-existing" }],
+    });
+
+    expect(() =>
+      attachInterfaces(doc, {
+        networkId: "net-new",
+        interfaceIds: ["if-1"],
+      }),
+    ).toThrow(/already attached/i);
+  });
+
+  it("is idempotent when attaching an interface to its current network", () => {
+    const doc = makeDocument({
+      attachments: [{ interfaceId: "if-1", networkId: "net-1" }],
+    });
+
+    const result = attachInterfaces(doc, {
+      networkId: "net-1",
+      interfaceIds: ["if-1"],
+    });
+
+    expect(result.attachments).toEqual([
+      { interfaceId: "if-1", networkId: "net-1" },
     ]);
   });
 });

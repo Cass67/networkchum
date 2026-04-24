@@ -40,6 +40,7 @@ import {
   deleteStartupConfigSet,
   detachInterface,
   moveNode,
+  renameNode,
   removeNodeConfig,
   setActiveConfigSet,
   setNodeBootActions,
@@ -58,6 +59,10 @@ const createLabSchema = z.object({
 });
 
 const renameLabSchema = z.object({
+  name: z.string().trim().min(1),
+});
+
+const renameNodeSchema = z.object({
   name: z.string().trim().min(1),
 });
 
@@ -420,7 +425,15 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       return reply.code(404).send({ message: "Lab not found" });
     }
 
-    const document = attachInterfaces(lab.document, body);
+    let document;
+    try {
+      document = attachInterfaces(lab.document, body);
+    } catch (error) {
+      if (error instanceof Error && /already attached/i.test(error.message)) {
+        return reply.code(409).send({ message: error.message });
+      }
+      throw error;
+    }
     const updatedLab = await updateLabDocument(params.labId, document);
     if (updatedLab) {
       await writeLabBackup(updatedLab);
@@ -448,6 +461,31 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     }
 
     const document = moveNode(lab.document, params.nodeId, body);
+    const updatedLab = await updateLabDocument(params.labId, document);
+    if (updatedLab) {
+      await writeLabBackup(updatedLab);
+    }
+    return reply.send({ lab: updatedLab });
+  });
+
+  app.patch("/labs/:labId/nodes/:nodeId", async (request, reply) => {
+    const params = z
+      .object({ labId: z.string().min(1), nodeId: z.string().min(1) })
+      .parse(request.params);
+    const body = renameNodeSchema.parse(request.body);
+    const lab = await getManagedLab(params.labId);
+    if (!lab) {
+      return reply.code(404).send({ message: "Lab not found" });
+    }
+
+    const nodeExists = lab.document.nodes.some(
+      (node) => node.id === params.nodeId,
+    );
+    if (!nodeExists) {
+      return reply.code(404).send({ message: "Node not found" });
+    }
+
+    const document = renameNode(lab.document, params.nodeId, body.name);
     const updatedLab = await updateLabDocument(params.labId, document);
     if (updatedLab) {
       await writeLabBackup(updatedLab);

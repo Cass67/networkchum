@@ -1,5 +1,11 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LabDetails } from "./LabDetails.js";
@@ -83,5 +89,46 @@ describe("LabDetails", () => {
     expect(
       screen.getByRole("button", { name: "Disconnect Native Console" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows only the selected node when a node is focused", () => {
+    render(
+      <LabDetails
+        labName="Lab"
+        nodes={[
+          { id: "node-1", name: "veos-1" },
+          { id: "node-2", name: "veos-2" },
+        ]}
+        selectedNodeId="node-1"
+      />,
+    );
+
+    expect(screen.getAllByText("veos-1").length).toBeGreaterThan(0);
+    expect(screen.queryByText("veos-2")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Power On veos-2" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("supports inline node rename from the device row", async () => {
+    const onRenameNode = vi.fn(async () => undefined);
+
+    render(
+      <LabDetails
+        labName="Lab"
+        nodes={[{ id: "node-1", name: "veos-1" }]}
+        onRenameNode={onRenameNode}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Name veos-1" }));
+
+    const input = screen.getByLabelText("Rename veos-1");
+    fireEvent.change(input, { target: { value: "veos-edge-1" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(onRenameNode).toHaveBeenCalledWith("node-1", "veos-edge-1");
+    });
   });
 });

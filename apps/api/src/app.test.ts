@@ -1164,6 +1164,78 @@ describe("api", () => {
     expect(payload.lab.document.attachments).toHaveLength(2);
   });
 
+  it("rejects attaching an interface that is already in use", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Port Conflict Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const addNodeResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes`,
+      payload: {
+        templateId: "cisco-iosv",
+        name: "host-1",
+        position: { x: 10, y: 10 },
+      },
+    });
+    const node = (
+      addNodeResponse.json() as {
+        lab: {
+          document: {
+            nodes: Array<{ id: string; interfaces: Array<{ id: string }> }>;
+          };
+        };
+      }
+    ).lab.document.nodes[0]!;
+
+    const firstNetworkResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/networks`,
+      payload: { name: "first-link", visible: false },
+    });
+    const firstNetworkId = (
+      firstNetworkResponse.json() as { network: { id: string } }
+    ).network.id;
+
+    const secondNetworkResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/networks`,
+      payload: { name: "second-link", visible: false },
+    });
+    const secondNetworkId = (
+      secondNetworkResponse.json() as { network: { id: string } }
+    ).network.id;
+
+    await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/attachments`,
+      payload: {
+        networkId: firstNetworkId,
+        interfaceIds: [node.interfaces[0]!.id],
+      },
+    });
+
+    const conflictResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/attachments`,
+      payload: {
+        networkId: secondNetworkId,
+        interfaceIds: [node.interfaces[0]!.id],
+      },
+    });
+
+    expect(conflictResponse.statusCode).toBe(409);
+    expect(conflictResponse.json()).toMatchObject({
+      message: expect.stringMatching(/already attached/i),
+    });
+    expect((await getLab(labId))?.document.attachments).toEqual([
+      { interfaceId: node.interfaces[0]!.id, networkId: firstNetworkId },
+    ]);
+  });
+
   it("powers on and off a node while tracking runtime state", async () => {
     const createLabResponse = await app.inject({
       method: "POST",
@@ -1569,6 +1641,37 @@ describe("api", () => {
     expect(response.statusCode).toBe(200);
     expect((await getLab(labId))?.name).toBe("Renamed Lab");
     expect((await getLab(labId))?.document.name).toBe("Renamed Lab");
+  });
+
+  it("renames a node", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Node Rename Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes`,
+      payload: {
+        templateId: "linux-alpine-container",
+        name: "old-node",
+        position: { x: 10, y: 10 },
+      },
+    });
+
+    const nodeId = (await getLab(labId))?.document.nodes[0]?.id;
+    expect(nodeId).toBeTruthy();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/labs/${labId}/nodes/${nodeId}`,
+      payload: { name: "new-node" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect((await getLab(labId))?.document.nodes[0]?.name).toBe("new-node");
   });
 
   it("uploads a qcow2 image into managed storage", async () => {

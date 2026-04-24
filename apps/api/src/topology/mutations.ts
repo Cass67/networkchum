@@ -118,6 +118,19 @@ export function moveNode(
   };
 }
 
+export function renameNode(
+  document: LabDocument,
+  nodeId: string,
+  name: string,
+): LabDocument {
+  return {
+    ...document,
+    nodes: document.nodes.map((node) =>
+      node.id === nodeId ? { ...node, name } : node,
+    ),
+  };
+}
+
 export function setNodeBridgeInterface(
   document: LabDocument,
   nodeId: string,
@@ -167,12 +180,30 @@ export function attachInterfaces(
   document: LabDocument,
   input: { networkId: string; interfaceIds: string[] },
 ): LabDocument {
-  const nextAttachments = document.attachments.filter(
-    (attachment) => !input.interfaceIds.includes(attachment.interfaceId),
+  const existingNetworkByInterface = new Map(
+    document.attachments.map((attachment) => [
+      attachment.interfaceId,
+      attachment.networkId,
+    ]),
+  );
+  const nextAttachments = [...document.attachments];
+  const existingAttachmentKeys = new Set(
+    document.attachments.map(
+      (attachment) => `${attachment.interfaceId}:${attachment.networkId}`,
+    ),
   );
 
   for (const interfaceId of input.interfaceIds) {
-    nextAttachments.push({ interfaceId, networkId: input.networkId });
+    const existingNetworkId = existingNetworkByInterface.get(interfaceId);
+    if (existingNetworkId && existingNetworkId !== input.networkId) {
+      throw new Error(`Interface ${interfaceId} is already attached`);
+    }
+
+    const attachmentKey = `${interfaceId}:${input.networkId}`;
+    if (!existingAttachmentKeys.has(attachmentKey)) {
+      nextAttachments.push({ interfaceId, networkId: input.networkId });
+      existingAttachmentKeys.add(attachmentKey);
+    }
   }
 
   return {

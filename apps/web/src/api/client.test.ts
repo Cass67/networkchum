@@ -258,4 +258,33 @@ describe("createApiClient", () => {
     expect(template.configSchema.ramMb.default).toBe(4096);
     expect(template.configSchema.interfaceCount.default).toBe(6);
   });
+
+  it("renames a node through the backend", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        lab: {
+          id: "lab-1",
+          name: "Fetched Lab",
+          document: {
+            nodes: [{ id: "node-1", name: "edge-1" }],
+            networks: [],
+            attachments: [],
+          },
+        },
+      }),
+    }));
+
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+    const lab = await client.renameNode("lab-1", "node-1", "edge-1");
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/labs/lab-1/nodes/node-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ name: "edge-1" }),
+      }),
+    );
+    expect(lab.document.nodes[0]?.name).toBe("edge-1");
+  });
 });

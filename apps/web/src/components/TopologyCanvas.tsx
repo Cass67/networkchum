@@ -56,6 +56,7 @@ type TopologyCanvasProps = {
   onPowerOnNode?: (nodeId: string) => void;
   onPowerOffNode?: (nodeId: string) => void;
   onOpenNativeConsole?: (nodeId: string) => void;
+  onRenameNode?: (nodeId: string) => void;
 };
 
 const NODE_WIDTH = 100;
@@ -90,6 +91,17 @@ function getNodeCableAnchor(
   const dx = target.x - center.x;
   const dy = target.y - center.y;
 
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return {
+      x:
+        center.x +
+        (dx >= 0
+          ? NODE_GLYPH_SIZE / 2 + NODE_CABLE_ANCHOR_GAP
+          : -(NODE_GLYPH_SIZE / 2 + NODE_CABLE_ANCHOR_GAP)),
+      y: center.y,
+    };
+  }
+
   if (dy > 0) {
     return {
       x: center.x,
@@ -105,12 +117,8 @@ function getNodeCableAnchor(
   }
 
   return {
-    x:
-      center.x +
-      (dx >= 0
-        ? NODE_GLYPH_SIZE / 2 + NODE_CABLE_ANCHOR_GAP
-        : -(NODE_GLYPH_SIZE / 2 + NODE_CABLE_ANCHOR_GAP)),
-    y: center.y,
+    x: center.x,
+    y: center.y - NODE_GLYPH_SIZE / 2 - NODE_CABLE_ANCHOR_GAP,
   };
 }
 
@@ -334,6 +342,7 @@ export function TopologyCanvas({
   onPowerOnNode,
   onPowerOffNode,
   onOpenNativeConsole,
+  onRenameNode,
 }: TopologyCanvasProps) {
   const svgWidth = 1440;
   const svgHeight = 900;
@@ -405,7 +414,7 @@ export function TopologyCanvas({
       if (!node?.interfaces?.length) return "";
       return (
         node.interfaces.find((iface) => !attachedInterfaceIds.has(iface.id))
-          ?.id ?? node.interfaces[0]!.id
+          ?.id ?? ""
       );
     },
     [attachedInterfaceIds],
@@ -830,13 +839,15 @@ export function TopologyCanvas({
                 });
               },
             },
+            { label: "Rename", onSelect: () => onRenameNode?.(nodeId) },
             status === "running"
               ? { label: "Power Off", onSelect: () => onPowerOffNode?.(nodeId) }
               : { label: "Power On", onSelect: () => onPowerOnNode?.(nodeId) },
             { label: "Delete Node", onSelect: () => onDeleteNode?.(nodeId) },
           ],
         });
-        onSelectNode?.(nodeId);
+        syncSingleSelection(nodeId);
+        onSelectCable?.(null);
         return;
       }
 
@@ -850,9 +861,10 @@ export function TopologyCanvas({
       onDeleteNode,
       onPowerOffNode,
       onPowerOnNode,
+      onRenameNode,
       onSelectCable,
-      onSelectNode,
       resolvedNodes,
+      syncSingleSelection,
       viewportOffset,
       viewportScale,
     ],
@@ -871,6 +883,25 @@ export function TopologyCanvas({
   })();
 
   const isDragging = Object.keys(pendingPositions).length > 0;
+  const cableSourceNode = cableDialog
+    ? resolvedNodes.find((node) => node.id === cableDialog.sourceNodeId)
+    : undefined;
+  const cableTargetNode = cableDialog
+    ? resolvedNodes.find((node) => node.id === cableDialog.targetNodeId)
+    : undefined;
+  const freeSourceInterfaces =
+    cableSourceNode?.interfaces?.filter(
+      (iface) => !attachedInterfaceIds.has(iface.id),
+    ) ?? [];
+  const freeTargetInterfaces =
+    cableTargetNode?.interfaces?.filter(
+      (iface) => !attachedInterfaceIds.has(iface.id),
+    ) ?? [];
+  const canCreateCable =
+    Boolean(cableDialog?.sourceInterfaceId) &&
+    Boolean(cableDialog?.targetInterfaceId) &&
+    !attachedInterfaceIds.has(cableDialog?.sourceInterfaceId ?? "") &&
+    !attachedInterfaceIds.has(cableDialog?.targetInterfaceId ?? "");
 
   return (
     <section className="canvas-panel">
@@ -1193,18 +1224,7 @@ export function TopologyCanvas({
           <div className="confirm-dialog">
             <h2>Add Cable</h2>
             <p>
-              Connect{" "}
-              {
-                resolvedNodes.find(
-                  (node) => node.id === cableDialog.sourceNodeId,
-                )?.name
-              }{" "}
-              to{" "}
-              {
-                resolvedNodes.find(
-                  (node) => node.id === cableDialog.targetNodeId,
-                )?.name
-              }
+              Connect {cableSourceNode?.name} to {cableTargetNode?.name}
             </p>
             <label className="field">
               <span className="field-label">Source Interface</span>
@@ -1220,11 +1240,10 @@ export function TopologyCanvas({
                   )
                 }
               >
-                {(
-                  resolvedNodes.find(
-                    (node) => node.id === cableDialog.sourceNodeId,
-                  )?.interfaces ?? []
-                ).map((iface) => (
+                {freeSourceInterfaces.length === 0 ? (
+                  <option value="">No free interfaces</option>
+                ) : null}
+                {freeSourceInterfaces.map((iface) => (
                   <option key={iface.id} value={iface.id}>
                     {iface.name}
                   </option>
@@ -1245,11 +1264,10 @@ export function TopologyCanvas({
                   )
                 }
               >
-                {(
-                  resolvedNodes.find(
-                    (node) => node.id === cableDialog.targetNodeId,
-                  )?.interfaces ?? []
-                ).map((iface) => (
+                {freeTargetInterfaces.length === 0 ? (
+                  <option value="">No free interfaces</option>
+                ) : null}
+                {freeTargetInterfaces.map((iface) => (
                   <option key={iface.id} value={iface.id}>
                     {iface.name}
                   </option>
@@ -1267,15 +1285,11 @@ export function TopologyCanvas({
               <button
                 type="button"
                 className="btn btn-sm btn-primary"
+                disabled={!canCreateCable}
                 onClick={() => {
                   if (!labId || !onCreateNetwork || !onAttachInterfaces) return;
-                  const sourceNode = resolvedNodes.find(
-                    (node) => node.id === cableDialog.sourceNodeId,
-                  );
-                  const targetNode = resolvedNodes.find(
-                    (node) => node.id === cableDialog.targetNodeId,
-                  );
-                  const networkName = `link-${sourceNode?.name ?? "node"}-${targetNode?.name ?? "node"}`;
+                  if (!canCreateCable) return;
+                  const networkName = `link-${cableSourceNode?.name ?? "node"}-${cableTargetNode?.name ?? "node"}`;
                   const sourceInterfaceId = cableDialog.sourceInterfaceId;
                   const targetInterfaceId = cableDialog.targetInterfaceId;
                   setCableDialog(null);

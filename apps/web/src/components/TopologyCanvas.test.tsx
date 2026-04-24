@@ -149,6 +149,46 @@ describe("TopologyCanvas", () => {
     expect(link).toHaveAttribute("y2", "242");
   });
 
+  it("anchors horizontally dominant diagonal cables to the sides of nodes", () => {
+    const networks = [
+      { id: "net-1", kind: "ethernet", name: "LAN", visible: true },
+    ];
+    const attachments = [
+      { interfaceId: "eth0", networkId: "net-1" },
+      { interfaceId: "eth0-n2", networkId: "net-1" },
+    ];
+    const nodesWithIface = [
+      {
+        id: "n1",
+        name: "R1",
+        position: { x: 50, y: 50 },
+        interfaces: [{ id: "eth0", name: "eth0", slot: 0 }],
+      },
+      {
+        id: "n2",
+        name: "R2",
+        position: { x: 250, y: 80 },
+        interfaces: [{ id: "eth0-n2", name: "eth0", slot: 0 }],
+      },
+    ];
+
+    render(
+      <TopologyCanvas
+        labName="Lab"
+        labId="lab-1"
+        nodes={nodesWithIface}
+        networks={networks}
+        attachments={attachments}
+      />,
+    );
+
+    const link = screen.getByTestId("link-net-1");
+    expect(link).toHaveAttribute("x1", "132");
+    expect(link).toHaveAttribute("y1", "74");
+    expect(link).toHaveAttribute("x2", "268");
+    expect(link).toHaveAttribute("y2", "104");
+  });
+
   it("shows node status based on nodeStatuses", () => {
     render(
       <TopologyCanvas
@@ -332,8 +372,10 @@ describe("TopologyCanvas", () => {
     expect(screen.getByTestId("link-net-1-n1")).toBeInTheDocument();
     expect(screen.getByTestId("link-net-1-n2")).toBeInTheDocument();
     expect(screen.getByTestId("link-net-1-n3")).toBeInTheDocument();
-    expect(screen.getByTestId("link-net-1-n1")).toHaveAttribute("y1", "136");
-    expect(screen.getByTestId("link-net-1-n2")).toHaveAttribute("y1", "136");
+    expect(screen.getByTestId("link-net-1-n1")).toHaveAttribute("x1", "132");
+    expect(screen.getByTestId("link-net-1-n1")).toHaveAttribute("y1", "74");
+    expect(screen.getByTestId("link-net-1-n2")).toHaveAttribute("x1", "268");
+    expect(screen.getByTestId("link-net-1-n2")).toHaveAttribute("y1", "74");
     expect(screen.getByTestId("link-net-1-n3")).toHaveAttribute("y1", "192");
   });
 
@@ -607,6 +649,31 @@ describe("TopologyCanvas", () => {
       expect(
         screen.getByRole("menuitem", { name: "Add Cable" }),
       ).toBeInTheDocument();
+      expect(
+        screen.getByRole("menuitem", { name: "Rename" }),
+      ).toBeInTheDocument();
+    });
+
+    it("invokes rename from the node context menu", () => {
+      const onRenameNode = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodesWithIface}
+          onRenameNode={onRenameNode}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+      fireEvent.contextMenu(screen.getByTestId("node-n1"), {
+        clientX: 100,
+        clientY: 98,
+      });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Rename" }));
+
+      expect(onRenameNode).toHaveBeenCalledWith("n1");
     });
 
     it("closes the node context menu on a normal click elsewhere", () => {
@@ -687,6 +754,78 @@ describe("TopologyCanvas", () => {
       expect(
         screen.getByRole("dialog", { name: "Add Cable" }),
       ).toBeInTheDocument();
+    });
+
+    it("only lists free interfaces when adding a cable", () => {
+      const nodesWithPorts = [
+        {
+          id: "n1",
+          name: "R1",
+          position: { x: 50, y: 50 },
+          interfaces: [
+            { id: "e1", name: "eth0", slot: 0 },
+            { id: "e1-free", name: "eth1", slot: 1 },
+          ],
+        },
+        {
+          id: "n2",
+          name: "R2",
+          position: { x: 250, y: 50 },
+          interfaces: [
+            { id: "e2", name: "eth0", slot: 0 },
+            { id: "e2-free", name: "eth1", slot: 1 },
+          ],
+        },
+      ];
+
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodesWithPorts}
+          networks={[
+            {
+              id: "net-existing",
+              kind: "ethernet",
+              name: "LAN",
+              visible: true,
+            },
+          ]}
+          attachments={[
+            { interfaceId: "e1", networkId: "net-existing" },
+            { interfaceId: "e2", networkId: "net-existing" },
+          ]}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.contextMenu(screen.getByTestId("node-n1"), {
+        clientX: 100,
+        clientY: 98,
+      });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Add Cable" }));
+      fireEvent.mouseUp(screen.getByTestId("node-n2"), {
+        clientX: 300,
+        clientY: 98,
+      });
+
+      const sourceSelect = screen.getByLabelText(
+        "Source Interface",
+      ) as HTMLSelectElement;
+      const targetSelect = screen.getByLabelText(
+        "Destination Interface",
+      ) as HTMLSelectElement;
+
+      expect(
+        Array.from(sourceSelect.options).map((option) => option.value),
+      ).toEqual(["e1-free"]);
+      expect(
+        Array.from(targetSelect.options).map((option) => option.value),
+      ).toEqual(["e2-free"]);
+      expect(sourceSelect.value).toBe("e1-free");
+      expect(targetSelect.value).toBe("e2-free");
     });
 
     it("cancels cable drawing on Escape", () => {

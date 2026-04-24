@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import type {
   CloudRole,
   NodeBootAction,
@@ -357,6 +357,16 @@ type ApiClient = {
     labId: string,
     nodeId: string,
     position: { x: number; y: number },
+  ) => Promise<{
+    id: string;
+    name: string;
+    autoBackup?: boolean;
+    document: LabDocumentData;
+  }>;
+  renameNode?: (
+    labId: string,
+    nodeId: string,
+    name: string,
   ) => Promise<{
     id: string;
     name: string;
@@ -837,6 +847,18 @@ const defaultApi: ApiClient = browserApi ?? {
       },
     };
   },
+  async renameNode(labId: string, nodeId: string, name: string) {
+    return {
+      id: labId,
+      name: demoLabs[0]?.name ?? "Demo Lab",
+      autoBackup: false,
+      document: {
+        nodes: [{ id: nodeId, name }],
+        networks: [],
+        attachments: [],
+      },
+    };
+  },
   async getLab(labId: string) {
     return {
       id: labId,
@@ -1152,6 +1174,7 @@ export function App({
     document: LabDocumentData;
   } | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [showAddNodeDialog, setShowAddNodeDialog] = useState(false);
   const [dialogTemplateId, setDialogTemplateId] = useState<string | null>(null);
   const [consoleNode, setConsoleNode] = useState<{
@@ -1195,8 +1218,9 @@ export function App({
     fileName: string;
   }>(null);
   const [leftTab, setLeftTab] = useState<
-    "labs" | "devices" | "containers" | "images"
-  >("labs");
+    "labs" | "inspector" | "devices" | "containers" | "images" | null
+  >(null);
+  const lastInspectorLabId = useRef<string | null>(null);
   const [startupConfigDialog, setStartupConfigDialog] = useState<{
     nodeId: string;
     nodeName: string;
@@ -1218,6 +1242,14 @@ export function App({
       // Ignore storage failures and keep the in-memory theme.
     }
   }, [themeMode]);
+
+  useEffect(() => {
+    if (!selectedLabId || lastInspectorLabId.current === selectedLabId) {
+      return;
+    }
+    lastInspectorLabId.current = selectedLabId;
+    setLeftTab((current) => current ?? "inspector");
+  }, [selectedLabId]);
 
   useEffect(() => {
     try {
@@ -1371,6 +1403,7 @@ export function App({
   useEffect(() => {
     if (!selectedLabId) {
       setSelectedLab(null);
+      setRenamingNodeId(null);
       return;
     }
 
@@ -1461,6 +1494,15 @@ export function App({
     };
   }, [listRunningConfigBackups, selectedLabId, selectedNodeId]);
 
+  useEffect(() => {
+    if (
+      renamingNodeId &&
+      !selectedLab?.document.nodes.some((node) => node.id === renamingNodeId)
+    ) {
+      setRenamingNodeId(null);
+    }
+  }, [renamingNodeId, selectedLab]);
+
   function applyLabUpdate(nextLab: {
     id: string;
     name: string;
@@ -1480,8 +1522,10 @@ export function App({
       setCreateLabError(null);
       setLabs((current) => [...current, newLab]);
       setSelectedLabId(newLab.id);
+      setLeftTab("inspector");
     } catch {
       setCreateLabError("Failed to create lab");
+      setLeftTab("labs");
     }
   }
 
@@ -1496,6 +1540,7 @@ export function App({
       position: { x: 120, y: 80 },
     });
     applyLabUpdate(nextLab);
+    setLeftTab("inspector");
   }
 
   async function handleAddAlpineContainer() {
@@ -1509,6 +1554,7 @@ export function App({
       position: { x: 180, y: 140 },
     });
     applyLabUpdate(nextLab);
+    setLeftTab("inspector");
   }
 
   async function handleAddNode(input: {
@@ -1525,6 +1571,7 @@ export function App({
 
     const nextLab = await api.addNode(selectedLabId, input);
     applyLabUpdate(nextLab);
+    setLeftTab("inspector");
     setShowAddNodeDialog(false);
     setDialogTemplateId(null);
   }
@@ -1536,6 +1583,16 @@ export function App({
 
     const nextLab = await api.renameLab(labId, name.trim());
     applyLabUpdate(nextLab);
+  }
+
+  async function handleRenameNode(nodeId: string, name: string) {
+    if (!selectedLabId || !api.renameNode) {
+      return;
+    }
+
+    const nextLab = await api.renameNode(selectedLabId, nodeId, name.trim());
+    applyLabUpdate(nextLab);
+    setRenamingNodeId(null);
   }
 
   async function handleSetLabAutoBackup(labId: string, autoBackup: boolean) {
@@ -2112,22 +2169,28 @@ export function App({
     setConfirmState(null);
   }
 
+  const effectiveLeftTab =
+    leftTab ?? (labs.length > 0 && !selectedLabId ? "labs" : null);
   const leftPanelTitle =
-    leftTab === "labs"
+    effectiveLeftTab === "labs"
       ? "Labs"
-      : leftTab === "devices"
-        ? "Devices"
-        : leftTab === "containers"
-          ? "Containers"
-          : "Images";
+      : effectiveLeftTab === "inspector"
+        ? "Inspector"
+        : effectiveLeftTab === "devices"
+          ? "Devices"
+          : effectiveLeftTab === "containers"
+            ? "Containers"
+            : "Images";
   const leftPanelDescription =
-    leftTab === "labs"
+    effectiveLeftTab === "labs"
       ? "Create labs, reopen saved topologies, and keep your active workspace in view."
-      : leftTab === "devices"
-        ? "Drop templates into the current lab without leaving the canvas."
-        : leftTab === "containers"
-          ? "Discover container images, pull from registries, and turn them into reusable templates or one-off nodes."
-          : "Manage uploaded disk images and bind them to reusable templates.";
+      : effectiveLeftTab === "inspector"
+        ? "Selection details and runtime controls for the active lab object."
+        : effectiveLeftTab === "devices"
+          ? "Drop templates into the current lab without leaving the canvas."
+          : effectiveLeftTab === "containers"
+            ? "Discover container images, pull from registries, and turn them into reusable templates or one-off nodes."
+            : "Manage uploaded disk images and bind them to reusable templates.";
   const themeToggleLabel =
     themeMode === "dark" ? "Switch to day mode" : "Switch to night mode";
   const themeToggleText = themeMode === "dark" ? "Day Mode" : "Night Mode";
@@ -2201,31 +2264,94 @@ export function App({
   }
 
   return (
-    <div className="app-shell" style={{ overflow: "hidden" }}>
-      <header className="topbar">
-        <div className="topbar-brand">
-          <div className="topbar-mark" aria-hidden="true">
-            <span className="topbar-mark-dot" />
-          </div>
-          <div className="topbar-brand-copy">
-            <p className="topbar-kicker">Network Lab Control</p>
-            <h1 className="topbar-logo">NetworkChum</h1>
-          </div>
+    <div
+      className="app-shell"
+      style={{ position: "relative", overflow: "hidden" }}
+    >
+      <div className="floating-brandbar" style={{ position: "absolute" }}>
+        <strong className="floating-brand">NetworkChum</strong>
+        <span className="floating-document-title">
+          {selectedLab?.name ?? "No lab selected"}
+        </span>
+        <span className="floating-meta">
+          {selectedLab
+            ? `${selectedLab.document.nodes.length} node${selectedLab.document.nodes.length === 1 ? "" : "s"}`
+            : "Create a lab"}
+        </span>
+        <span className="floating-meta">
+          Bridge: {bridgeStatus === "online" ? "Online" : "Offline"}
+        </span>
+        <span className="floating-meta">{backendLabel}</span>
+        <button
+          type="button"
+          className="floating-brand-action"
+          aria-label={themeToggleLabel}
+          onClick={() =>
+            setThemeMode((current) => (current === "dark" ? "light" : "dark"))
+          }
+        >
+          {themeMode === "dark" ? "Light" : "Dark"}
+        </button>
+        {!selectedLab ? (
+          <button
+            type="button"
+            className="floating-brand-action"
+            aria-label="Create Lab"
+            onClick={handleCreateLab}
+          >
+            New Lab
+          </button>
+        ) : null}
+      </div>
+
+      <div
+        className="floating-workspace-controls"
+        style={{ position: "absolute" }}
+      >
+        <div className="floating-tab-group">
+          {(
+            ["labs", "inspector", "devices", "containers", "images"] as const
+          ).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`floating-tab${effectiveLeftTab === tab ? " active" : ""}`}
+              onClick={() =>
+                setLeftTab((current) => (current === tab ? null : tab))
+              }
+            >
+              {tab === "labs"
+                ? "Labs"
+                : tab === "inspector"
+                  ? "Inspector"
+                  : tab === "devices"
+                    ? "Devices"
+                    : tab === "containers"
+                      ? "Containers"
+                      : "Images"}
+            </button>
+          ))}
         </div>
-        <div className={`topbar-context${selectedLab ? "" : " is-empty"}`}>
-          <span className="topbar-context-label">Active Lab</span>
-          <span className="topbar-lab-name">
-            {selectedLab?.name ?? "No lab selected"}
-          </span>
-          <span className="topbar-context-meta">
-            {selectedLab
-              ? `${selectedLab.document.nodes.length} node${selectedLab.document.nodes.length === 1 ? "" : "s"}`
-              : "Create a lab to start mapping nodes"}
-          </span>
-        </div>
-        <div className="topbar-spacer" />
-        <label className="field" style={{ minWidth: 220 }}>
-          <span className="field-label">Native Console Preference</span>
+        {selectedCustomTerminal ? (
+          <div className="floating-tab-group">
+            <button
+              type="button"
+              className="floating-icon-button"
+              aria-label="Edit Terminal"
+              onClick={openEditTerminalDialog}
+            >
+              Terminal
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        className="floating-console-controls"
+        style={{ position: "absolute" }}
+      >
+        <label className="compact-field">
+          <span className="sr-only">Native Console Preference</span>
           <select
             className="field-input"
             aria-label="Native Console Preference"
@@ -2241,8 +2367,8 @@ export function App({
             <option value="iterm-helper">Open in Terminal</option>
           </select>
         </label>
-        <label className="field" style={{ minWidth: 220 }}>
-          <span className="field-label">macOS Terminal</span>
+        <label className="compact-field">
+          <span className="sr-only">macOS Terminal</span>
           <select
             className="field-input"
             aria-label="macOS Terminal"
@@ -2265,8 +2391,8 @@ export function App({
           </select>
         </label>
         {!isLocalPageHost(locationLike.hostname) ? (
-          <label className="field" style={{ minWidth: 180 }}>
-            <span className="field-label">SSH Relay User</span>
+          <label className="compact-field">
+            <span className="sr-only">SSH Relay User</span>
             <input
               className="field-input"
               aria-label="SSH Relay User"
@@ -2279,77 +2405,29 @@ export function App({
             />
           </label>
         ) : null}
-        {selectedCustomTerminal ? (
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={openEditTerminalDialog}
-          >
-            Edit Terminal
-          </button>
-        ) : null}
-        <span className="panel-description">
-          Bridge: {bridgeStatus === "online" ? "Online" : "Offline"}
-        </span>
-        <span className="panel-description">{backendLabel}</span>
-        <button
-          type="button"
-          className="theme-toggle"
-          aria-label={themeToggleLabel}
-          onClick={() =>
-            setThemeMode((current) => (current === "dark" ? "light" : "dark"))
-          }
-        >
-          <span className="theme-toggle-track" aria-hidden="true">
-            <span
-              className={`theme-toggle-thumb${themeMode === "light" ? " is-light" : ""}`}
-            />
-          </span>
-          <span className="theme-toggle-copy">
-            <span className="theme-toggle-label">Theme</span>
-            <span className="theme-toggle-text">{themeToggleText}</span>
-          </span>
-        </button>
-      </header>
+      </div>
 
-      <aside
-        className="left-sidebar"
-        style={{ display: "flex", flexDirection: "column", minHeight: "0px" }}
-      >
-        <div
-          className="sidebar-tabs"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          }}
+      {effectiveLeftTab ? (
+        <aside
+          className="floating-workspace-panel"
+          style={{ position: "absolute", overflowY: "auto" }}
         >
-          {(["labs", "devices", "containers", "images"] as const).map((tab) => (
+          <div className="sidebar-header floating-panel-header">
+            <div>
+              <p className="panel-eyebrow">Workspace</p>
+              <h2 className="sidebar-heading">{leftPanelTitle}</h2>
+              <p className="sidebar-description">{leftPanelDescription}</p>
+            </div>
             <button
-              key={tab}
               type="button"
-              className={`sidebar-tab${leftTab === tab ? " active" : ""}`}
-              onClick={() => setLeftTab(tab)}
+              className="floating-panel-close"
+              aria-label={`Close ${leftPanelTitle}`}
+              onClick={() => setLeftTab(null)}
             >
-              {tab === "labs"
-                ? "Labs"
-                : tab === "devices"
-                  ? "Devices"
-                  : tab === "containers"
-                    ? "Containers"
-                    : "Images"}
+              Close
             </button>
-          ))}
-        </div>
-        <div
-          className="sidebar-content"
-          style={{ flexGrow: 1, minHeight: "0px", overflowY: "auto" }}
-        >
-          <div className="sidebar-header">
-            <p className="panel-eyebrow">Workspace</p>
-            <h2 className="sidebar-heading">{leftPanelTitle}</h2>
-            <p className="sidebar-description">{leftPanelDescription}</p>
           </div>
-          {leftTab === "labs" && (
+          {effectiveLeftTab === "labs" && (
             <>
               <div className="panel-actions">
                 <button
@@ -2380,6 +2458,7 @@ export function App({
                   setSelectedNodeId(null);
                   setSelectedCableId(null);
                   setSelectedImageId(null);
+                  setLeftTab("inspector");
                 }}
                 onContextMenuLab={(labId, position) => {
                   setContextMenu({
@@ -2403,7 +2482,78 @@ export function App({
               />
             </>
           )}
-          {leftTab === "devices" && (
+          {effectiveLeftTab === "inspector" && selection ? (
+            <>
+              <SelectionPanel
+                selected={selection}
+                cloudManagementCapabilities={cloudManagementCapabilities}
+                onRenameLab={handleRenameLab}
+                onSetLabAutoBackup={handleSetLabAutoBackup}
+                onDeleteLab={(labId) =>
+                  setConfirmState({ type: "delete-lab", labId })
+                }
+                onDeleteNode={(nodeId) =>
+                  setConfirmState({ type: "delete-node", nodeId })
+                }
+                onDeleteCable={(networkId) =>
+                  setConfirmState({ type: "delete-cable", networkId })
+                }
+                onPowerOnNode={handlePowerOnNode}
+                onPowerOffNode={handlePowerOffNode}
+                onEditStartupConfig={handleOpenStartupConfigDialog}
+                onEditCloudSettings={handleOpenCloudNodeSettingsDialog}
+                onUnbindImage={async (imageId) => {
+                  if (!api.unbindImageFromTemplate) return;
+                  await api.unbindImageFromTemplate(imageId);
+                  await refreshImages();
+                }}
+                onRemoveImageFromCatalog={async (imageId) => {
+                  if (!api.removeImageFromCatalog) return;
+                  await api.removeImageFromCatalog(imageId);
+                  await refreshImages();
+                }}
+                onDeleteImageFile={handleDeleteImageFile}
+              />
+              <div className="divider" />
+              <LabDetails
+                labName={selectedLab?.name ?? null}
+                nodes={selectedLab?.document.nodes ?? []}
+                nodeStatuses={nodeStatuses}
+                nodeMessages={
+                  nativeConsoleError && selectedNodeId
+                    ? { ...nodeMessages, [selectedNodeId]: nativeConsoleError }
+                    : nodeMessages
+                }
+                onPowerOnNode={handlePowerOnNode}
+                nodeConnectCommands={nodeConnectCommands}
+                onConnectNode={handleConnectNode}
+                onCopyNativeCommand={(nodeId) => {
+                  void handleCopyNativeCommand(nodeId);
+                }}
+                onDisconnectNativeConsole={(nodeId) => {
+                  void handleDisconnectNativeConsole(nodeId);
+                }}
+                nativeConsoleModeLabel={nativeConsoleModeLabel}
+                selectedNodeId={selectedNodeId}
+                nodeRunningConfigBackups={selectedNodeBackups}
+                onRenameNode={handleRenameNode}
+                renamingNodeId={renamingNodeId}
+                onRequestRenameNode={(nodeId) => {
+                  setSelectedNodeId(nodeId);
+                  setSelectedCableId(null);
+                  setRenamingNodeId(nodeId);
+                }}
+                onCancelRenameNode={() => setRenamingNodeId(null)}
+              />
+            </>
+          ) : null}
+          {effectiveLeftTab === "inspector" && !selection ? (
+            <div className="panel-empty panel-empty--compact">
+              <h3>No selection</h3>
+              <p>Create or open a lab to inspect its details.</p>
+            </div>
+          ) : null}
+          {effectiveLeftTab === "devices" && (
             <>
               <div className="panel-actions">
                 <button
@@ -2426,7 +2576,7 @@ export function App({
               />
             </>
           )}
-          {leftTab === "images" && (
+          {effectiveLeftTab === "images" && (
             <ImageLibrary
               images={images}
               templates={imageBindableTemplates}
@@ -2434,6 +2584,7 @@ export function App({
                 setSelectedImageId(imageId);
                 setSelectedNodeId(null);
                 setSelectedCableId(null);
+                setLeftTab("inspector");
               }}
               onUpload={async (file, templateId) => {
                 if (!api.uploadImage) return;
@@ -2461,7 +2612,7 @@ export function App({
               onDeleteImageFile={handleDeleteImageFile}
             />
           )}
-          {leftTab === "containers" && (
+          {effectiveLeftTab === "containers" && (
             <ContainersTab
               api={api}
               activeLabId={selectedLabId}
@@ -2474,11 +2625,12 @@ export function App({
                     document: LabDocumentData;
                   },
                 );
+                setLeftTab("inspector");
               }}
             />
           )}
-        </div>
-      </aside>
+        </aside>
+      ) : null}
 
       <main className="canvas-area">
         <TopologyCanvas
@@ -2489,8 +2641,12 @@ export function App({
           attachments={selectedLab?.document.attachments ?? []}
           nodeStatuses={nodeStatuses}
           selectedNodeId={selectedNodeId}
-          onSelectNode={setSelectedNodeId}
-          onSelectCable={setSelectedCableId}
+          onSelectNode={(nodeId) => {
+            setSelectedNodeId(nodeId);
+          }}
+          onSelectCable={(networkId) => {
+            setSelectedCableId(networkId);
+          }}
           onMoveNode={async (nodeId, position) => {
             if (!selectedLabId || !api.moveNode) return;
             try {
@@ -2518,71 +2674,17 @@ export function App({
           onDeleteNode={(nodeId) =>
             setConfirmState({ type: "delete-node", nodeId })
           }
+          onRenameNode={(nodeId) => {
+            setSelectedNodeId(nodeId);
+            setSelectedCableId(null);
+            setRenamingNodeId(nodeId);
+          }}
           onPowerOnNode={handlePowerOnNode}
           onPowerOffNode={handlePowerOffNode}
           onOpenNativeConsole={handleOpenNativeConsole}
           onRefreshLab={handleRefreshLab}
         />
       </main>
-
-      <aside
-        className="right-panel"
-        style={{ minHeight: "0px", overflowY: "auto" }}
-      >
-        <SelectionPanel
-          selected={selection}
-          cloudManagementCapabilities={cloudManagementCapabilities}
-          onRenameLab={handleRenameLab}
-          onSetLabAutoBackup={handleSetLabAutoBackup}
-          onDeleteLab={(labId) =>
-            setConfirmState({ type: "delete-lab", labId })
-          }
-          onDeleteNode={(nodeId) =>
-            setConfirmState({ type: "delete-node", nodeId })
-          }
-          onDeleteCable={(networkId) =>
-            setConfirmState({ type: "delete-cable", networkId })
-          }
-          onPowerOnNode={handlePowerOnNode}
-          onPowerOffNode={handlePowerOffNode}
-          onEditStartupConfig={handleOpenStartupConfigDialog}
-          onEditCloudSettings={handleOpenCloudNodeSettingsDialog}
-          onUnbindImage={async (imageId) => {
-            if (!api.unbindImageFromTemplate) return;
-            await api.unbindImageFromTemplate(imageId);
-            await refreshImages();
-          }}
-          onRemoveImageFromCatalog={async (imageId) => {
-            if (!api.removeImageFromCatalog) return;
-            await api.removeImageFromCatalog(imageId);
-            await refreshImages();
-          }}
-          onDeleteImageFile={handleDeleteImageFile}
-        />
-        <div className="divider" />
-        <LabDetails
-          labName={selectedLab?.name ?? null}
-          nodes={selectedLab?.document.nodes ?? []}
-          nodeStatuses={nodeStatuses}
-          nodeMessages={
-            nativeConsoleError && selectedNodeId
-              ? { ...nodeMessages, [selectedNodeId]: nativeConsoleError }
-              : nodeMessages
-          }
-          onPowerOnNode={handlePowerOnNode}
-          nodeConnectCommands={nodeConnectCommands}
-          onConnectNode={handleConnectNode}
-          onCopyNativeCommand={(nodeId) => {
-            void handleCopyNativeCommand(nodeId);
-          }}
-          onDisconnectNativeConsole={(nodeId) => {
-            void handleDisconnectNativeConsole(nodeId);
-          }}
-          nativeConsoleModeLabel={nativeConsoleModeLabel}
-          selectedNodeId={selectedNodeId}
-          nodeRunningConfigBackups={selectedNodeBackups}
-        />
-      </aside>
 
       <ContextMenu
         open={contextMenu !== null}

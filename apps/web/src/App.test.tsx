@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -44,14 +45,18 @@ beforeEach(() => {
   document.documentElement.removeAttribute("data-theme");
 });
 
+function openLabsDrawer() {
+  const labsButton = screen.getByRole("button", { name: "Labs" });
+  if (!labsButton.classList.contains("active")) {
+    fireEvent.click(labsButton);
+  }
+}
+
 describe("App", () => {
   it("renders the shell", () => {
     render(<App />);
 
-    expect(
-      screen.getByRole("heading", { name: "NetworkChum" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Labs" })).toBeInTheDocument();
+    expect(screen.getByText("NetworkChum")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Devices" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Containers" }),
@@ -122,36 +127,134 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("wraps the workspace tabs so all sections remain accessible", () => {
+  it("uses floating workspace controls instead of a permanent sidebar", () => {
     render(<App />);
 
-    const tabs = document.querySelector(".sidebar-tabs");
+    expect(document.querySelector(".topbar")).toBeNull();
+    expect(document.querySelector(".left-sidebar")).toBeNull();
 
-    expect(tabs).not.toBeNull();
-    expect(getComputedStyle(tabs!).display).toBe("grid");
+    const controls = document.querySelector(".floating-workspace-controls");
+
+    expect(controls).not.toBeNull();
+    expect(getComputedStyle(controls!).position).toBe("absolute");
   });
 
-  it("uses dedicated scroll containers for the side panels", () => {
+  it("keeps workspace drawers hidden until summoned and closes them again", () => {
     render(<App />);
 
     const shell = document.querySelector(".app-shell");
-    const leftSidebar = document.querySelector(".left-sidebar");
-    const sidebarContent = document.querySelector(".sidebar-content");
-    const rightPanel = document.querySelector(".right-panel");
 
     expect(shell).not.toBeNull();
-    expect(leftSidebar).not.toBeNull();
-    expect(sidebarContent).not.toBeNull();
-    expect(rightPanel).not.toBeNull();
-
+    expect(getComputedStyle(shell!).position).toBe("relative");
     expect(getComputedStyle(shell!).overflow).toBe("hidden");
-    expect(getComputedStyle(leftSidebar!).display).toBe("flex");
-    expect(getComputedStyle(leftSidebar!).minHeight).toBe("0px");
-    expect(getComputedStyle(sidebarContent!).flexGrow).toBe("1");
-    expect(getComputedStyle(sidebarContent!).minHeight).toBe("0px");
-    expect(getComputedStyle(sidebarContent!).overflowY).toBe("auto");
-    expect(getComputedStyle(rightPanel!).minHeight).toBe("0px");
-    expect(getComputedStyle(rightPanel!).overflowY).toBe("auto");
+
+    expect(document.querySelector(".floating-workspace-panel")).toBeNull();
+    expect(document.querySelector(".floating-inspector")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Labs" }));
+
+    const workspacePanel = document.querySelector(".floating-workspace-panel");
+    expect(workspacePanel).not.toBeNull();
+    expect(getComputedStyle(workspacePanel!).position).toBe("absolute");
+    expect(getComputedStyle(workspacePanel!).overflowY).toBe("auto");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Labs" }));
+
+    expect(document.querySelector(".floating-workspace-panel")).toBeNull();
+  });
+
+  it("shows selected-object inspection inside the left workspace panel", async () => {
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Inspectable Lab" }],
+      listCatalog: async () => [],
+      listTemplates: async () => [],
+      listImages: async () => [],
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Inspectable Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Inspectable Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({ nodeId: "node-1", status: "running" }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Close Inspector" });
+
+    const workspacePanel = document.querySelector(".floating-workspace-panel");
+    expect(workspacePanel).not.toBeNull();
+    expect(workspacePanel).toHaveTextContent("Selection");
+    expect(workspacePanel).toHaveTextContent("Lab Details");
+    expect(document.querySelector(".floating-inspector")).toBeNull();
+  });
+
+  it("does not open the inspector when canvas selection changes", async () => {
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Canvas Lab" }],
+      listCatalog: async () => [],
+      listTemplates: async () => [],
+      listImages: async () => [],
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Canvas Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "node-one", position: { x: 10, y: 10 } },
+            { id: "node-2", name: "node-two", position: { x: 180, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Canvas Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({ nodeId: "node-1", status: "running" }),
+    };
+
+    render(<App api={api} />);
+
+    await screen.findByRole("button", { name: "Close Inspector" });
+    fireEvent.click(screen.getByRole("button", { name: "Close Inspector" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Close Inspector" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(await screen.findByTestId("node-node-1"));
+
+    expect(
+      screen.queryByRole("button", { name: "Close Inspector" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByTestId("topology-svg"));
+
+    expect(
+      screen.queryByRole("button", { name: "Close Inspector" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByTestId("node-node-2"));
+    fireEvent.click(screen.getByRole("button", { name: "Inspector" }));
+
+    const workspacePanel = document.querySelector(".floating-workspace-panel");
+    expect(workspacePanel).not.toBeNull();
+    const panel = within(workspacePanel as HTMLElement);
+
+    await waitFor(() => {
+      expect(panel.getAllByText("node-two").length).toBeGreaterThan(0);
+    });
+    expect(panel.queryByText("node-one")).not.toBeInTheDocument();
   });
 
   it("loads labs and catalog from the api client", async () => {
@@ -215,6 +318,7 @@ describe("App", () => {
       expect(screen.getByText("Empty canvas")).toBeInTheDocument();
     });
 
+    openLabsDrawer();
     fireEvent.click(screen.getByRole("button", { name: "Open Second Lab" }));
 
     await waitFor(() => {
@@ -445,6 +549,75 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("starts inline node rename from the canvas context menu and saves it", async () => {
+    const renameNode = vi.fn(
+      async (labId: string, nodeId: string, name: string) => ({
+        id: labId,
+        name: "Rename Lab",
+        document: {
+          nodes: [
+            {
+              id: nodeId,
+              name,
+              position: { x: 10, y: 10 },
+            },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+    );
+
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Rename Lab" }],
+      listCatalog: async () => [],
+      listTemplates: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Rename Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "old-node", position: { x: 10, y: 10 } },
+          ],
+          networks: [],
+          attachments: [],
+        },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Rename Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+      renameNode,
+    };
+
+    render(<App api={api} />);
+
+    openLabsDrawer();
+    await screen.findByRole("button", { name: "Open Rename Lab" });
+    fireEvent.click(screen.getByRole("button", { name: "Open Rename Lab" }));
+
+    const node = await screen.findByTestId("node-node-1");
+    fireEvent.contextMenu(node, { clientX: 100, clientY: 98 });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Rename" }));
+
+    const input = await screen.findByLabelText("Rename old-node");
+    fireEvent.change(input, { target: { value: "edge-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Name old-node" }));
+
+    await waitFor(() => {
+      expect(renameNode).toHaveBeenCalledWith("lab-1", "node-1", "edge-1");
+    });
+  });
+
   it("shows running-config backup summary for a focused node", async () => {
     const listRunningConfigBackups = vi.fn(async () => [
       {
@@ -493,6 +666,7 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    openLabsDrawer();
     await screen.findByRole("button", { name: "Open Backup Lab" });
     fireEvent.click(screen.getByRole("button", { name: "Open Backup Lab" }));
 
@@ -553,6 +727,11 @@ describe("App", () => {
 
     fireEvent.change(screen.getByLabelText("Lab name"), {
       target: { value: "Edge Lab" },
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Save Name" }),
+      ).not.toBeDisabled();
     });
     fireEvent.click(screen.getByRole("button", { name: "Save Name" }));
 
@@ -931,6 +1110,7 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    openLabsDrawer();
     await screen.findByRole("button", { name: "Open Fetched Lab" });
     fireEvent.contextMenu(
       screen.getByRole("button", { name: "Open Fetched Lab" }),
@@ -1269,6 +1449,7 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    openLabsDrawer();
     await screen.findByRole("button", { name: "Open Containers Lab" });
     fireEvent.click(
       screen.getByRole("button", { name: "Open Containers Lab" }),
@@ -2513,6 +2694,7 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    openLabsDrawer();
     await screen.findByRole("button", { name: "Open Fetched Lab" });
     fireEvent.click(screen.getByRole("button", { name: "Open Fetched Lab" }));
 
@@ -2712,6 +2894,7 @@ describe("App", () => {
 
       render(<App api={api} />);
 
+      openLabsDrawer();
       await screen.findByRole("button", { name: "Open Cloud Lab" });
       fireEvent.click(screen.getByRole("button", { name: "Open Cloud Lab" }));
 
@@ -2815,6 +2998,7 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    openLabsDrawer();
     await screen.findByRole("button", { name: "Open Cloud Lab" });
     fireEvent.click(screen.getByRole("button", { name: "Devices" }));
     fireEvent.click(screen.getByRole("button", { name: "Add Node" }));

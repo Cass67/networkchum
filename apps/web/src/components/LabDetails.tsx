@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import type { RunningConfigBackupRecord } from "../api/client.js";
 
 type LabNode = {
@@ -19,6 +21,10 @@ type LabDetailsProps = {
   nativeConsoleModeLabel?: string;
   selectedNodeId?: string | null;
   nodeRunningConfigBackups?: RunningConfigBackupRecord[];
+  onRenameNode?: (nodeId: string, name: string) => void | Promise<void>;
+  renamingNodeId?: string | null;
+  onRequestRenameNode?: (nodeId: string) => void;
+  onCancelRenameNode?: () => void;
 };
 
 const runningConfigStatusClass: Record<
@@ -51,9 +57,59 @@ export function LabDetails({
   nativeConsoleModeLabel,
   selectedNodeId = null,
   nodeRunningConfigBackups = [],
+  onRenameNode,
+  renamingNodeId = null,
+  onRequestRenameNode,
+  onCancelRenameNode,
 }: LabDetailsProps) {
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
+  const visibleNodes = selectedNode ? [selectedNode] : nodes;
   const backupRecords = nodeRunningConfigBackups ?? [];
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [savingNodeId, setSavingNodeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!renamingNodeId) {
+      return;
+    }
+
+    const node = nodes.find((entry) => entry.id === renamingNodeId);
+    if (!node) {
+      return;
+    }
+
+    setEditingNodeId(node.id);
+    setDraftName(node.name);
+  }, [nodes, renamingNodeId]);
+
+  function startRename(node: LabNode) {
+    setEditingNodeId(node.id);
+    setDraftName(node.name);
+    onRequestRenameNode?.(node.id);
+  }
+
+  function stopRename() {
+    setEditingNodeId(null);
+    setDraftName("");
+    onCancelRenameNode?.();
+  }
+
+  async function submitRename(node: LabNode) {
+    const nextName = draftName.trim();
+    if (!nextName || nextName === node.name || !onRenameNode) {
+      stopRename();
+      return;
+    }
+
+    setSavingNodeId(node.id);
+    try {
+      await onRenameNode(node.id, nextName);
+      stopRename();
+    } finally {
+      setSavingNodeId(null);
+    }
+  }
 
   return (
     <section className="panel-section">
@@ -69,7 +125,7 @@ export function LabDetails({
         </div>
       ) : null}
       <ul className="device-list">
-        {nodes.map((node) => (
+        {visibleNodes.map((node) => (
           <li
             key={node.id}
             className={`device-card${selectedNodeId === node.id ? " is-selected" : ""}`}
@@ -117,6 +173,60 @@ export function LabDetails({
               ) : null}
             </div>
             <div className="device-card-actions">
+              {editingNodeId === node.id ? (
+                <>
+                  <label className="sr-only" htmlFor={`rename-node-${node.id}`}>
+                    Rename {node.name}
+                  </label>
+                  <input
+                    id={`rename-node-${node.id}`}
+                    className="input"
+                    aria-label={`Rename ${node.name}`}
+                    value={draftName}
+                    autoFocus
+                    onChange={(event) => setDraftName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void submitRename(node);
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        stopRename();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    aria-label={`Save Name ${node.name}`}
+                    onClick={() => {
+                      void submitRename(node);
+                    }}
+                    disabled={savingNodeId === node.id}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    aria-label={`Cancel Rename ${node.name}`}
+                    onClick={stopRename}
+                    disabled={savingNodeId === node.id}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  aria-label={`Edit Name ${node.name}`}
+                  onClick={() => startRename(node)}
+                >
+                  Rename
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn-sm"
