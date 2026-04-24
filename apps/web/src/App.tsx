@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CanvasDrawing,
   CloudRole,
+  ImportCommitRequest,
+  ImportPreview,
   NodeBootAction,
   NodeBootActionState,
 } from "@networkchum/shared";
@@ -20,6 +22,7 @@ import { ContextMenu } from "./components/ContextMenu.js";
 import { ContainersTab } from "./components/ContainersTab.js";
 import { DeviceCatalog } from "./components/DeviceCatalog.js";
 import { ImageLibrary } from "./components/ImageLibrary.js";
+import { ImportTopologyDialog } from "./components/ImportTopologyDialog.js";
 import { LabBrowser } from "./components/LabBrowser.js";
 import { LabDetails } from "./components/LabDetails.js";
 import { SelectionPanel } from "./components/SelectionPanel.js";
@@ -232,6 +235,16 @@ type ApiClient = {
     document: LabDocumentData;
   }>;
   deleteLab?: (labId: string) => Promise<{ labId: string }>;
+  previewTopologyImport?: (file: File) => Promise<ImportPreview>;
+  commitTopologyImport?: (
+    draftId: string,
+    input: ImportCommitRequest,
+  ) => Promise<{
+    id: string;
+    name: string;
+    autoBackup?: boolean;
+    document: LabDocumentData;
+  }>;
   getLab: (labId: string) => Promise<{
     id: string;
     name: string;
@@ -1209,6 +1222,8 @@ export function App({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [showAddNodeDialog, setShowAddNodeDialog] = useState(false);
+  const [showImportTopologyDialog, setShowImportTopologyDialog] =
+    useState(false);
   const [dialogTemplateId, setDialogTemplateId] = useState<string | null>(null);
   const [consoleNode, setConsoleNode] = useState<{
     nodeId: string;
@@ -1591,6 +1606,31 @@ export function App({
       setCreateLabError("Failed to create lab");
       setLeftTab("labs");
     }
+  }
+
+  async function handleCommitTopologyImport(
+    draftId: string,
+    input: ImportCommitRequest,
+  ) {
+    if (!api.commitTopologyImport) {
+      return;
+    }
+    const importedLab = await api.commitTopologyImport(draftId, input);
+    setLabs((current) => [
+      ...current.filter((lab) => lab.id !== importedLab.id),
+      {
+        id: importedLab.id,
+        name: importedLab.name,
+        autoBackup: importedLab.autoBackup,
+      },
+    ]);
+    setSelectedLab(importedLab);
+    setSelectedLabId(importedLab.id);
+    setSelectedNodeId(null);
+    setSelectedCableId(null);
+    setSelectedImageId(null);
+    setShowImportTopologyDialog(false);
+    setLeftTab("inspector");
   }
 
   async function handleAddLinuxVm() {
@@ -2532,6 +2572,17 @@ export function App({
                 >
                   New Lab
                 </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  aria-label="Import Lab"
+                  disabled={
+                    !api.previewTopologyImport || !api.commitTopologyImport
+                  }
+                  onClick={() => setShowImportTopologyDialog(true)}
+                >
+                  Import Lab
+                </button>
               </div>
               {createLabError ? (
                 <p
@@ -3087,6 +3138,19 @@ export function App({
           }}
         />
       ) : null}
+      <ImportTopologyDialog
+        open={showImportTopologyDialog}
+        catalog={catalog}
+        images={images}
+        onClose={() => setShowImportTopologyDialog(false)}
+        onPreview={async (file) => {
+          if (!api.previewTopologyImport) {
+            throw new Error("Topology import is unavailable");
+          }
+          return api.previewTopologyImport(file);
+        }}
+        onCommit={handleCommitTopologyImport}
+      />
       {editingTemplate ? (
         <TemplateEditorDialog
           key={editingTemplate.id}
