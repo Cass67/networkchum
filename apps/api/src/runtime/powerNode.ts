@@ -111,6 +111,16 @@ function isAlreadyExistsError(stderr: string): boolean {
   return /already exists|File exists|Device or resource busy/i.test(stderr);
 }
 
+function isContainerNameAlreadyInUseError(
+  stderr: string,
+  containerName: string,
+): boolean {
+  return (
+    stderr.includes(containerName) &&
+    /container name .*already in use|name .*already in use/i.test(stderr)
+  );
+}
+
 function buildNetworkFailureMessage(
   opKind: string,
   stderr: string,
@@ -595,7 +605,20 @@ export async function powerOnNode(
       shell,
     });
     console.log("[powerNode] container command:", spec.command.join(" "));
-    const result = await runCommand(spec.command[0]!, spec.command.slice(1));
+    let result = await runCommand(spec.command[0]!, spec.command.slice(1));
+    if (
+      !result.ok &&
+      isContainerNameAlreadyInUseError(result.stderr, containerName)
+    ) {
+      const removeResult = await runCommand(engine, [
+        "rm",
+        "-f",
+        containerName,
+      ]);
+      result = removeResult.ok
+        ? await runCommand(spec.command[0]!, spec.command.slice(1))
+        : removeResult;
+    }
 
     if (result.ok) {
       console.log(`[powerNode] container started: ${result.stdout.trim()}`);

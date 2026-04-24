@@ -498,7 +498,7 @@ describe("TopologyCanvas", () => {
       ).toHaveTextContent("");
     });
 
-    it("adds a text drawing from the text tool", () => {
+    it("adds a text drawing where the armed text tool is clicked", () => {
       const onUpdateCanvasDrawings = vi.fn();
       render(
         <TopologyCanvas
@@ -514,10 +514,15 @@ describe("TopologyCanvas", () => {
         target: { value: "#facc15" },
       });
       fireEvent.click(screen.getByRole("button", { name: "Add Text" }));
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+      fireEvent.mouseDown(svg, { clientX: 260, clientY: 310 });
 
       expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
         expect.objectContaining({
           kind: "text",
+          x: 260,
+          y: 310,
           text: "Label",
           fill: "#facc15",
           fontSize: 22,
@@ -583,6 +588,8 @@ describe("TopologyCanvas", () => {
 
       fireEvent.doubleClick(screen.getByTestId("drawing-text-1"));
       const editor = screen.getByLabelText("Edit Text Drawing");
+      expect(editor.closest("foreignObject")).not.toBeNull();
+      expect(document.querySelector(".canvas-text-editor")).toBeNull();
       fireEvent.change(editor, { target: { value: "Internet" } });
       fireEvent.blur(editor);
 

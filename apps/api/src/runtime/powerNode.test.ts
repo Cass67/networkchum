@@ -687,6 +687,70 @@ describe("powerOnNode", () => {
     ]);
   });
 
+  it("removes a stale managed container name and retries container launch once", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "networkchum-runtime-"),
+    );
+    tempDirs.push(tempDir);
+    process.env.NETWORKCHUM_DATA_DIR = tempDir;
+
+    const registry = new TemplateRegistry();
+    const lab = await createLab("Stale Container Lab");
+    const template = registry.get("linux-alpine-container")!;
+    const document = addNode(lab.document, {
+      template,
+      name: "alpine-1",
+      position: { x: 10, y: 10 },
+      containerEngine: "podman",
+    });
+    await updateLabDocument(lab.id, document);
+    const savedLab = await getLab(lab.id);
+    const nodeId = savedLab!.document.nodes[0]!.id;
+    const containerName = `networkchum-${lab.id}-${nodeId}`;
+    const commands: Array<{ command: string; args: string[] }> = [];
+    let runAttempts = 0;
+
+    const state = await powerOnNode(lab.id, nodeId, {
+      runCommand: async (command, args) => {
+        commands.push({ command, args });
+        if (command === "podman" && args[0] === "info") {
+          return { ok: true, stdout: "{}", stderr: "" };
+        }
+        if (command === "podman" && args[0] === "run") {
+          runAttempts += 1;
+          if (runAttempts === 1) {
+            return {
+              ok: false,
+              stdout: "",
+              stderr: `Error: creating container storage: the container name "${containerName}" is already in use by stale-id. You have to remove that container to be able to reuse that name.`,
+            };
+          }
+          return { ok: true, stdout: "container-id-456", stderr: "" };
+        }
+        if (command === "podman" && args[0] === "rm") {
+          return { ok: true, stdout: "", stderr: "" };
+        }
+        return { ok: false, stdout: "", stderr: "unexpected command" };
+      },
+      hasBinary: async (command) => command === "podman",
+    });
+
+    expect(state?.status).toBe("running");
+    expect(state?.externalId).toBe("container-id-456");
+    expect(commands).toEqual([
+      { command: "podman", args: ["info"] },
+      expect.objectContaining({
+        command: "podman",
+        args: expect.arrayContaining(["run", "--name", containerName]),
+      }),
+      { command: "podman", args: ["rm", "-f", containerName] },
+      expect.objectContaining({
+        command: "podman",
+        args: expect.arrayContaining(["run", "--name", containerName]),
+      }),
+    ]);
+  });
+
   it("falls back to docker when podman is installed but unreachable", async () => {
     const tempDir = await mkdtemp(
       path.join(os.tmpdir(), "networkchum-runtime-"),

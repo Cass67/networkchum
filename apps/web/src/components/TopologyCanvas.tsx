@@ -332,11 +332,6 @@ type DisconnectPopup = {
 type TextEditState = {
   drawingId: string;
   value: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  fontSize: number;
 };
 
 function getSvgPoint(
@@ -705,6 +700,9 @@ export function TopologyCanvas({
     null,
   );
   const [textEdit, setTextEdit] = useState<TextEditState | null>(null);
+  const [activeDrawingTool, setActiveDrawingTool] = useState<"text" | null>(
+    null,
+  );
   const [defaultDrawingColor, setDefaultDrawingColor] = useState(
     DEFAULT_DRAWING_COLOR,
   );
@@ -764,6 +762,12 @@ export function TopologyCanvas({
     setViewportOffset(initialViewport.offset);
   }, [drawings, labId, nodes, svgHeight, svgWidth]);
 
+  useEffect(() => {
+    if (!textEdit) return;
+    textEditInputRef.current?.focus();
+    textEditInputRef.current?.select();
+  }, [textEdit]);
+
   const attachedInterfaceIds = new Set(attachments.map((a) => a.interfaceId));
   const interfaceNetworkMap = new Map(
     attachments.map((a) => [a.interfaceId, a.networkId]),
@@ -816,27 +820,40 @@ export function TopologyCanvas({
     [commitDrawings, defaultDrawingColor, drawings],
   );
 
-  const handleAddText = useCallback(() => {
-    const maxZIndex =
-      drawings.reduce((max, drawing) => Math.max(max, drawing.zIndex), 0) + 1;
-    const drawing: CanvasDrawing = {
-      id: createDrawingId(),
-      kind: "text",
-      x: 180,
-      y: 180,
-      width: 180,
-      height: 56,
-      text: "Label",
-      fill: defaultDrawingColor,
-      fontSize: 22,
-      opacity: 1,
-      locked: false,
-      zIndex: maxZIndex,
-    };
+  const placeTextDrawing = useCallback(
+    (position: { x: number; y: number }) => {
+      const maxZIndex =
+        drawings.reduce((max, drawing) => Math.max(max, drawing.zIndex), 0) + 1;
+      const drawing: CanvasDrawing = {
+        id: createDrawingId(),
+        kind: "text",
+        x: position.x,
+        y: position.y,
+        width: 180,
+        height: 56,
+        text: "Label",
+        fill: defaultDrawingColor,
+        fontSize: 22,
+        opacity: 1,
+        locked: false,
+        zIndex: maxZIndex,
+      };
 
-    setSelectedDrawingId(drawing.id);
-    commitDrawings([...drawings, drawing]);
-  }, [commitDrawings, defaultDrawingColor, drawings]);
+      setSelectedDrawingId(drawing.id);
+      setActiveDrawingTool(null);
+      setTextEdit({ drawingId: drawing.id, value: drawing.text });
+      commitDrawings([...drawings, drawing]);
+    },
+    [commitDrawings, defaultDrawingColor, drawings],
+  );
+
+  const handleAddText = useCallback(() => {
+    setActiveDrawingTool("text");
+    setSelectedDrawingId(null);
+    setSelectedNodeIds([]);
+    onSelectNode?.(null);
+    onSelectCable?.(null);
+  }, [onSelectCable, onSelectNode]);
 
   const handleAddImageFile = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -964,6 +981,23 @@ export function TopologyCanvas({
   const handleSvgMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       const target = e.target as SVGElement;
+      const svg = svgRef.current;
+
+      if (activeDrawingTool === "text" && svg && onUpdateCanvasDrawings) {
+        const point = getCanvasPoint(
+          svg,
+          e.clientX,
+          e.clientY,
+          viewportOffset,
+          viewportScale,
+        );
+        placeTextDrawing(point);
+        syncSingleSelection(null);
+        onSelectCable?.(null);
+        setDisconnectPopup(null);
+        e.preventDefault();
+        return;
+      }
 
       const resizeEl = target.closest<SVGElement>("[data-drawing-resize-id]");
       if (resizeEl) {
@@ -975,7 +1009,6 @@ export function TopologyCanvas({
         const drawing = resolvedDrawings.find(
           (entry) => entry.id === drawingId,
         );
-        const svg = svgRef.current;
         if (!drawing || drawing.locked || !svg || !onUpdateCanvasDrawings) {
           return;
         }
@@ -1013,7 +1046,6 @@ export function TopologyCanvas({
         const drawing = resolvedDrawings.find(
           (entry) => entry.id === drawingId,
         );
-        const svg = svgRef.current;
         setSelectedDrawingId(drawingId);
         syncSingleSelection(null);
         onSelectCable?.(null);
@@ -1196,6 +1228,7 @@ export function TopologyCanvas({
     },
     [
       cableState.mode,
+      activeDrawingTool,
       onMoveNode,
       onSelectCable,
       resolvedNodes,
@@ -1207,6 +1240,7 @@ export function TopologyCanvas({
       spaceHeld,
       viewportOffset,
       viewportScale,
+      placeTextDrawing,
     ],
   );
 
@@ -1518,6 +1552,10 @@ export function TopologyCanvas({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<SVGSVGElement>) => {
       if (e.key === "Escape") {
+        if (activeDrawingTool) {
+          setActiveDrawingTool(null);
+          return;
+        }
         if (cableState.mode === "drawing") {
           clearCable();
           return;
@@ -1530,7 +1568,7 @@ export function TopologyCanvas({
         setSpaceHeld(true);
       }
     },
-    [cableState.mode, clearCable, syncSingleSelection],
+    [activeDrawingTool, cableState.mode, clearCable, syncSingleSelection],
   );
 
   const handleKeyUp = useCallback((e: React.KeyboardEvent<SVGSVGElement>) => {
@@ -1588,19 +1626,7 @@ export function TopologyCanvas({
           setSelectedDrawingId(drawing.id);
           syncSingleSelection(null);
           onSelectCable?.(null);
-          setTextEdit({
-            drawingId: drawing.id,
-            value: drawing.text,
-            x: viewportOffset.x + drawing.x * viewportScale,
-            y: viewportOffset.y + drawing.y * viewportScale,
-            width: drawing.width * viewportScale,
-            height: drawing.height * viewportScale,
-            fontSize: drawing.fontSize * viewportScale,
-          });
-          window.setTimeout(() => {
-            textEditInputRef.current?.focus();
-            textEditInputRef.current?.select();
-          }, 0);
+          setTextEdit({ drawingId: drawing.id, value: drawing.text });
           event.preventDefault();
         }
         return;
@@ -1612,14 +1638,7 @@ export function TopologyCanvas({
         onOpenNativeConsole?.(nodeId);
       }
     },
-    [
-      onOpenNativeConsole,
-      onSelectCable,
-      resolvedDrawings,
-      syncSingleSelection,
-      viewportOffset,
-      viewportScale,
-    ],
+    [onOpenNativeConsole, onSelectCable, resolvedDrawings, syncSingleSelection],
   );
 
   const handleDisconnect = useCallback(
@@ -1919,7 +1938,8 @@ export function TopologyCanvas({
                 ? "grab"
                 : isDragging || isDrawingDragging
                   ? "grabbing"
-                  : cableState.mode === "drawing"
+                  : cableState.mode === "drawing" ||
+                      activeDrawingTool === "text"
                     ? "crosshair"
                     : "default",
           }}
@@ -1972,19 +1992,58 @@ export function TopologyCanvas({
                         height={drawing.height}
                         fill="transparent"
                       />
-                      <text
-                        x={drawing.x + drawing.width / 2}
-                        y={drawing.y + drawing.height / 2}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        fill={drawing.fill}
-                        fontSize={drawing.fontSize}
-                        fontWeight={800}
-                        opacity={drawing.opacity}
-                        pointerEvents="none"
-                      >
-                        {drawing.text}
-                      </text>
+                      {textEdit?.drawingId === drawing.id ? (
+                        <foreignObject
+                          x={drawing.x}
+                          y={drawing.y}
+                          width={drawing.width}
+                          height={drawing.height}
+                          data-testid={`drawing-text-editor-${drawing.id}`}
+                        >
+                          <input
+                            ref={textEditInputRef}
+                            className="canvas-inline-text-editor"
+                            aria-label="Edit Text Drawing"
+                            value={textEdit.value}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onDoubleClick={(event) => event.stopPropagation()}
+                            onChange={(event) =>
+                              setTextEdit((current) =>
+                                current
+                                  ? { ...current, value: event.target.value }
+                                  : current,
+                              )
+                            }
+                            onBlur={commitTextEdit}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                commitTextEdit();
+                              }
+                              if (event.key === "Escape") {
+                                setTextEdit(null);
+                              }
+                            }}
+                            style={{
+                              color: drawing.fill,
+                              fontSize: drawing.fontSize,
+                            }}
+                          />
+                        </foreignObject>
+                      ) : (
+                        <text
+                          x={drawing.x + drawing.width / 2}
+                          y={drawing.y + drawing.height / 2}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fill={drawing.fill}
+                          fontSize={drawing.fontSize}
+                          fontWeight={800}
+                          opacity={drawing.opacity}
+                          pointerEvents="none"
+                        >
+                          {drawing.text}
+                        </text>
+                      )}
                     </g>
                   ) : drawing.shape === "ellipse" ||
                     drawing.shape === "circle" ? (
@@ -2330,35 +2389,6 @@ export function TopologyCanvas({
             )}
           </g>
         </svg>
-        {textEdit ? (
-          <input
-            ref={textEditInputRef}
-            className="canvas-text-editor"
-            aria-label="Edit Text Drawing"
-            value={textEdit.value}
-            onChange={(event) =>
-              setTextEdit((current) =>
-                current ? { ...current, value: event.target.value } : current,
-              )
-            }
-            onBlur={commitTextEdit}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                commitTextEdit();
-              }
-              if (event.key === "Escape") {
-                setTextEdit(null);
-              }
-            }}
-            style={{
-              left: textEdit.x,
-              top: textEdit.y,
-              width: textEdit.width,
-              height: textEdit.height,
-              fontSize: textEdit.fontSize,
-            }}
-          />
-        ) : null}
       </div>
       <ContextMenu
         open={contextMenu !== null}
