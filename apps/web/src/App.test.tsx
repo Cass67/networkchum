@@ -10,7 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { NodeBootActionState } from "@networkchum/shared";
+import type { CanvasDrawing, NodeBootActionState } from "@networkchum/shared";
 
 type DeviceRoleIcon =
   | "router"
@@ -50,6 +50,30 @@ function openLabsDrawer() {
   if (!labsButton.classList.contains("active")) {
     fireEvent.click(labsButton);
   }
+}
+
+function mockSvgPoint(svgElement: HTMLElement) {
+  const svg = svgElement as any;
+  let ptX = 0;
+  let ptY = 0;
+  svg.createSVGPoint = () => ({
+    get x() {
+      return ptX;
+    },
+    set x(v: number) {
+      ptX = v;
+    },
+    get y() {
+      return ptY;
+    },
+    set y(v: number) {
+      ptY = v;
+    },
+    matrixTransform: () => ({ x: ptX, y: ptY }),
+  });
+  svg.getScreenCTM = () => ({
+    inverse: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
+  });
 }
 
 async function openInspectorPanel() {
@@ -266,6 +290,127 @@ describe("App", () => {
       expect(panel.getAllByText("node-two").length).toBeGreaterThan(0);
     });
     expect(panel.queryByText("node-one")).not.toBeInTheDocument();
+  });
+
+  it("falls back to individual node moves when batch node move is unavailable", async () => {
+    const moveNodes = vi.fn(async () => {
+      throw new Error("not found");
+    });
+    const moveNode = vi.fn(
+      async (
+        labId: string,
+        nodeId: string,
+        position: { x: number; y: number },
+      ) => ({
+        id: labId,
+        name: "Fallback Lab",
+        document: {
+          nodes: [{ id: nodeId, name: "node-one", position }],
+          networks: [],
+          attachments: [],
+          canvas: {
+            drawings: [
+              {
+                id: "shape-1",
+                kind: "shape" as const,
+                shape: "rectangle" as const,
+                x: 80,
+                y: 100,
+                width: 420,
+                height: 180,
+                fill: "#fde68a",
+                stroke: "#f59e0b",
+                opacity: 0.75,
+                locked: true,
+                zIndex: 1,
+              },
+            ],
+          },
+        },
+      }),
+    );
+    const updateCanvasDrawings = vi.fn(
+      async (labId: string, drawings: CanvasDrawing[]) => ({
+        id: labId,
+        name: "Fallback Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "node-one", position: { x: 50, y: 50 } },
+          ],
+          networks: [],
+          attachments: [],
+          canvas: { drawings },
+        },
+      }),
+    );
+    const api = {
+      listLabs: async () => [{ id: "lab-1", name: "Fallback Lab" }],
+      listCatalog: async () => [],
+      listTemplates: async () => [],
+      listImages: async () => [],
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Fallback Lab",
+        document: {
+          nodes: [
+            { id: "node-1", name: "node-one", position: { x: 50, y: 50 } },
+          ],
+          networks: [],
+          attachments: [],
+          canvas: {
+            drawings: [
+              {
+                id: "shape-1",
+                kind: "shape" as const,
+                shape: "rectangle" as const,
+                x: 20,
+                y: 20,
+                width: 420,
+                height: 180,
+                fill: "#fde68a",
+                stroke: "#f59e0b",
+                opacity: 0.75,
+                locked: true,
+                zIndex: 1,
+              },
+            ],
+          },
+        },
+      }),
+      listRuntimeStates: async () => [],
+      createLab: async () => ({ id: "lab-2", name: "New Lab" }),
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Fallback Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({ nodeId: "node-1", status: "running" }),
+      moveNodes,
+      moveNode,
+      updateCanvasDrawings,
+    };
+
+    render(<App api={api} />);
+
+    const svg = await screen.findByTestId("topology-svg");
+    mockSvgPoint(svg);
+
+    fireEvent.mouseDown(await screen.findByTestId("drawing-shape-1"), {
+      clientX: 30,
+      clientY: 40,
+    });
+    fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+    fireEvent.mouseUp(svg);
+
+    await waitFor(() => {
+      expect(moveNodes).toHaveBeenCalledWith("lab-1", [
+        { nodeId: "node-1", position: { x: 110, y: 130 } },
+      ]);
+      expect(moveNode).toHaveBeenCalledWith("lab-1", "node-1", {
+        x: 110,
+        y: 130,
+      });
+    });
   });
 
   it("edits template defaults from the templates tab", async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isLocalPageHost,
+  resolveApiBaseUrl,
   resolveBridgeBaseUrl,
   resolveConsoleWebSocketUrl,
 } from "./runtimeUrls.js";
@@ -26,6 +27,15 @@ describe("runtimeUrls", () => {
         hostname: "192.168.1.25",
       }),
     ).toBe("http://127.0.0.1:4010");
+  });
+
+  it("uses the same page host for API traffic on remote page hosts", () => {
+    expect(
+      resolveApiBaseUrl({
+        protocol: "http:",
+        hostname: "192.168.1.25",
+      }),
+    ).toBe("http://192.168.1.25:4000");
   });
 
   it("uses the page host for console websocket traffic", () => {

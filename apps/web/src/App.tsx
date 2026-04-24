@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CanvasDrawing,
   CloudRole,
@@ -600,7 +600,6 @@ const demoCatalog: CatalogSummary[] = [
   },
 ];
 
-const browserApi = typeof fetch === "function" ? createApiClient(fetch) : null;
 const THEME_STORAGE_KEY = "networkchum-theme";
 const NATIVE_CONSOLE_STORAGE_KEY = "networkchum-native-console";
 const MACOS_TERMINAL_STORAGE_KEY = "networkchum-macos-terminal";
@@ -781,7 +780,7 @@ function resolveEffectiveContainerDetails(
   };
 }
 
-const defaultApi: ApiClient = browserApi ?? {
+const defaultApi: ApiClient = {
   async listLabs() {
     return demoLabs;
   },
@@ -1133,12 +1132,20 @@ const defaultApi: ApiClient = browserApi ?? {
 };
 
 export function App({
-  api = defaultApi,
+  api: apiOverride,
   locationLike = window.location,
 }: {
   api?: ApiClient;
   locationLike?: LocationLike;
 }) {
+  const api = useMemo(
+    () =>
+      apiOverride ??
+      (typeof fetch === "function"
+        ? createApiClient(fetch, resolveApiBaseUrl(locationLike))
+        : defaultApi),
+    [apiOverride, locationLike.hostname, locationLike.protocol],
+  );
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const initialTheme = readStoredTheme();
 
@@ -2762,12 +2769,7 @@ export function App({
           }}
           onMoveNodes={async (moves) => {
             if (!selectedLabId) return;
-            try {
-              if (api.moveNodes) {
-                const lab = await api.moveNodes(selectedLabId, moves);
-                applyLabUpdate(lab);
-                return;
-              }
+            const moveNodesIndividually = async () => {
               if (!api.moveNode) return;
               for (const move of moves) {
                 const lab = await api.moveNode(
@@ -2777,6 +2779,19 @@ export function App({
                 );
                 applyLabUpdate(lab);
               }
+            };
+            try {
+              if (api.moveNodes) {
+                try {
+                  const lab = await api.moveNodes(selectedLabId, moves);
+                  applyLabUpdate(lab);
+                  return;
+                } catch {
+                  await moveNodesIndividually();
+                  return;
+                }
+              }
+              await moveNodesIndividually();
             } catch {
               /* keep existing state */
             }
