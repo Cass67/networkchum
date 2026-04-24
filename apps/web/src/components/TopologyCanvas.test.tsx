@@ -588,7 +588,11 @@ describe("TopologyCanvas", () => {
 
       fireEvent.doubleClick(screen.getByTestId("drawing-text-1"));
       const editor = screen.getByLabelText("Edit Text Drawing");
-      expect(editor.closest("foreignObject")).not.toBeNull();
+      const editFrame = editor.closest("foreignObject");
+      expect(editFrame).not.toBeNull();
+      expect(editFrame).toHaveAttribute("width", "160");
+      expect(editor).toHaveStyle({ width: "100%" });
+      expect(editor).toHaveAttribute("size", "1");
       expect(document.querySelector(".canvas-text-editor")).toBeNull();
       fireEvent.change(editor, { target: { value: "Internet" } });
       fireEvent.blur(editor);

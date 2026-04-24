@@ -2024,9 +2024,12 @@ export function TopologyCanvas({
                               }
                             }}
                             style={{
+                              boxSizing: "border-box",
                               color: drawing.fill,
                               fontSize: drawing.fontSize,
+                              width: "100%",
                             }}
+                            size={1}
                           />
                         </foreignObject>
                       ) : (
