@@ -294,6 +294,7 @@ type PanState = {
 type DrawingInteractionState = {
   active: boolean;
   mode: "move" | "resize";
+  resizeHandle: ResizeHandle | null;
   drawingId: string | null;
   startX: number;
   startY: number;
@@ -304,6 +305,8 @@ type DrawingInteractionState = {
   containedDrawingIds: string[];
   startDrawingPositions: Record<string, { x: number; y: number }>;
 };
+
+type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 type CableState = {
   mode: "idle" | "drawing";
@@ -383,17 +386,43 @@ function resizeDrawing(
   drawing: CanvasDrawing,
   deltaX: number,
   deltaY: number,
+  handle: ResizeHandle,
 ): CanvasDrawing {
-  let width = Math.max(MIN_DRAWING_SIZE, drawing.width + deltaX);
-  let height = Math.max(MIN_DRAWING_SIZE, drawing.height + deltaY);
+  let left = drawing.x;
+  let right = drawing.x + drawing.width;
+  let top = drawing.y;
+  let bottom = drawing.y + drawing.height;
+
+  if (handle.includes("w")) {
+    left = Math.min(right - MIN_DRAWING_SIZE, drawing.x + deltaX);
+  } else {
+    right = Math.max(left + MIN_DRAWING_SIZE, right + deltaX);
+  }
+
+  if (handle.includes("n")) {
+    top = Math.min(bottom - MIN_DRAWING_SIZE, drawing.y + deltaY);
+  } else {
+    bottom = Math.max(top + MIN_DRAWING_SIZE, bottom + deltaY);
+  }
+
+  let x = left;
+  let y = top;
+  let width = right - left;
+  let height = bottom - top;
 
   if (drawingHasLockedAspect(drawing)) {
     const size = Math.max(width, height);
+    if (handle.includes("w")) {
+      x = right - size;
+    }
+    if (handle.includes("n")) {
+      y = bottom - size;
+    }
     width = size;
     height = size;
   }
 
-  return { ...drawing, width, height };
+  return { ...drawing, x, y, width, height };
 }
 
 function nodeCenterIsInsideDrawing(node: CanvasNode, drawing: CanvasDrawing) {
@@ -655,6 +684,7 @@ export function TopologyCanvas({
   const drawingInteractionRef = useRef<DrawingInteractionState>({
     active: false,
     mode: "move",
+    resizeHandle: null,
     drawingId: null,
     startX: 0,
     startY: 0,
@@ -938,6 +968,10 @@ export function TopologyCanvas({
       const resizeEl = target.closest<SVGElement>("[data-drawing-resize-id]");
       if (resizeEl) {
         const drawingId = resizeEl.getAttribute("data-drawing-resize-id")!;
+        const resizeHandle =
+          (resizeEl.getAttribute(
+            "data-drawing-resize-handle",
+          ) as ResizeHandle | null) ?? "se";
         const drawing = resolvedDrawings.find(
           (entry) => entry.id === drawingId,
         );
@@ -956,6 +990,7 @@ export function TopologyCanvas({
         drawingInteractionRef.current = {
           active: true,
           mode: "resize",
+          resizeHandle,
           drawingId,
           startX: svgPt.x,
           startY: svgPt.y,
@@ -993,15 +1028,20 @@ export function TopologyCanvas({
           viewportOffset,
           viewportScale,
         );
-        const containedNodeIds = resolvedNodes
-          .filter((node) => nodeCenterIsInsideDrawing(node, drawing))
-          .map((node) => node.id);
-        const containedDrawingIds = resolvedDrawings
-          .filter((entry) => drawingCenterIsInsideDrawing(entry, drawing))
-          .map((entry) => entry.id);
+        const containedNodeIds = drawing.locked
+          ? resolvedNodes
+              .filter((node) => nodeCenterIsInsideDrawing(node, drawing))
+              .map((node) => node.id)
+          : [];
+        const containedDrawingIds = drawing.locked
+          ? resolvedDrawings
+              .filter((entry) => drawingCenterIsInsideDrawing(entry, drawing))
+              .map((entry) => entry.id)
+          : [];
         drawingInteractionRef.current = {
           active: true,
           mode: "move",
+          resizeHandle: null,
           drawingId,
           startX: svgPt.x,
           startY: svgPt.y,
@@ -1189,7 +1229,12 @@ export function TopologyCanvas({
         const deltaY = svgPt.y - interaction.startY;
         const nextDrawing =
           interaction.mode === "resize"
-            ? resizeDrawing(interaction.startDrawing, deltaX, deltaY)
+            ? resizeDrawing(
+                interaction.startDrawing,
+                deltaX,
+                deltaY,
+                interaction.resizeHandle ?? "se",
+              )
             : {
                 ...interaction.startDrawing,
                 x: interaction.startDrawing.x + deltaX,
@@ -1351,6 +1396,7 @@ export function TopologyCanvas({
         drawingInteractionRef.current = {
           active: false,
           mode: "move",
+          resizeHandle: null,
           drawingId: null,
           startX: 0,
           startY: 0,
@@ -1954,32 +2000,6 @@ export function TopologyCanvas({
                       style={{ cursor: drawingCursor }}
                     />
                   )}
-                  {isSelected ? (
-                    <rect
-                      x={drawing.x - 4}
-                      y={drawing.y - 4}
-                      width={drawing.width + 8}
-                      height={drawing.height + 8}
-                      fill="none"
-                      stroke="var(--canvas-node-selected)"
-                      strokeDasharray="6 3"
-                      pointerEvents="none"
-                    />
-                  ) : null}
-                  {isSelected && !drawing.locked && onUpdateCanvasDrawings ? (
-                    <rect
-                      x={drawing.x + drawing.width - 6}
-                      y={drawing.y + drawing.height - 6}
-                      width={12}
-                      height={12}
-                      fill="var(--accent-strong)"
-                      stroke="var(--panel-bg-strong)"
-                      strokeWidth={2}
-                      data-drawing-resize-id={drawing.id}
-                      data-testid={`drawing-resize-${drawing.id}`}
-                      style={{ cursor: "nwse-resize" }}
-                    />
-                  ) : null}
                 </g>
               );
             })}
@@ -2118,6 +2138,55 @@ export function TopologyCanvas({
                 </g>
               );
             })}
+
+            {selectedDrawing ? (
+              <g data-testid="drawing-selection-overlay">
+                <rect
+                  x={selectedDrawing.x - 4}
+                  y={selectedDrawing.y - 4}
+                  width={selectedDrawing.width + 8}
+                  height={selectedDrawing.height + 8}
+                  fill="none"
+                  stroke="var(--canvas-node-selected)"
+                  strokeDasharray="6 3"
+                  pointerEvents="none"
+                />
+                {!selectedDrawing.locked && onUpdateCanvasDrawings
+                  ? (["nw", "ne", "sw", "se"] as const).map((handle) => {
+                      const x = handle.includes("w")
+                        ? selectedDrawing.x - 6
+                        : selectedDrawing.x + selectedDrawing.width - 6;
+                      const y = handle.includes("n")
+                        ? selectedDrawing.y - 6
+                        : selectedDrawing.y + selectedDrawing.height - 6;
+                      const cursor =
+                        handle === "nw" || handle === "se"
+                          ? "nwse-resize"
+                          : "nesw-resize";
+                      return (
+                        <rect
+                          key={handle}
+                          x={x}
+                          y={y}
+                          width={12}
+                          height={12}
+                          fill="var(--accent-strong)"
+                          stroke="var(--panel-bg-strong)"
+                          strokeWidth={2}
+                          data-drawing-resize-id={selectedDrawing.id}
+                          data-drawing-resize-handle={handle}
+                          data-testid={
+                            handle === "se"
+                              ? `drawing-resize-${selectedDrawing.id}`
+                              : `drawing-resize-${handle}-${selectedDrawing.id}`
+                          }
+                          style={{ cursor }}
+                        />
+                      );
+                    })
+                  : null}
+              </g>
+            ) : null}
 
             {selectionBox?.active ? (
               <rect

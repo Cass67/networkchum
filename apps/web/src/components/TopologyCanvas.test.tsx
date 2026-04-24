@@ -591,6 +591,7 @@ describe("TopologyCanvas", () => {
     });
 
     it("moves unlocked drawings by dragging them", () => {
+      const onMoveNodes = vi.fn();
       const onUpdateCanvasDrawings = vi.fn();
       render(
         <TopologyCanvas
@@ -598,6 +599,7 @@ describe("TopologyCanvas", () => {
           labId="lab-1"
           nodes={nodes}
           drawings={[shape]}
+          onMoveNodes={onMoveNodes}
           onUpdateCanvasDrawings={onUpdateCanvasDrawings}
         />,
       );
@@ -611,22 +613,24 @@ describe("TopologyCanvas", () => {
       });
       fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
 
-      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("x", "110");
-      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("y", "130");
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("x", "50");
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("y", "50");
 
       fireEvent.mouseUp(svg);
 
       expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
         expect.objectContaining({ id: "shape-1", x: 80, y: 110 }),
       ]);
+      expect(onMoveNodes).not.toHaveBeenCalled();
     });
 
-    it("moves topology nodes inside a dragged drawing in one batch", () => {
+    it("moves topology nodes inside a dragged locked drawing in one batch", () => {
       const onMoveNode = vi.fn();
       const onMoveNodes = vi.fn();
       const onUpdateCanvasDrawings = vi.fn();
       const frame = {
         ...shape,
+        locked: true,
         x: 20,
         y: 20,
         width: 420,
@@ -652,6 +656,10 @@ describe("TopologyCanvas", () => {
         clientY: 40,
       });
       fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("x", "110");
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("y", "130");
+
       fireEvent.mouseUp(svg);
 
       expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
@@ -664,10 +672,60 @@ describe("TopologyCanvas", () => {
       ]);
     });
 
-    it("moves text drawings inside a dragged drawing with the drawing", () => {
+    it("leaves text drawings inside an unlocked dragged drawing in place", () => {
       const onUpdateCanvasDrawings = vi.fn();
       const frame = {
         ...shape,
+        x: 20,
+        y: 20,
+        width: 420,
+        height: 180,
+      };
+      const textDrawing = {
+        id: "text-1",
+        kind: "text" as const,
+        x: 120,
+        y: 130,
+        width: 160,
+        height: 48,
+        text: "network",
+        fill: "#1d4ed8",
+        fontSize: 22,
+        opacity: 1,
+        locked: false,
+        zIndex: 2,
+      };
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[frame, textDrawing]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+      fireEvent.mouseUp(svg);
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-1", x: 80, y: 100 }),
+        expect.objectContaining({ id: "text-1", x: 120, y: 130 }),
+      ]);
+    });
+
+    it("moves text drawings inside a locked dragged drawing with the drawing", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      const frame = {
+        ...shape,
+        locked: true,
         x: 20,
         y: 20,
         width: 420,
@@ -771,6 +829,51 @@ describe("TopologyCanvas", () => {
 
       expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
         expect.objectContaining({ id: "shape-1", width: 230, height: 130 }),
+      ]);
+    });
+
+    it("resizes drawings from the top-left handle without moving nodes", () => {
+      const onMoveNode = vi.fn();
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[shape]}
+          onMoveNode={onMoveNode}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseUp(svg);
+
+      const handle = screen.getByTestId("drawing-resize-nw-shape-1");
+      const node = screen.getByTestId("node-n1");
+      expect(
+        node.compareDocumentPosition(handle) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+
+      fireEvent.mouseDown(handle, { clientX: 20, clientY: 30 });
+      fireEvent.mouseMove(svg, { clientX: 5, clientY: 10 });
+      fireEvent.mouseUp(svg);
+
+      expect(onMoveNode).not.toHaveBeenCalled();
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({
+          id: "shape-1",
+          x: 5,
+          y: 10,
+          width: 195,
+          height: 110,
+        }),
       ]);
     });
 
