@@ -534,6 +534,51 @@ describe("api", () => {
     expect(payload.lab.document.nodes[0]?.name).toBe("host-1");
   });
 
+  it("persists canvas drawings on the lab document", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Drawing Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const drawings = [
+      {
+        id: "building-a",
+        kind: "shape",
+        shape: "rectangle",
+        x: 10,
+        y: 20,
+        width: 320,
+        height: 180,
+        fill: "#bfdbfe",
+        stroke: "#2563eb",
+        opacity: 0.35,
+        locked: true,
+        zIndex: 2,
+      },
+    ];
+
+    const patchResponse = await app.inject({
+      method: "PATCH",
+      url: `/labs/${labId}/canvas/drawings`,
+      payload: { drawings },
+    });
+
+    expect(patchResponse.statusCode, patchResponse.body).toBe(200);
+    const patchPayload = patchResponse.json() as {
+      lab: {
+        document: {
+          canvas: {
+            drawings: typeof drawings;
+          };
+        };
+      };
+    };
+    expect(patchPayload.lab.document.canvas.drawings).toEqual(drawings);
+    expect((await getLab(labId))?.document.canvas.drawings).toEqual(drawings);
+  });
+
   it("creates a one-off container node in the current lab", async () => {
     const createLabResponse = await app.inject({
       method: "POST",

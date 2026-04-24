@@ -18,6 +18,79 @@ describe("LabDocumentSchema", () => {
     });
 
     expect(result.name).toBe("demo");
+    expect(result.canvas.drawings).toEqual([]);
+  });
+
+  it("accepts persistent canvas drawings in the lab file", () => {
+    const result = LabDocumentSchema.parse({
+      id: "lab-1",
+      name: "demo",
+      version: 1,
+      canvas: {
+        zoom: 1,
+        backgroundImage: null,
+        drawings: [
+          {
+            id: "shape-1",
+            kind: "shape",
+            shape: "rectangle",
+            x: 20,
+            y: 30,
+            width: 180,
+            height: 90,
+            fill: "#dbeafe",
+            stroke: "#2563eb",
+            opacity: 0.4,
+            locked: true,
+            zIndex: 2,
+          },
+          {
+            id: "image-1",
+            kind: "image",
+            x: 10,
+            y: 12,
+            width: 400,
+            height: 240,
+            src: "data:image/png;base64,aGVsbG8=",
+            opacity: 0.8,
+            locked: false,
+            zIndex: 1,
+          },
+          {
+            id: "text-1",
+            kind: "text",
+            x: 40,
+            y: 42,
+            width: 160,
+            height: 48,
+            text: "Core",
+            fill: "#f8fafc",
+            fontSize: 20,
+            opacity: 1,
+            locked: false,
+            zIndex: 3,
+          },
+        ],
+      },
+      nodes: [],
+      networks: [],
+      attachments: [],
+      annotations: [],
+      startupConfigSets: [],
+      activeConfigSetId: null,
+    });
+
+    expect(result.canvas.drawings).toHaveLength(3);
+    expect(result.canvas.drawings[0]).toMatchObject({
+      kind: "shape",
+      shape: "rectangle",
+      locked: true,
+    });
+    expect(result.canvas.drawings[2]).toMatchObject({
+      kind: "text",
+      text: "Core",
+      fontSize: 20,
+    });
   });
 
   it("normalizes legacy single boot actions into split startup and backup modes", () => {

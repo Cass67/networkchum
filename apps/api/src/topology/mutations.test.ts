@@ -9,6 +9,7 @@ import {
   moveNode,
   removeNetwork,
   removeNode,
+  setCanvasDrawings,
 } from "./mutations.js";
 import * as mutations from "./mutations.js";
 
@@ -17,7 +18,7 @@ function makeDocument(overrides: Partial<LabDocument> = {}): LabDocument {
     id: "lab-1",
     name: "Test Lab",
     version: 1,
-    canvas: { zoom: 1, backgroundImage: null },
+    canvas: { zoom: 1, backgroundImage: null, drawings: [] },
     nodes: [],
     networks: [],
     attachments: [],
@@ -95,6 +96,47 @@ describe("moveNode", () => {
     const result = moveNode(doc, "node-a", { x: 5, y: 5 });
 
     expect(result.nodes[1]).toBe(doc.nodes[1]);
+  });
+});
+
+describe("setCanvasDrawings", () => {
+  it("replaces persistent canvas drawings without touching topology", () => {
+    const doc = makeDocument({
+      nodes: [
+        {
+          id: "node-a",
+          name: "A",
+          runtime: "container",
+          templateId: "tpl-1",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 512, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [],
+        },
+      ],
+    });
+    const drawings = [
+      {
+        id: "shape-1",
+        kind: "shape" as const,
+        shape: "ellipse" as const,
+        x: 20,
+        y: 30,
+        width: 160,
+        height: 80,
+        fill: "#fde68a",
+        stroke: "#f59e0b",
+        opacity: 0.35,
+        locked: false,
+        zIndex: 1,
+      },
+    ];
+
+    const result = setCanvasDrawings(doc, drawings);
+
+    expect(result.canvas.drawings).toEqual(drawings);
+    expect(result.nodes).toBe(doc.nodes);
   });
 });
 

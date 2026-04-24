@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import type {
+  CanvasDrawing,
   CloudRole,
   NodeBootAction,
   NodeBootActionState,
@@ -136,6 +137,11 @@ type StartupConfigSetData = {
 };
 
 type LabDocumentData = {
+  canvas?: {
+    zoom?: number;
+    backgroundImage?: string | null;
+    drawings?: CanvasDrawing[];
+  };
   nodes: LabNodeData[];
   networks: Array<{ id: string; kind: string; name: string; visible: boolean }>;
   attachments: Array<{ interfaceId: string; networkId: string }>;
@@ -358,6 +364,15 @@ type ApiClient = {
     labId: string,
     nodeId: string,
     position: { x: number; y: number },
+  ) => Promise<{
+    id: string;
+    name: string;
+    autoBackup?: boolean;
+    document: LabDocumentData;
+  }>;
+  updateCanvasDrawings?: (
+    labId: string,
+    drawings: CanvasDrawing[],
   ) => Promise<{
     id: string;
     name: string;
@@ -1516,6 +1531,7 @@ export function App({
   function applyLabUpdate(nextLab: {
     id: string;
     name: string;
+    autoBackup?: boolean;
     document: LabDocumentData;
   }) {
     setSelectedLab(nextLab);
@@ -1524,6 +1540,37 @@ export function App({
         lab.id === nextLab.id ? { ...lab, name: nextLab.name } : lab,
       ),
     );
+  }
+
+  async function handleUpdateCanvasDrawings(drawings: CanvasDrawing[]) {
+    if (!selectedLabId || !selectedLab) {
+      return;
+    }
+
+    const nextLab = {
+      ...selectedLab,
+      document: {
+        ...selectedLab.document,
+        canvas: {
+          zoom: selectedLab.document.canvas?.zoom ?? 1,
+          backgroundImage: selectedLab.document.canvas?.backgroundImage ?? null,
+          ...selectedLab.document.canvas,
+          drawings,
+        },
+      },
+    };
+    applyLabUpdate(nextLab);
+
+    if (!api.updateCanvasDrawings) {
+      return;
+    }
+
+    try {
+      const savedLab = await api.updateCanvasDrawings(selectedLabId, drawings);
+      applyLabUpdate(savedLab);
+    } catch {
+      /* keep optimistic canvas edits in place */
+    }
   }
 
   async function handleCreateLab() {
@@ -2695,6 +2742,7 @@ export function App({
           nodes={canvasNodes}
           networks={selectedLab?.document.networks ?? []}
           attachments={selectedLab?.document.attachments ?? []}
+          drawings={selectedLab?.document.canvas?.drawings ?? []}
           nodeStatuses={nodeStatuses}
           selectedNodeId={selectedNodeId}
           onSelectNode={(nodeId) => {
@@ -2738,6 +2786,9 @@ export function App({
           onPowerOnNode={handlePowerOnNode}
           onPowerOffNode={handlePowerOffNode}
           onOpenNativeConsole={handleOpenNativeConsole}
+          onUpdateCanvasDrawings={
+            selectedLabId ? handleUpdateCanvasDrawings : undefined
+          }
           onRefreshLab={handleRefreshLab}
         />
       </main>

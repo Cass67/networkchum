@@ -1,4 +1,5 @@
 import type {
+  CanvasDrawing,
   CloudRole,
   NodeBootAction,
   NodeBootActionState,
@@ -96,6 +97,11 @@ type StartupConfigSetSummary = {
 };
 
 type LabDocumentSummary = {
+  canvas?: {
+    zoom?: number;
+    backgroundImage?: string | null;
+    drawings?: CanvasDrawing[];
+  };
   nodes: Array<{
     id: string;
     name: string;
@@ -623,6 +629,24 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
+      const payload = await parseResponse<{ lab: LabDetails }>(
+        response as Response,
+      );
+      return payload.lab;
+    },
+
+    async updateCanvasDrawings(
+      labId: string,
+      drawings: CanvasDrawing[],
+    ): Promise<LabDetails> {
+      const response = await fetcher(
+        `${baseUrl}/labs/${labId}/canvas/drawings`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ drawings }),
+        },
+      );
       const payload = await parseResponse<{ lab: LabDetails }>(
         response as Response,
       );

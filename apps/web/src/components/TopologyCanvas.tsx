@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { type ChangeEvent, useCallback, useRef, useState } from "react";
+import type { CanvasDrawing } from "@networkchum/shared";
 
 import { ContextMenu } from "./ContextMenu.js";
 import { DeviceIcon, getDeviceIconKind } from "../icons/deviceIcons.js";
@@ -57,6 +58,8 @@ type TopologyCanvasProps = {
   onPowerOffNode?: (nodeId: string) => void;
   onOpenNativeConsole?: (nodeId: string) => void;
   onRenameNode?: (nodeId: string) => void;
+  drawings?: CanvasDrawing[];
+  onUpdateCanvasDrawings?: (drawings: CanvasDrawing[]) => void | Promise<void>;
 };
 
 const NODE_WIDTH = 100;
@@ -70,6 +73,9 @@ const CABLE_LABEL_OFFSET = 16;
 const MIN_VIEWPORT_SCALE = 0.5;
 const MAX_VIEWPORT_SCALE = 2.5;
 const VIEWPORT_ZOOM_STEP = 1.1;
+const MIN_DRAWING_SIZE = 24;
+const DEFAULT_DRAWING_COLOR = "#facc15";
+const DEFAULT_SHAPE_STROKE = "#f8fafc";
 function getNodeCenter(node: CanvasNode): { x: number; y: number } {
   return {
     x: (node.position?.x ?? 32) + NODE_WIDTH / 2,
@@ -273,6 +279,15 @@ type PanState = {
   originY: number;
 };
 
+type DrawingInteractionState = {
+  active: boolean;
+  mode: "move" | "resize";
+  drawingId: string | null;
+  startX: number;
+  startY: number;
+  startDrawing: CanvasDrawing | null;
+};
+
 type CableState = {
   mode: "idle" | "drawing";
   sourceNodeId: string | null;
@@ -292,6 +307,16 @@ type DisconnectPopup = {
   networkName: string;
   x: number;
   y: number;
+};
+
+type TextEditState = {
+  drawingId: string;
+  value: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
 };
 
 function getSvgPoint(
@@ -322,6 +347,144 @@ function getCanvasPoint(
   };
 }
 
+function createDrawingId() {
+  return `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function sortDrawings(drawings: CanvasDrawing[]) {
+  return [...drawings].sort((a, b) => a.zIndex - b.zIndex);
+}
+
+function drawingHasLockedAspect(drawing: CanvasDrawing) {
+  return (
+    drawing.kind === "shape" &&
+    (drawing.shape === "square" || drawing.shape === "circle")
+  );
+}
+
+function resizeDrawing(
+  drawing: CanvasDrawing,
+  deltaX: number,
+  deltaY: number,
+): CanvasDrawing {
+  let width = Math.max(MIN_DRAWING_SIZE, drawing.width + deltaX);
+  let height = Math.max(MIN_DRAWING_SIZE, drawing.height + deltaY);
+
+  if (drawingHasLockedAspect(drawing)) {
+    const size = Math.max(width, height);
+    width = size;
+    height = size;
+  }
+
+  return { ...drawing, width, height };
+}
+
+type ToolIconKind =
+  | "rectangle"
+  | "square"
+  | "ellipse"
+  | "circle"
+  | "image"
+  | "text"
+  | "lock"
+  | "unlock"
+  | "forward"
+  | "backward"
+  | "delete";
+
+function ToolIcon({ kind }: { kind: ToolIconKind }) {
+  switch (kind) {
+    case "rectangle":
+      return <rect x="5" y="7" width="14" height="10" rx="1.5" />;
+    case "square":
+      return <rect x="6" y="6" width="12" height="12" rx="1.5" />;
+    case "ellipse":
+      return <ellipse cx="12" cy="12" rx="7" ry="5" />;
+    case "circle":
+      return <circle cx="12" cy="12" r="6" />;
+    case "image":
+      return (
+        <>
+          <rect x="4" y="5" width="16" height="14" rx="2" />
+          <path d="M7 16l3.5-4 2.5 3 2-2.2L18 16" />
+          <circle cx="9" cy="9" r="1" />
+        </>
+      );
+    case "text":
+      return <path d="M6 7h12M12 7v10M9 17h6" />;
+    case "lock":
+      return (
+        <>
+          <rect x="6" y="10" width="12" height="9" rx="2" />
+          <path d="M8 10V8a4 4 0 0 1 8 0v2" />
+        </>
+      );
+    case "unlock":
+      return (
+        <>
+          <rect x="6" y="10" width="12" height="9" rx="2" />
+          <path d="M8 10V8a4 4 0 0 1 7-2.6" />
+        </>
+      );
+    case "forward":
+      return (
+        <>
+          <rect x="7" y="9" width="8" height="8" rx="1" />
+          <path d="M11 5h6v6" />
+        </>
+      );
+    case "backward":
+      return (
+        <>
+          <rect x="9" y="7" width="8" height="8" rx="1" />
+          <path d="M7 13v6h6" />
+        </>
+      );
+    case "delete":
+      return (
+        <>
+          <path d="M6 7h12" />
+          <path d="M9 7V5h6v2" />
+          <path d="M8 10l1 9h6l1-9" />
+        </>
+      );
+  }
+}
+
+function ToolButton({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon: ToolIconKind;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="canvas-tool-button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <ToolIcon kind={icon} />
+      </svg>
+    </button>
+  );
+}
+
 export function TopologyCanvas({
   labName,
   labId,
@@ -343,11 +506,15 @@ export function TopologyCanvas({
   onPowerOffNode,
   onOpenNativeConsole,
   onRenameNode,
+  drawings = [],
+  onUpdateCanvasDrawings,
 }: TopologyCanvasProps) {
   const svgWidth = 1440;
   const svgHeight = 900;
 
   const svgRef = useRef<SVGSVGElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const textEditInputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<DragState>({
     dragging: false,
     nodeId: null,
@@ -356,9 +523,27 @@ export function TopologyCanvas({
     selectedIds: [],
     startPositions: {},
   });
+  const drawingInteractionRef = useRef<DrawingInteractionState>({
+    active: false,
+    mode: "move",
+    drawingId: null,
+    startX: 0,
+    startY: 0,
+    startDrawing: null,
+  });
   const [pendingPositions, setPendingPositions] = useState<
     Record<string, { x: number; y: number }>
   >({});
+  const [pendingDrawings, setPendingDrawings] = useState<
+    Record<string, CanvasDrawing>
+  >({});
+  const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(
+    null,
+  );
+  const [textEdit, setTextEdit] = useState<TextEditState | null>(null);
+  const [defaultDrawingColor, setDefaultDrawingColor] = useState(
+    DEFAULT_DRAWING_COLOR,
+  );
   const [selectionBox, setSelectionBox] = useState<SelectionBoxState | null>(
     null,
   );
@@ -388,6 +573,12 @@ export function TopologyCanvas({
     if (pending) return { ...n, position: pending };
     return n;
   });
+  const resolvedDrawings = sortDrawings(
+    drawings.map((drawing) => pendingDrawings[drawing.id] ?? drawing),
+  );
+  const selectedDrawing =
+    resolvedDrawings.find((drawing) => drawing.id === selectedDrawingId) ??
+    null;
 
   const attachedInterfaceIds = new Set(attachments.map((a) => a.interfaceId));
   const interfaceNetworkMap = new Map(
@@ -396,6 +587,172 @@ export function TopologyCanvas({
   const networkMap = new Map(networks.map((n) => [n.id, n]));
 
   const links = buildLinks(resolvedNodes, networks, attachments);
+
+  const commitDrawings = useCallback(
+    (nextDrawings: CanvasDrawing[]) => {
+      void onUpdateCanvasDrawings?.(nextDrawings);
+    },
+    [onUpdateCanvasDrawings],
+  );
+
+  const replaceDrawing = useCallback(
+    (drawingId: string, update: (drawing: CanvasDrawing) => CanvasDrawing) => {
+      commitDrawings(
+        drawings.map((drawing) =>
+          drawing.id === drawingId ? update(drawing) : drawing,
+        ),
+      );
+    },
+    [commitDrawings, drawings],
+  );
+
+  const handleAddShape = useCallback(
+    (shape: "rectangle" | "square" | "ellipse" | "circle") => {
+      const lockedAspect = shape === "square" || shape === "circle";
+      const maxZIndex =
+        drawings.reduce((max, drawing) => Math.max(max, drawing.zIndex), 0) + 1;
+      const drawing: CanvasDrawing = {
+        id: createDrawingId(),
+        kind: "shape",
+        shape,
+        x: 160,
+        y: 140,
+        width: lockedAspect ? 160 : 240,
+        height: lockedAspect ? 160 : 120,
+        fill: defaultDrawingColor,
+        stroke: DEFAULT_SHAPE_STROKE,
+        opacity: 0.75,
+        locked: false,
+        zIndex: maxZIndex,
+      };
+
+      setSelectedDrawingId(drawing.id);
+      commitDrawings([...drawings, drawing]);
+    },
+    [commitDrawings, defaultDrawingColor, drawings],
+  );
+
+  const handleAddText = useCallback(() => {
+    const maxZIndex =
+      drawings.reduce((max, drawing) => Math.max(max, drawing.zIndex), 0) + 1;
+    const drawing: CanvasDrawing = {
+      id: createDrawingId(),
+      kind: "text",
+      x: 180,
+      y: 180,
+      width: 180,
+      height: 56,
+      text: "Label",
+      fill: defaultDrawingColor,
+      fontSize: 22,
+      opacity: 1,
+      locked: false,
+      zIndex: maxZIndex,
+    };
+
+    setSelectedDrawingId(drawing.id);
+    commitDrawings([...drawings, drawing]);
+  }, [commitDrawings, defaultDrawingColor, drawings]);
+
+  const handleAddImageFile = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result !== "string") {
+          return;
+        }
+        const minZIndex =
+          drawings.reduce((min, drawing) => Math.min(min, drawing.zIndex), 0) -
+          1;
+        const drawing: CanvasDrawing = {
+          id: createDrawingId(),
+          kind: "image",
+          x: 120,
+          y: 120,
+          width: 420,
+          height: 260,
+          src: reader.result,
+          opacity: 0.8,
+          locked: false,
+          zIndex: minZIndex,
+        };
+        setSelectedDrawingId(drawing.id);
+        commitDrawings([...drawings, drawing]);
+      };
+      reader.readAsDataURL(file);
+      event.target.value = "";
+    },
+    [commitDrawings, drawings],
+  );
+
+  const handleDrawingColorChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const fill = event.target.value;
+      setDefaultDrawingColor(fill);
+      if (selectedDrawing?.kind === "shape") {
+        replaceDrawing(selectedDrawing.id, (drawing) =>
+          drawing.kind === "shape" ? { ...drawing, fill } : drawing,
+        );
+      } else if (selectedDrawing?.kind === "text") {
+        replaceDrawing(selectedDrawing.id, (drawing) =>
+          drawing.kind === "text" ? { ...drawing, fill } : drawing,
+        );
+      }
+    },
+    [replaceDrawing, selectedDrawing],
+  );
+
+  const handleDeleteSelectedDrawing = useCallback(() => {
+    if (!selectedDrawingId) return;
+    commitDrawings(
+      drawings.filter((drawing) => drawing.id !== selectedDrawingId),
+    );
+    setSelectedDrawingId(null);
+  }, [commitDrawings, drawings, selectedDrawingId]);
+
+  const commitTextEdit = useCallback(() => {
+    if (!textEdit) return;
+    const nextText = textEdit.value.trim() || "Label";
+    commitDrawings(
+      drawings.map((drawing) =>
+        drawing.id === textEdit.drawingId && drawing.kind === "text"
+          ? { ...drawing, text: nextText }
+          : drawing,
+      ),
+    );
+    setTextEdit(null);
+  }, [commitDrawings, drawings, textEdit]);
+
+  const handleToggleSelectedDrawingLock = useCallback(() => {
+    if (!selectedDrawingId) return;
+    replaceDrawing(selectedDrawingId, (drawing) => ({
+      ...drawing,
+      locked: !drawing.locked,
+    }));
+  }, [replaceDrawing, selectedDrawingId]);
+
+  const handleBringDrawingForward = useCallback(
+    (drawingId: string) => {
+      const nextZ =
+        drawings.reduce((max, drawing) => Math.max(max, drawing.zIndex), 0) + 1;
+      replaceDrawing(drawingId, (drawing) => ({ ...drawing, zIndex: nextZ }));
+    },
+    [drawings, replaceDrawing],
+  );
+
+  const handleSendDrawingBackward = useCallback(
+    (drawingId: string) => {
+      const nextZ =
+        drawings.reduce((min, drawing) => Math.min(min, drawing.zIndex), 0) - 1;
+      replaceDrawing(drawingId, (drawing) => ({ ...drawing, zIndex: nextZ }));
+    },
+    [drawings, replaceDrawing],
+  );
 
   const clearCable = useCallback(() => {
     setCableState({ mode: "idle", sourceNodeId: null, mousePos: null });
@@ -423,6 +780,71 @@ export function TopologyCanvas({
   const handleSvgMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       const target = e.target as SVGElement;
+
+      const resizeEl = target.closest<SVGElement>("[data-drawing-resize-id]");
+      if (resizeEl) {
+        const drawingId = resizeEl.getAttribute("data-drawing-resize-id")!;
+        const drawing = resolvedDrawings.find(
+          (entry) => entry.id === drawingId,
+        );
+        const svg = svgRef.current;
+        if (!drawing || drawing.locked || !svg || !onUpdateCanvasDrawings) {
+          return;
+        }
+        const svgPt = getCanvasPoint(
+          svg,
+          e.clientX,
+          e.clientY,
+          viewportOffset,
+          viewportScale,
+        );
+        setSelectedDrawingId(drawingId);
+        drawingInteractionRef.current = {
+          active: true,
+          mode: "resize",
+          drawingId,
+          startX: svgPt.x,
+          startY: svgPt.y,
+          startDrawing: drawing,
+        };
+        syncSingleSelection(null);
+        onSelectCable?.(null);
+        e.preventDefault();
+        return;
+      }
+
+      const drawingEl = target.closest<SVGElement>("[data-drawing-id]");
+      if (drawingEl) {
+        const drawingId = drawingEl.getAttribute("data-drawing-id")!;
+        const drawing = resolvedDrawings.find(
+          (entry) => entry.id === drawingId,
+        );
+        const svg = svgRef.current;
+        setSelectedDrawingId(drawingId);
+        syncSingleSelection(null);
+        onSelectCable?.(null);
+        setDisconnectPopup(null);
+        if (!drawing || drawing.locked || !svg || !onUpdateCanvasDrawings) {
+          return;
+        }
+        const svgPt = getCanvasPoint(
+          svg,
+          e.clientX,
+          e.clientY,
+          viewportOffset,
+          viewportScale,
+        );
+        drawingInteractionRef.current = {
+          active: true,
+          mode: "move",
+          drawingId,
+          startX: svgPt.x,
+          startY: svgPt.y,
+          startDrawing: drawing,
+        };
+        e.preventDefault();
+        return;
+      }
 
       if (spaceHeld) {
         setPanState({
@@ -534,6 +956,7 @@ export function TopologyCanvas({
       }
 
       setDisconnectPopup(null);
+      setSelectedDrawingId(null);
       syncSingleSelection(null);
       onSelectCable?.(null);
     },
@@ -545,6 +968,8 @@ export function TopologyCanvas({
       links,
       syncSingleSelection,
       selectedNodeIds,
+      resolvedDrawings,
+      onUpdateCanvasDrawings,
       spaceHeld,
       viewportOffset,
       viewportScale,
@@ -562,6 +987,26 @@ export function TopologyCanvas({
         viewportOffset,
         viewportScale,
       );
+
+      if (drawingInteractionRef.current.active) {
+        const interaction = drawingInteractionRef.current;
+        if (!interaction.drawingId || !interaction.startDrawing) return;
+        const deltaX = svgPt.x - interaction.startX;
+        const deltaY = svgPt.y - interaction.startY;
+        const nextDrawing =
+          interaction.mode === "resize"
+            ? resizeDrawing(interaction.startDrawing, deltaX, deltaY)
+            : {
+                ...interaction.startDrawing,
+                x: interaction.startDrawing.x + deltaX,
+                y: interaction.startDrawing.y + deltaY,
+              };
+        setPendingDrawings((prev) => ({
+          ...prev,
+          [interaction.drawingId!]: nextDrawing,
+        }));
+        return;
+      }
 
       if (panState?.active) {
         setViewportOffset({
@@ -615,6 +1060,33 @@ export function TopologyCanvas({
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (panState?.active) {
         setPanState(null);
+        return;
+      }
+
+      if (drawingInteractionRef.current.active) {
+        const drawingId = drawingInteractionRef.current.drawingId;
+        const finalDrawing = drawingId ? pendingDrawings[drawingId] : undefined;
+        if (drawingId && finalDrawing) {
+          commitDrawings(
+            drawings.map((drawing) =>
+              drawing.id === drawingId ? finalDrawing : drawing,
+            ),
+          );
+        }
+        setPendingDrawings((prev) => {
+          if (!drawingId) return prev;
+          const next = { ...prev };
+          delete next[drawingId];
+          return next;
+        });
+        drawingInteractionRef.current = {
+          active: false,
+          mode: "move",
+          drawingId: null,
+          startX: 0,
+          startY: 0,
+          startDrawing: null,
+        };
         return;
       }
 
@@ -691,6 +1163,9 @@ export function TopologyCanvas({
     },
     [
       pendingPositions,
+      pendingDrawings,
+      drawings,
+      commitDrawings,
       onMoveNode,
       cableState.mode,
       cableState.sourceNodeId,
@@ -711,6 +1186,7 @@ export function TopologyCanvas({
           return;
         }
         setDisconnectPopup(null);
+        setSelectedDrawingId(null);
         syncSingleSelection(null);
       }
       if (e.key === " ") {
@@ -762,6 +1238,53 @@ export function TopologyCanvas({
     [viewportOffset, viewportScale],
   );
 
+  const handleSvgDoubleClick = useCallback(
+    (event: React.MouseEvent<SVGSVGElement>) => {
+      const target = event.target as SVGElement;
+      const drawingEl = target.closest<SVGElement>("[data-drawing-id]");
+      if (drawingEl) {
+        const drawingId = drawingEl.getAttribute("data-drawing-id")!;
+        const drawing = resolvedDrawings.find(
+          (entry) => entry.id === drawingId,
+        );
+        if (drawing?.kind === "text" && !drawing.locked) {
+          setSelectedDrawingId(drawing.id);
+          syncSingleSelection(null);
+          onSelectCable?.(null);
+          setTextEdit({
+            drawingId: drawing.id,
+            value: drawing.text,
+            x: viewportOffset.x + drawing.x * viewportScale,
+            y: viewportOffset.y + drawing.y * viewportScale,
+            width: drawing.width * viewportScale,
+            height: drawing.height * viewportScale,
+            fontSize: drawing.fontSize * viewportScale,
+          });
+          window.setTimeout(() => {
+            textEditInputRef.current?.focus();
+            textEditInputRef.current?.select();
+          }, 0);
+          event.preventDefault();
+        }
+        return;
+      }
+
+      const nodeGroup = target.closest<SVGGElement>("[data-node-id]");
+      const nodeId = nodeGroup?.getAttribute("data-node-id");
+      if (nodeId) {
+        onOpenNativeConsole?.(nodeId);
+      }
+    },
+    [
+      onOpenNativeConsole,
+      onSelectCable,
+      resolvedDrawings,
+      syncSingleSelection,
+      viewportOffset,
+      viewportScale,
+    ],
+  );
+
   const handleDisconnect = useCallback(
     async (interfaceIds: string[]) => {
       if (!labId || !onDetachInterface) return;
@@ -778,6 +1301,49 @@ export function TopologyCanvas({
     (e: React.MouseEvent<SVGSVGElement>) => {
       e.preventDefault();
       const target = e.target as SVGElement;
+
+      const drawingEl = target.closest<SVGElement>("[data-drawing-id]");
+      if (drawingEl) {
+        const drawingId = drawingEl.getAttribute("data-drawing-id")!;
+        const drawing = resolvedDrawings.find(
+          (entry) => entry.id === drawingId,
+        );
+        setSelectedDrawingId(drawingId);
+        syncSingleSelection(null);
+        onSelectCable?.(null);
+        setContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          items: [
+            {
+              label: drawing?.locked ? "Unlock" : "Lock",
+              onSelect: () =>
+                replaceDrawing(drawingId, (entry) => ({
+                  ...entry,
+                  locked: !entry.locked,
+                })),
+            },
+            {
+              label: "Bring Forward",
+              onSelect: () => handleBringDrawingForward(drawingId),
+            },
+            {
+              label: "Send Backward",
+              onSelect: () => handleSendDrawingBackward(drawingId),
+            },
+            {
+              label: "Delete Drawing",
+              onSelect: () => {
+                commitDrawings(
+                  drawings.filter((entry) => entry.id !== drawingId),
+                );
+                setSelectedDrawingId(null);
+              },
+            },
+          ],
+        });
+        return;
+      }
 
       const linkEl = target.closest<SVGLineElement>("[data-link-id]");
       if (linkEl) {
@@ -855,7 +1421,11 @@ export function TopologyCanvas({
     },
     [
       attachments,
+      commitDrawings,
+      drawings,
+      handleBringDrawingForward,
       handleDisconnect,
+      handleSendDrawingBackward,
       nodeStatuses,
       onDeleteCable,
       onDeleteNode,
@@ -863,6 +1433,8 @@ export function TopologyCanvas({
       onPowerOnNode,
       onRenameNode,
       onSelectCable,
+      replaceDrawing,
+      resolvedDrawings,
       resolvedNodes,
       syncSingleSelection,
       viewportOffset,
@@ -883,6 +1455,9 @@ export function TopologyCanvas({
   })();
 
   const isDragging = Object.keys(pendingPositions).length > 0;
+  const isDrawingDragging =
+    drawingInteractionRef.current.active ||
+    Object.keys(pendingDrawings).length > 0;
   const cableSourceNode = cableDialog
     ? resolvedNodes.find((node) => node.id === cableDialog.sourceNodeId)
     : undefined;
@@ -902,6 +1477,10 @@ export function TopologyCanvas({
     Boolean(cableDialog?.targetInterfaceId) &&
     !attachedInterfaceIds.has(cableDialog?.sourceInterfaceId ?? "") &&
     !attachedInterfaceIds.has(cableDialog?.targetInterfaceId ?? "");
+  const selectedShapeFill =
+    selectedDrawing?.kind === "shape" || selectedDrawing?.kind === "text"
+      ? selectedDrawing.fill
+      : defaultDrawingColor;
 
   return (
     <section className="canvas-panel">
@@ -917,6 +1496,78 @@ export function TopologyCanvas({
         </p>
       </div>
       <div className="canvas-surface">
+        <div
+          className="canvas-drawing-toolbar canvas-drawing-dock"
+          aria-label="Drawing Tools"
+        >
+          <label className="canvas-color-field">
+            <span className="sr-only">Drawing Color</span>
+            <input
+              type="color"
+              aria-label="Drawing Color"
+              value={selectedShapeFill}
+              onChange={handleDrawingColorChange}
+            />
+          </label>
+          <ToolButton
+            label="Add Rectangle"
+            icon="rectangle"
+            onClick={() => handleAddShape("rectangle")}
+          />
+          <ToolButton
+            label="Add Square"
+            icon="square"
+            onClick={() => handleAddShape("square")}
+          />
+          <ToolButton
+            label="Add Ellipse"
+            icon="ellipse"
+            onClick={() => handleAddShape("ellipse")}
+          />
+          <ToolButton
+            label="Add Circle"
+            icon="circle"
+            onClick={() => handleAddShape("circle")}
+          />
+          <ToolButton label="Add Text" icon="text" onClick={handleAddText} />
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            aria-label="Background Image File"
+            onChange={handleAddImageFile}
+          />
+          <ToolButton
+            label="Add Background Image"
+            icon="image"
+            onClick={() => imageInputRef.current?.click()}
+          />
+          {selectedDrawing ? (
+            <>
+              <ToolButton
+                label={selectedDrawing.locked ? "Unlock" : "Lock"}
+                icon={selectedDrawing.locked ? "unlock" : "lock"}
+                onClick={handleToggleSelectedDrawingLock}
+              />
+              <ToolButton
+                label="Bring Forward"
+                icon="forward"
+                onClick={() => handleBringDrawingForward(selectedDrawing.id)}
+              />
+              <ToolButton
+                label="Send Backward"
+                icon="backward"
+                onClick={() => handleSendDrawingBackward(selectedDrawing.id)}
+              />
+              <ToolButton
+                label="Delete Drawing"
+                icon="delete"
+                onClick={handleDeleteSelectedDrawing}
+              />
+            </>
+          ) : null}
+        </div>
         <svg
           ref={svgRef}
           width={svgWidth}
@@ -929,7 +1580,7 @@ export function TopologyCanvas({
               ? "grabbing"
               : spaceHeld
                 ? "grab"
-                : isDragging
+                : isDragging || isDrawingDragging
                   ? "grabbing"
                   : cableState.mode === "drawing"
                     ? "crosshair"
@@ -939,14 +1590,7 @@ export function TopologyCanvas({
           role="application"
           aria-label={labName ? `${labName} topology` : "Topology canvas"}
           onMouseDown={handleSvgMouseDown}
-          onDoubleClick={(event) => {
-            const target = event.target as SVGElement;
-            const nodeGroup = target.closest<SVGGElement>("[data-node-id]");
-            const nodeId = nodeGroup?.getAttribute("data-node-id");
-            if (nodeId) {
-              onOpenNativeConsole?.(nodeId);
-            }
-          }}
+          onDoubleClick={handleSvgDoubleClick}
           onMouseMove={handleSvgMouseMove}
           onMouseUp={handleSvgMouseUp}
           onWheel={handleSvgWheel}
@@ -959,6 +1603,113 @@ export function TopologyCanvas({
             data-testid="viewport-layer"
             transform={`translate(${viewportOffset.x} ${viewportOffset.y}) scale(${viewportScale})`}
           >
+            {resolvedDrawings.map((drawing) => {
+              const isSelected = drawing.id === selectedDrawingId;
+              const drawingCursor =
+                drawing.locked || !onUpdateCanvasDrawings ? "default" : "move";
+              return (
+                <g key={drawing.id}>
+                  {drawing.kind === "image" ? (
+                    <image
+                      href={drawing.src}
+                      x={drawing.x}
+                      y={drawing.y}
+                      width={drawing.width}
+                      height={drawing.height}
+                      preserveAspectRatio="none"
+                      opacity={drawing.opacity}
+                      data-drawing-id={drawing.id}
+                      data-testid={`drawing-${drawing.id}`}
+                      style={{ cursor: drawingCursor }}
+                    />
+                  ) : drawing.kind === "text" ? (
+                    <g
+                      data-drawing-id={drawing.id}
+                      data-testid={`drawing-${drawing.id}`}
+                      fill={drawing.fill}
+                      style={{ cursor: drawingCursor }}
+                    >
+                      <rect
+                        x={drawing.x}
+                        y={drawing.y}
+                        width={drawing.width}
+                        height={drawing.height}
+                        fill="transparent"
+                      />
+                      <text
+                        x={drawing.x + drawing.width / 2}
+                        y={drawing.y + drawing.height / 2}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fill={drawing.fill}
+                        fontSize={drawing.fontSize}
+                        fontWeight={800}
+                        opacity={drawing.opacity}
+                        pointerEvents="none"
+                      >
+                        {drawing.text}
+                      </text>
+                    </g>
+                  ) : drawing.shape === "ellipse" ||
+                    drawing.shape === "circle" ? (
+                    <ellipse
+                      cx={drawing.x + drawing.width / 2}
+                      cy={drawing.y + drawing.height / 2}
+                      rx={drawing.width / 2}
+                      ry={drawing.height / 2}
+                      fill={drawing.fill}
+                      stroke={drawing.stroke}
+                      strokeWidth={2}
+                      opacity={drawing.opacity}
+                      data-drawing-id={drawing.id}
+                      data-testid={`drawing-${drawing.id}`}
+                      style={{ cursor: drawingCursor }}
+                    />
+                  ) : (
+                    <rect
+                      x={drawing.x}
+                      y={drawing.y}
+                      width={drawing.width}
+                      height={drawing.height}
+                      fill={drawing.fill}
+                      stroke={drawing.stroke}
+                      strokeWidth={2}
+                      opacity={drawing.opacity}
+                      data-drawing-id={drawing.id}
+                      data-testid={`drawing-${drawing.id}`}
+                      style={{ cursor: drawingCursor }}
+                    />
+                  )}
+                  {isSelected ? (
+                    <rect
+                      x={drawing.x - 4}
+                      y={drawing.y - 4}
+                      width={drawing.width + 8}
+                      height={drawing.height + 8}
+                      fill="none"
+                      stroke="var(--canvas-node-selected)"
+                      strokeDasharray="6 3"
+                      pointerEvents="none"
+                    />
+                  ) : null}
+                  {isSelected && !drawing.locked && onUpdateCanvasDrawings ? (
+                    <rect
+                      x={drawing.x + drawing.width - 6}
+                      y={drawing.y + drawing.height - 6}
+                      width={12}
+                      height={12}
+                      fill="var(--accent-strong)"
+                      stroke="var(--panel-bg-strong)"
+                      strokeWidth={2}
+                      data-drawing-resize-id={drawing.id}
+                      data-testid={`drawing-resize-${drawing.id}`}
+                      style={{ cursor: "nwse-resize" }}
+                    />
+                  ) : null}
+                </g>
+              );
+            })}
+
             {links.map((link) => (
               <line
                 key={link.id}
@@ -1049,6 +1800,15 @@ export function TopologyCanvas({
                     }}
                     pointerEvents="none"
                   >
+                    <circle
+                      cx={NODE_ICON_BASE_SIZE / 2}
+                      cy={NODE_ICON_BASE_SIZE / 2}
+                      r={NODE_ICON_BASE_SIZE / 2 + 1.6}
+                      fill="var(--canvas-node-glyph-bg)"
+                      stroke={outlineColor}
+                      strokeWidth={0.85}
+                      data-testid={`node-glyph-backplate-${node.id}`}
+                    />
                     {node.deviceRoleIcon ? (
                       <DeviceRoleIconGlyph
                         kind={node.deviceRoleIcon}
@@ -1211,6 +1971,35 @@ export function TopologyCanvas({
             )}
           </g>
         </svg>
+        {textEdit ? (
+          <input
+            ref={textEditInputRef}
+            className="canvas-text-editor"
+            aria-label="Edit Text Drawing"
+            value={textEdit.value}
+            onChange={(event) =>
+              setTextEdit((current) =>
+                current ? { ...current, value: event.target.value } : current,
+              )
+            }
+            onBlur={commitTextEdit}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                commitTextEdit();
+              }
+              if (event.key === "Escape") {
+                setTextEdit(null);
+              }
+            }}
+            style={{
+              left: textEdit.x,
+              top: textEdit.y,
+              width: textEdit.width,
+              height: textEdit.height,
+              fontSize: textEdit.fontSize,
+            }}
+          />
+        ) : null}
       </div>
       <ContextMenu
         open={contextMenu !== null}

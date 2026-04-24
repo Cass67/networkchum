@@ -1,7 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
-import { CloudRoleSchema, NodeBootActionSchema } from "@networkchum/shared";
+import {
+  CanvasDrawingSchema,
+  CloudRoleSchema,
+  NodeBootActionSchema,
+} from "@networkchum/shared";
 
 import {
   listLabs,
@@ -42,6 +46,7 @@ import {
   moveNode,
   renameNode,
   removeNodeConfig,
+  setCanvasDrawings,
   setActiveConfigSet,
   setNodeBootActions,
   setCloudNodeBridgeGroup,
@@ -104,6 +109,10 @@ const setNodeBootActionSchema = z.object({
 const setNodeSettingsSchema = z.object({
   cloudRole: CloudRoleSchema.optional(),
   bridgeGroup: z.string().trim().min(1).nullable().optional(),
+});
+
+const setCanvasDrawingsSchema = z.object({
+  drawings: z.array(CanvasDrawingSchema),
 });
 
 export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
@@ -448,6 +457,22 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       await syncSocketTopology();
     }
     return reply.code(201).send({ lab: updatedLab });
+  });
+
+  app.patch("/labs/:labId/canvas/drawings", async (request, reply) => {
+    const params = z.object({ labId: z.string().min(1) }).parse(request.params);
+    const body = setCanvasDrawingsSchema.parse(request.body);
+    const lab = await getManagedLab(params.labId);
+    if (!lab) {
+      return reply.code(404).send({ message: "Lab not found" });
+    }
+
+    const document = setCanvasDrawings(lab.document, body.drawings);
+    const updatedLab = await updateLabDocument(params.labId, document);
+    if (updatedLab) {
+      await writeLabBackup(updatedLab);
+    }
+    return reply.send({ lab: updatedLab });
   });
 
   app.patch("/labs/:labId/nodes/:nodeId/position", async (request, reply) => {

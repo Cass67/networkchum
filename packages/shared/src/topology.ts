@@ -129,6 +129,42 @@ export const AttachmentSchema = z.object({
   networkId: z.string().min(1),
 });
 
+const CanvasDrawingBaseSchema = z.object({
+  id: z.string().min(1),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().positive(),
+  height: z.number().positive(),
+  opacity: z.number().min(0).max(1).default(1),
+  locked: z.boolean().default(false),
+  zIndex: z.number().int().default(0),
+});
+
+export const CanvasShapeDrawingSchema = CanvasDrawingBaseSchema.extend({
+  kind: z.literal("shape"),
+  shape: z.enum(["rectangle", "square", "ellipse", "circle"]),
+  fill: z.string().min(1),
+  stroke: z.string().min(1),
+});
+
+export const CanvasImageDrawingSchema = CanvasDrawingBaseSchema.extend({
+  kind: z.literal("image"),
+  src: z.string().min(1),
+});
+
+export const CanvasTextDrawingSchema = CanvasDrawingBaseSchema.extend({
+  kind: z.literal("text"),
+  text: z.string().min(1),
+  fill: z.string().min(1),
+  fontSize: z.number().positive().default(22),
+});
+
+export const CanvasDrawingSchema = z.discriminatedUnion("kind", [
+  CanvasShapeDrawingSchema,
+  CanvasImageDrawingSchema,
+  CanvasTextDrawingSchema,
+]);
+
 export const AnnotationSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(["text"]),
@@ -188,6 +224,7 @@ export const LabDocumentSchema = z.object({
   canvas: z.object({
     zoom: z.number().positive(),
     backgroundImage: z.string().nullable(),
+    drawings: z.array(CanvasDrawingSchema).default(() => []),
   }),
   nodes: z.array(LabNodeSchema),
   networks: z.array(NetworkSegmentSchema),
@@ -201,6 +238,7 @@ export const LabDocumentSchema = z.object({
 export type LabDocument = z.infer<typeof LabDocumentSchema>;
 export type LabNode = z.infer<typeof LabNodeSchema>;
 export type Attachment = z.infer<typeof AttachmentSchema>;
+export type CanvasDrawing = z.infer<typeof CanvasDrawingSchema>;
 export type StartupConfigSet = z.infer<typeof StartupConfigSetSchema>;
 export type NodeBootAction = z.infer<typeof NodeBootActionSchema>;
 export type CloudRole = z.infer<typeof CloudRoleSchema>;

@@ -159,6 +159,70 @@ describe("createApiClient", () => {
     expect(lab.document.nodes[0]?.name).toBe("linux-vm-1");
   });
 
+  it("updates persistent canvas drawings through the backend", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        lab: {
+          id: "lab-1",
+          name: "Fetched Lab",
+          document: {
+            canvas: {
+              drawings: [
+                {
+                  id: "shape-1",
+                  kind: "shape",
+                  shape: "rectangle",
+                  x: 20,
+                  y: 30,
+                  width: 180,
+                  height: 90,
+                  fill: "#fde68a",
+                  stroke: "#f59e0b",
+                  opacity: 0.35,
+                  locked: false,
+                  zIndex: 1,
+                },
+              ],
+            },
+            nodes: [],
+            networks: [],
+            attachments: [],
+          },
+        },
+      }),
+    }));
+
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+    const drawings = [
+      {
+        id: "shape-1",
+        kind: "shape" as const,
+        shape: "rectangle" as const,
+        x: 20,
+        y: 30,
+        width: 180,
+        height: 90,
+        fill: "#fde68a",
+        stroke: "#f59e0b",
+        opacity: 0.35,
+        locked: false,
+        zIndex: 1,
+      },
+    ];
+
+    const lab = await client.updateCanvasDrawings("lab-1", drawings);
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/labs/lab-1/canvas/drawings",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ drawings }),
+      }),
+    );
+    expect(lab.document.canvas?.drawings).toEqual(drawings);
+  });
+
   it("powers on a node through the backend", async () => {
     const fetcher = vi.fn(async () => ({
       ok: true,

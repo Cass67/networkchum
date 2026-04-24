@@ -275,6 +275,14 @@ describe("TopologyCanvas", () => {
     );
   });
 
+  it("renders a contrast backplate behind node glyphs", () => {
+    render(<TopologyCanvas labName="Lab" labId="lab-1" nodes={nodes} />);
+
+    const backplate = screen.getByTestId("node-glyph-backplate-n1");
+    expect(backplate).toHaveAttribute("fill", "var(--canvas-node-glyph-bg)");
+    expect(backplate).toHaveAttribute("stroke", "var(--canvas-node-stopped)");
+  });
+
   it("calls onSelectNode when a node is clicked", () => {
     const onSelectNode = vi.fn();
     render(
@@ -411,6 +419,288 @@ describe("TopologyCanvas", () => {
     fireEvent.mouseDown(screen.getByText("Router-1"));
 
     expect(onSelectNode).toHaveBeenCalledWith("n1");
+  });
+
+  describe("drawings", () => {
+    const shape = {
+      id: "shape-1",
+      kind: "shape" as const,
+      shape: "rectangle" as const,
+      x: 20,
+      y: 30,
+      width: 180,
+      height: 90,
+      fill: "#fde68a",
+      stroke: "#f59e0b",
+      opacity: 0.35,
+      locked: false,
+      zIndex: 1,
+    };
+
+    it("renders persistent shapes behind topology objects", () => {
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[shape]}
+        />,
+      );
+
+      const drawing = screen.getByTestId("drawing-shape-1");
+      expect(drawing).toHaveAttribute("fill", "#fde68a");
+      expect(drawing).toHaveAttribute("opacity", "0.35");
+    });
+
+    it("adds a rectangle drawing with the selected fill color", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText("Drawing Color"), {
+        target: { value: "#bfdbfe" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Add Rectangle" }));
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({
+          kind: "shape",
+          shape: "rectangle",
+          fill: "#bfdbfe",
+          opacity: 0.75,
+        }),
+      ]);
+    });
+
+    it("uses icon-only drawing tools in a bottom dock", () => {
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[]}
+          onUpdateCanvasDrawings={vi.fn()}
+        />,
+      );
+
+      const toolbar = screen.getByLabelText("Drawing Tools");
+      expect(toolbar).toHaveClass("canvas-drawing-dock");
+      expect(
+        screen.getByRole("button", { name: "Add Rectangle" }),
+      ).toHaveTextContent("");
+    });
+
+    it("adds a text drawing from the text tool", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText("Drawing Color"), {
+        target: { value: "#facc15" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Add Text" }));
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({
+          kind: "text",
+          text: "Label",
+          fill: "#facc15",
+          fontSize: 22,
+        }),
+      ]);
+    });
+
+    it("renders persistent text drawings", () => {
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[
+            {
+              id: "text-1",
+              kind: "text",
+              x: 20,
+              y: 30,
+              width: 160,
+              height: 48,
+              text: "WAN",
+              fill: "#facc15",
+              fontSize: 22,
+              opacity: 1,
+              locked: false,
+              zIndex: 2,
+            },
+          ]}
+        />,
+      );
+
+      const drawing = screen.getByTestId("drawing-text-1");
+      expect(drawing).toHaveTextContent("WAN");
+      expect(drawing).toHaveAttribute("fill", "#facc15");
+    });
+
+    it("edits text drawings on double click", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      const textDrawing = {
+        id: "text-1",
+        kind: "text" as const,
+        x: 20,
+        y: 30,
+        width: 160,
+        height: 48,
+        text: "WAN",
+        fill: "#facc15",
+        fontSize: 22,
+        opacity: 1,
+        locked: false,
+        zIndex: 2,
+      };
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[textDrawing]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      fireEvent.doubleClick(screen.getByTestId("drawing-text-1"));
+      const editor = screen.getByLabelText("Edit Text Drawing");
+      fireEvent.change(editor, { target: { value: "Internet" } });
+      fireEvent.blur(editor);
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        { ...textDrawing, text: "Internet" },
+      ]);
+    });
+
+    it("moves unlocked drawings by dragging them", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[shape]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+      fireEvent.mouseUp(svg);
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-1", x: 80, y: 110 }),
+      ]);
+    });
+
+    it("does not move locked drawings", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[{ ...shape, locked: true }]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+      fireEvent.mouseUp(svg);
+
+      expect(onUpdateCanvasDrawings).not.toHaveBeenCalled();
+    });
+
+    it("resizes drawings from the resize handle", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[shape]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseUp(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-resize-shape-1"), {
+        clientX: 200,
+        clientY: 120,
+      });
+      fireEvent.mouseMove(svg, { clientX: 250, clientY: 160 });
+      fireEvent.mouseUp(svg);
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-1", width: 230, height: 130 }),
+      ]);
+    });
+
+    it("can lock and reorder drawings from the context menu", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[
+            shape,
+            { ...shape, id: "shape-2", x: 60, y: 80, zIndex: 2 },
+          ]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      fireEvent.contextMenu(screen.getByTestId("drawing-shape-1"), {
+        clientX: 40,
+        clientY: 50,
+      });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Bring Forward" }));
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-1", zIndex: 3 }),
+        expect.objectContaining({ id: "shape-2", zIndex: 2 }),
+      ]);
+    });
   });
 
   describe("drag", () => {

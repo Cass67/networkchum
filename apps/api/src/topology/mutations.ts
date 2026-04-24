@@ -1,4 +1,5 @@
 import type {
+  CanvasDrawing,
   CloudRole,
   LabDocument,
   LabNode,
@@ -115,6 +116,19 @@ export function moveNode(
     nodes: document.nodes.map((n) =>
       n.id === nodeId ? { ...n, position } : n,
     ),
+  };
+}
+
+export function setCanvasDrawings(
+  document: LabDocument,
+  drawings: CanvasDrawing[],
+): LabDocument {
+  return {
+    ...document,
+    canvas: {
+      ...document.canvas,
+      drawings,
+    },
   };
 }
 

@@ -14,7 +14,7 @@ function makeLab(overrides: Partial<LabDocument> = {}): LabDocument {
     id: "lab-abc123",
     name: "Test Lab",
     version: 1,
-    canvas: { zoom: 1, backgroundImage: null },
+    canvas: { zoom: 1, backgroundImage: null, drawings: [] },
     nodes: [],
     networks: [],
     attachments: [],

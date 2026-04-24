@@ -69,6 +69,7 @@ export async function createLab(name: string): Promise<LabRecord> {
       canvas: {
         zoom: 1,
         backgroundImage: null,
+        drawings: [],
       },
       nodes: [],
       networks: [],

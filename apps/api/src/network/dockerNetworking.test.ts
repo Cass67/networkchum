@@ -82,7 +82,7 @@ describe("dockerNetworking", () => {
         id: "lab-1",
         name: "Test",
         version: 1,
-        canvas: { zoom: 1, backgroundImage: null },
+        canvas: { zoom: 1, backgroundImage: null, drawings: [] },
         nodes: [
           {
             id: "node-a",
