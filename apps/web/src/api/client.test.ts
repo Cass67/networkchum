@@ -82,6 +82,64 @@ describe("createApiClient", () => {
     ]);
   });
 
+  it("uploads a topology file for import preview", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        preview: {
+          draftId: "draft-1",
+          source: { format: "eve-unl", fileName: "demo.unl" },
+          labName: "Demo",
+          summary: { nodes: 0, networks: 0, links: 0 },
+          nodes: [],
+          issues: [],
+        },
+      }),
+    }));
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+
+    const preview = await client.previewTopologyImport(
+      new File(["<lab />"], "demo.unl"),
+    );
+
+    expect(fetcher).toHaveBeenCalledWith("/api/imports/topology/preview", {
+      method: "POST",
+      body: expect.any(FormData),
+    });
+    expect(preview.draftId).toBe("draft-1");
+  });
+
+  it("commits a topology import draft", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        lab: {
+          id: "lab-1",
+          name: "Demo",
+          document: { nodes: [], networks: [], attachments: [] },
+        },
+      }),
+    }));
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+
+    const lab = await client.commitTopologyImport("draft-1", {
+      name: "Demo",
+      mappings: [
+        {
+          templateKey: "qemu:vios:vios",
+          templateId: "cisco-iosv",
+          imageId: "img-1",
+        },
+      ],
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/imports/topology/draft-1/commit",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(lab.id).toBe("lab-1");
+  });
+
   it("loads labs from the backend", async () => {
     const fetcher = vi.fn(async () => ({
       ok: true,

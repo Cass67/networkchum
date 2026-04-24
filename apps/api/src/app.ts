@@ -8,6 +8,7 @@ import { consoleRoutes } from "./routes/console.js";
 import { containerRoutes } from "./routes/containers.js";
 import { healthRoutes } from "./routes/health.js";
 import { imageRoutes } from "./routes/images.js";
+import { importRoutes } from "./routes/imports.js";
 import { labRoutes } from "./routes/labs.js";
 import { templateRoutes } from "./routes/templates.js";
 
@@ -40,6 +41,7 @@ export function buildApp(dependencies: AppDependencies = {}) {
   app.register(consoleRoutes);
   app.register(templateRoutes);
   app.register(imageRoutes);
+  app.register(importRoutes, dependencies);
   app.register(catalogRoutes);
   app.register(containerRoutes, dependencies);
   app.register(labRoutes, dependencies);

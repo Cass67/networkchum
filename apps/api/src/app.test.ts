@@ -166,6 +166,55 @@ describe("api", () => {
     expect(response.headers["access-control-allow-methods"]).toContain("PATCH");
   });
 
+  it("previews an uploaded EVE lab import", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/imports/topology/preview",
+      headers: {
+        "content-type": "multipart/form-data; boundary=----test",
+      },
+      payload:
+        "------test\r\n" +
+        'Content-Disposition: form-data; name="file"; filename="demo.unl"\r\n' +
+        "Content-Type: application/xml\r\n\r\n" +
+        '<lab name="Demo"><topology><nodes /></topology></lab>\r\n' +
+        "------test--\r\n",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      (response.json() as { preview: { labName: string } }).preview.labName,
+    ).toBe("Demo");
+  });
+
+  it("commits a resolved import draft as a lab", async () => {
+    const previewResponse = await app.inject({
+      method: "POST",
+      url: "/imports/topology/preview",
+      headers: { "content-type": "multipart/form-data; boundary=----test" },
+      payload:
+        "------test\r\n" +
+        'Content-Disposition: form-data; name="file"; filename="demo.unl"\r\n' +
+        "Content-Type: application/xml\r\n\r\n" +
+        '<lab name="Demo"><topology><nodes /></topology></lab>\r\n' +
+        "------test--\r\n",
+    });
+    const draftId = (previewResponse.json() as { preview: { draftId: string } })
+      .preview.draftId;
+
+    const commitResponse = await app.inject({
+      method: "POST",
+      url: `/imports/topology/${draftId}/commit`,
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({ name: "Imported Demo", mappings: [] }),
+    });
+
+    expect(commitResponse.statusCode).toBe(201);
+    expect((commitResponse.json() as { lab: { name: string } }).lab.name).toBe(
+      "Imported Demo",
+    );
+  });
+
   it("returns built-in templates", async () => {
     const response = await app.inject({ method: "GET", url: "/templates" });
     const payload = response.json() as {

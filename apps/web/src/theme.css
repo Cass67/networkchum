@@ -1053,6 +1053,48 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+.import-dialog {
+  width: min(46rem, calc(100vw - 2rem));
+}
+
+.import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.import-summary strong {
+  color: var(--text);
+}
+
+.import-issues {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--warning);
+}
+
+.import-table {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.import-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) minmax(6rem, 1fr) minmax(10rem, 1.4fr) minmax(10rem, 1.4fr);
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--border);
+}
+
 .disconnect-popup-title {
   font-size: 0.82rem;
   text-align: center;

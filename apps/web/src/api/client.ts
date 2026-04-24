@@ -1,6 +1,8 @@
 import type {
   CanvasDrawing,
   CloudRole,
+  ImportCommitRequest,
+  ImportPreview,
   NodeBootAction,
   NodeBootActionState,
 } from "@networkchum/shared";
@@ -367,6 +369,37 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
         method: "DELETE",
       });
       return parseResponse(response as Response);
+    },
+
+    async previewTopologyImport(file: File): Promise<ImportPreview> {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetcher(`${baseUrl}/imports/topology/preview`, {
+        method: "POST",
+        body,
+      });
+      const payload = await parseResponse<{ preview: ImportPreview }>(
+        response as Response,
+      );
+      return payload.preview;
+    },
+
+    async commitTopologyImport(
+      draftId: string,
+      input: ImportCommitRequest,
+    ): Promise<LabDetails> {
+      const response = await fetcher(
+        `${baseUrl}/imports/topology/${draftId}/commit`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
+      const payload = await parseResponse<{ lab: LabDetails }>(
+        response as Response,
+      );
+      return payload.lab;
     },
 
     async getLab(labId: string): Promise<LabDetails> {

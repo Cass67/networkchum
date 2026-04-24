@@ -207,6 +207,16 @@ Catalog behavior today:
 - unbound VM templates still appear so you can target them during image upload/binding
 - removed images stay visible in the image library, but not in the add-node catalog
 
+## Importing Existing Labs
+
+NetworkChum can import topology files from:
+
+- EVE-NG and PNETLab `.unl`
+- GNS3 `.gns3`
+- GNS3 `.gns3project`, `.gns3p`, or `.zip` packages containing one topology file
+
+The importer reads topology, node positions, links, interface names, and best-effort startup configs. It does not import VM disk images from packages in the first version. When an imported node references a device type or image that is not available in the local catalog, NetworkChum asks you to choose a local substitute template and, where applicable, a bound image before creating the lab.
+
 ## Container Workflow
 
 Use the `Containers` tab when you want to work with OCI images instead of QCOW2 disks.

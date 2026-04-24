@@ -86,6 +86,26 @@ export async function createLab(name: string): Promise<LabRecord> {
   return lab;
 }
 
+export async function createLabFromDocument(
+  name: string,
+  document: LabDocument,
+): Promise<LabRecord> {
+  const labs = await listLabs();
+  const id = document.id;
+  const now = new Date().toISOString();
+  const lab: LabRecord = {
+    id,
+    name,
+    updatedAt: now,
+    autoBackup: false,
+    document: { ...document, id, name },
+  };
+
+  labs.push(lab);
+  await saveLabs(labs);
+  return lab;
+}
+
 export async function getLab(labId: string): Promise<LabRecord | null> {
   const labs = await listLabs();
   return labs.find((lab) => lab.id === labId) ?? null;
