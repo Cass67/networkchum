@@ -591,8 +591,13 @@ describe("TopologyCanvas", () => {
       const editFrame = editor.closest("foreignObject");
       expect(editFrame).not.toBeNull();
       expect(editFrame).toHaveAttribute("width", "160");
-      expect(editor).toHaveStyle({ width: "100%" });
-      expect(editor).toHaveAttribute("size", "1");
+      expect(editor.closest(".canvas-inline-text-editor-frame")).not.toBeNull();
+      expect(editor.closest(".canvas-inline-text-editor-frame")).toHaveStyle({
+        height: "100%",
+        width: "100%",
+      });
+      expect(editor).toHaveStyle({ height: "100%", width: "100%" });
+      expect(editor).not.toHaveAttribute("size");
       expect(document.querySelector(".canvas-text-editor")).toBeNull();
       fireEvent.change(editor, { target: { value: "Internet" } });
       fireEvent.blur(editor);

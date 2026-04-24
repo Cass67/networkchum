@@ -1,5 +1,6 @@
 import {
   type ChangeEvent,
+  type HTMLAttributes,
   useCallback,
   useEffect,
   useRef,
@@ -88,6 +89,9 @@ const INITIAL_FIT_THRESHOLD = 0.72;
 const MIN_DRAWING_SIZE = 24;
 const DEFAULT_DRAWING_COLOR = "#facc15";
 const DEFAULT_SHAPE_STROKE = "#f8fafc";
+const XHTML_NAMESPACE_PROPS = {
+  xmlns: "http://www.w3.org/1999/xhtml",
+} as HTMLAttributes<HTMLDivElement> & { xmlns: string };
 function getNodeCenter(node: CanvasNode): { x: number; y: number } {
   return {
     x: (node.position?.x ?? 32) + NODE_WIDTH / 2,
@@ -2000,37 +2004,49 @@ export function TopologyCanvas({
                           height={drawing.height}
                           data-testid={`drawing-text-editor-${drawing.id}`}
                         >
-                          <input
-                            ref={textEditInputRef}
-                            className="canvas-inline-text-editor"
-                            aria-label="Edit Text Drawing"
-                            value={textEdit.value}
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onDoubleClick={(event) => event.stopPropagation()}
-                            onChange={(event) =>
-                              setTextEdit((current) =>
-                                current
-                                  ? { ...current, value: event.target.value }
-                                  : current,
-                              )
-                            }
-                            onBlur={commitTextEdit}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                commitTextEdit();
-                              }
-                              if (event.key === "Escape") {
-                                setTextEdit(null);
-                              }
-                            }}
+                          <div
+                            className="canvas-inline-text-editor-frame"
                             style={{
-                              boxSizing: "border-box",
-                              color: drawing.fill,
-                              fontSize: drawing.fontSize,
+                              display: "block",
                               width: "100%",
+                              height: "100%",
                             }}
-                            size={1}
-                          />
+                            {...XHTML_NAMESPACE_PROPS}
+                          >
+                            <input
+                              ref={textEditInputRef}
+                              className="canvas-inline-text-editor"
+                              aria-label="Edit Text Drawing"
+                              value={textEdit.value}
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onDoubleClick={(event) => event.stopPropagation()}
+                              onChange={(event) =>
+                                setTextEdit((current) =>
+                                  current
+                                    ? { ...current, value: event.target.value }
+                                    : current,
+                                )
+                              }
+                              onBlur={commitTextEdit}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  commitTextEdit();
+                                }
+                                if (event.key === "Escape") {
+                                  setTextEdit(null);
+                                }
+                              }}
+                              style={{
+                                boxSizing: "border-box",
+                                color: drawing.fill,
+                                display: "block",
+                                fontSize: drawing.fontSize,
+                                height: "100%",
+                                minWidth: 0,
+                                width: "100%",
+                              }}
+                            />
+                          </div>
                         </foreignObject>
                       ) : (
                         <text
