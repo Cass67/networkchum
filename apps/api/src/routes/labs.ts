@@ -44,6 +44,7 @@ import {
   deleteStartupConfigSet,
   detachInterface,
   moveNode,
+  moveNodes,
   renameNode,
   removeNodeConfig,
   setCanvasDrawings,
@@ -113,6 +114,15 @@ const setNodeSettingsSchema = z.object({
 
 const setCanvasDrawingsSchema = z.object({
   drawings: z.array(CanvasDrawingSchema),
+});
+
+const moveNodesSchema = z.object({
+  moves: z.array(
+    z.object({
+      nodeId: z.string().min(1),
+      position: z.object({ x: z.number(), y: z.number() }),
+    }),
+  ),
 });
 
 export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
@@ -486,6 +496,22 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
     }
 
     const document = moveNode(lab.document, params.nodeId, body);
+    const updatedLab = await updateLabDocument(params.labId, document);
+    if (updatedLab) {
+      await writeLabBackup(updatedLab);
+    }
+    return reply.send({ lab: updatedLab });
+  });
+
+  app.patch("/labs/:labId/nodes/positions", async (request, reply) => {
+    const params = z.object({ labId: z.string().min(1) }).parse(request.params);
+    const body = moveNodesSchema.parse(request.body);
+    const lab = await getManagedLab(params.labId);
+    if (!lab) {
+      return reply.code(404).send({ message: "Lab not found" });
+    }
+
+    const document = moveNodes(lab.document, body.moves);
     const updatedLab = await updateLabDocument(params.labId, document);
     if (updatedLab) {
       await writeLabBackup(updatedLab);

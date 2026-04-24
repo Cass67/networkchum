@@ -579,6 +579,70 @@ describe("api", () => {
     expect((await getLab(labId))?.document.canvas.drawings).toEqual(drawings);
   });
 
+  it("moves multiple node positions in one request", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Batch Move Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const firstNodeResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes`,
+      payload: {
+        templateId: "linux-alpine-container",
+        name: "host-1",
+        position: { x: 10, y: 10 },
+      },
+    });
+    const secondNodeResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes`,
+      payload: {
+        templateId: "linux-alpine-container",
+        name: "host-2",
+        position: { x: 40, y: 40 },
+      },
+    });
+    const firstNodeId = (
+      firstNodeResponse.json() as {
+        lab: { document: { nodes: Array<{ id: string }> } };
+      }
+    ).lab.document.nodes[0]!.id;
+    const secondNodeId = (
+      secondNodeResponse.json() as {
+        lab: { document: { nodes: Array<{ id: string }> } };
+      }
+    ).lab.document.nodes[1]!.id;
+
+    const patchResponse = await app.inject({
+      method: "PATCH",
+      url: `/labs/${labId}/nodes/positions`,
+      payload: {
+        moves: [
+          { nodeId: firstNodeId, position: { x: 120, y: 140 } },
+          { nodeId: secondNodeId, position: { x: 220, y: 240 } },
+        ],
+      },
+    });
+
+    expect(patchResponse.statusCode, patchResponse.body).toBe(200);
+    const positions = (
+      patchResponse.json() as {
+        lab: {
+          document: {
+            nodes: Array<{ id: string; position: { x: number; y: number } }>;
+          };
+        };
+      }
+    ).lab.document.nodes.map((node) => [node.id, node.position]);
+    expect(Object.fromEntries(positions)).toMatchObject({
+      [firstNodeId]: { x: 120, y: 140 },
+      [secondNodeId]: { x: 220, y: 240 },
+    });
+  });
+
   it("creates a one-off container node in the current lab", async () => {
     const createLabResponse = await app.inject({
       method: "POST",

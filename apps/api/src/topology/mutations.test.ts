@@ -7,6 +7,7 @@ import {
   attachInterfaces,
   detachInterface,
   moveNode,
+  moveNodes,
   removeNetwork,
   removeNode,
   setCanvasDrawings,
@@ -96,6 +97,45 @@ describe("moveNode", () => {
     const result = moveNode(doc, "node-a", { x: 5, y: 5 });
 
     expect(result.nodes[1]).toBe(doc.nodes[1]);
+  });
+});
+
+describe("moveNodes", () => {
+  it("updates multiple node positions in one document change", () => {
+    const doc = makeDocument({
+      nodes: [
+        {
+          id: "node-a",
+          name: "A",
+          runtime: "container",
+          templateId: "tpl-1",
+          imageId: null,
+          position: { x: 0, y: 0 },
+          config: { vcpu: 1, ramMb: 512, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [],
+        },
+        {
+          id: "node-b",
+          name: "B",
+          runtime: "container",
+          templateId: "tpl-1",
+          imageId: null,
+          position: { x: 10, y: 10 },
+          config: { vcpu: 1, ramMb: 512, interfaceCount: 1 },
+          state: { desiredPower: "off" },
+          interfaces: [],
+        },
+      ],
+    });
+
+    const result = moveNodes(doc, [
+      { nodeId: "node-a", position: { x: 42, y: 99 } },
+      { nodeId: "node-b", position: { x: 80, y: 120 } },
+    ]);
+
+    expect(result.nodes[0]?.position).toEqual({ x: 42, y: 99 });
+    expect(result.nodes[1]?.position).toEqual({ x: 80, y: 120 });
   });
 });
 

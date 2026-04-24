@@ -1,4 +1,10 @@
-import { type ChangeEvent, useCallback, useRef, useState } from "react";
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { CanvasDrawing } from "@networkchum/shared";
 
 import { ContextMenu } from "./ContextMenu.js";
@@ -40,6 +46,9 @@ type TopologyCanvasProps = {
   selectedNodeId?: string | null;
   onSelectNode?: (nodeId: string | null) => void;
   onMoveNode?: (nodeId: string, position: { x: number; y: number }) => void;
+  onMoveNodes?: (
+    moves: Array<{ nodeId: string; position: { x: number; y: number } }>,
+  ) => void | Promise<void>;
   onCreateNetwork?: (
     labId: string,
     input: { name: string; visible?: boolean },
@@ -73,6 +82,9 @@ const CABLE_LABEL_OFFSET = 16;
 const MIN_VIEWPORT_SCALE = 0.5;
 const MAX_VIEWPORT_SCALE = 2.5;
 const VIEWPORT_ZOOM_STEP = 1.1;
+const INITIAL_FIT_PADDING_X = 180;
+const INITIAL_FIT_PADDING_Y = 140;
+const INITIAL_FIT_THRESHOLD = 0.72;
 const MIN_DRAWING_SIZE = 24;
 const DEFAULT_DRAWING_COLOR = "#facc15";
 const DEFAULT_SHAPE_STROKE = "#f8fafc";
@@ -286,6 +298,11 @@ type DrawingInteractionState = {
   startX: number;
   startY: number;
   startDrawing: CanvasDrawing | null;
+  latestDrawing: CanvasDrawing | null;
+  containedNodeIds: string[];
+  startNodePositions: Record<string, { x: number; y: number }>;
+  containedDrawingIds: string[];
+  startDrawingPositions: Record<string, { x: number; y: number }>;
 };
 
 type CableState = {
@@ -377,6 +394,116 @@ function resizeDrawing(
   }
 
   return { ...drawing, width, height };
+}
+
+function nodeCenterIsInsideDrawing(node: CanvasNode, drawing: CanvasDrawing) {
+  const center = getNodeCenter(node);
+  return (
+    center.x >= drawing.x &&
+    center.x <= drawing.x + drawing.width &&
+    center.y >= drawing.y &&
+    center.y <= drawing.y + drawing.height
+  );
+}
+
+function drawingCenterIsInsideDrawing(
+  candidate: CanvasDrawing,
+  container: CanvasDrawing,
+) {
+  const center = {
+    x: candidate.x + candidate.width / 2,
+    y: candidate.y + candidate.height / 2,
+  };
+  return (
+    candidate.id !== container.id &&
+    !candidate.locked &&
+    center.x >= container.x &&
+    center.x <= container.x + container.width &&
+    center.y >= container.y &&
+    center.y <= container.y + container.height
+  );
+}
+
+function getContentBounds(nodes: CanvasNode[], drawings: CanvasDrawing[]) {
+  const bounds: Array<{
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  }> = [];
+
+  for (const node of nodes) {
+    const x = node.position?.x ?? 32;
+    const y = node.position?.y ?? 32;
+    bounds.push({
+      minX: x,
+      minY: y,
+      maxX: x + NODE_WIDTH,
+      maxY: y + NODE_HEIGHT + NODE_LABEL_GAP + NODE_STATUS_GAP + 24,
+    });
+  }
+
+  for (const drawing of drawings) {
+    bounds.push({
+      minX: drawing.x,
+      minY: drawing.y,
+      maxX: drawing.x + drawing.width,
+      maxY: drawing.y + drawing.height,
+    });
+  }
+
+  if (bounds.length === 0) return null;
+
+  return bounds.reduce(
+    (acc, entry) => ({
+      minX: Math.min(acc.minX, entry.minX),
+      minY: Math.min(acc.minY, entry.minY),
+      maxX: Math.max(acc.maxX, entry.maxX),
+      maxY: Math.max(acc.maxY, entry.maxY),
+    }),
+    bounds[0]!,
+  );
+}
+
+function getInitialViewport(
+  nodes: CanvasNode[],
+  drawings: CanvasDrawing[],
+  svgWidth: number,
+  svgHeight: number,
+) {
+  const bounds = getContentBounds(nodes, drawings);
+  if (!bounds) return null;
+
+  const width = Math.max(bounds.maxX - bounds.minX, 1);
+  const height = Math.max(bounds.maxY - bounds.minY, 1);
+  const shouldFit =
+    width > svgWidth * INITIAL_FIT_THRESHOLD ||
+    height > svgHeight * INITIAL_FIT_THRESHOLD ||
+    bounds.minX < 0 ||
+    bounds.minY < 0 ||
+    bounds.maxX > svgWidth ||
+    bounds.maxY > svgHeight;
+
+  if (!shouldFit) {
+    return { offset: { x: 0, y: 0 }, scale: 1 };
+  }
+
+  const scale = Math.max(
+    MIN_VIEWPORT_SCALE,
+    Math.min(
+      1,
+      (svgWidth - INITIAL_FIT_PADDING_X * 2) / width,
+      (svgHeight - INITIAL_FIT_PADDING_Y * 2) / height,
+    ),
+  );
+
+  return {
+    scale,
+    offset: {
+      x: (svgWidth - width * scale) / 2 - bounds.minX * scale,
+      y: (svgHeight - height * scale) / 2 - bounds.minY * scale,
+    },
+  };
 }
 
 type ToolIconKind =
@@ -495,6 +622,7 @@ export function TopologyCanvas({
   selectedNodeId = null,
   onSelectNode,
   onMoveNode,
+  onMoveNodes,
   onCreateNetwork,
   onAttachInterfaces,
   onDetachInterface,
@@ -512,6 +640,7 @@ export function TopologyCanvas({
   const svgWidth = 1440;
   const svgHeight = 900;
 
+  const fittedViewportLabRef = useRef<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textEditInputRef = useRef<HTMLInputElement>(null);
@@ -530,6 +659,11 @@ export function TopologyCanvas({
     startX: 0,
     startY: 0,
     startDrawing: null,
+    latestDrawing: null,
+    containedNodeIds: [],
+    startNodePositions: {},
+    containedDrawingIds: [],
+    startDrawingPositions: {},
   });
   const [pendingPositions, setPendingPositions] = useState<
     Record<string, { x: number; y: number }>
@@ -579,6 +713,26 @@ export function TopologyCanvas({
   const selectedDrawing =
     resolvedDrawings.find((drawing) => drawing.id === selectedDrawingId) ??
     null;
+
+  useEffect(() => {
+    if (fittedViewportLabRef.current === labId) {
+      return;
+    }
+
+    const initialViewport = getInitialViewport(
+      nodes,
+      drawings,
+      svgWidth,
+      svgHeight,
+    );
+    if (!initialViewport) {
+      return;
+    }
+
+    fittedViewportLabRef.current = labId;
+    setViewportScale(initialViewport.scale);
+    setViewportOffset(initialViewport.offset);
+  }, [drawings, labId, nodes, svgHeight, svgWidth]);
 
   const attachedInterfaceIds = new Set(attachments.map((a) => a.interfaceId));
   const interfaceNetworkMap = new Map(
@@ -806,6 +960,11 @@ export function TopologyCanvas({
           startX: svgPt.x,
           startY: svgPt.y,
           startDrawing: drawing,
+          latestDrawing: null,
+          containedNodeIds: [],
+          startNodePositions: {},
+          containedDrawingIds: [],
+          startDrawingPositions: {},
         };
         syncSingleSelection(null);
         onSelectCable?.(null);
@@ -824,7 +983,7 @@ export function TopologyCanvas({
         syncSingleSelection(null);
         onSelectCable?.(null);
         setDisconnectPopup(null);
-        if (!drawing || drawing.locked || !svg || !onUpdateCanvasDrawings) {
+        if (!drawing || !svg || !onUpdateCanvasDrawings) {
           return;
         }
         const svgPt = getCanvasPoint(
@@ -834,6 +993,12 @@ export function TopologyCanvas({
           viewportOffset,
           viewportScale,
         );
+        const containedNodeIds = resolvedNodes
+          .filter((node) => nodeCenterIsInsideDrawing(node, drawing))
+          .map((node) => node.id);
+        const containedDrawingIds = resolvedDrawings
+          .filter((entry) => drawingCenterIsInsideDrawing(entry, drawing))
+          .map((entry) => entry.id);
         drawingInteractionRef.current = {
           active: true,
           mode: "move",
@@ -841,6 +1006,35 @@ export function TopologyCanvas({
           startX: svgPt.x,
           startY: svgPt.y,
           startDrawing: drawing,
+          latestDrawing: null,
+          containedNodeIds,
+          startNodePositions: Object.fromEntries(
+            containedNodeIds.map((nodeId) => {
+              const node = resolvedNodes.find((entry) => entry.id === nodeId);
+              return [
+                nodeId,
+                {
+                  x: node?.position?.x ?? 32,
+                  y: node?.position?.y ?? 32,
+                },
+              ];
+            }),
+          ),
+          containedDrawingIds,
+          startDrawingPositions: Object.fromEntries(
+            containedDrawingIds.map((containedDrawingId) => {
+              const containedDrawing = resolvedDrawings.find(
+                (entry) => entry.id === containedDrawingId,
+              );
+              return [
+                containedDrawingId,
+                {
+                  x: containedDrawing?.x ?? 0,
+                  y: containedDrawing?.y ?? 0,
+                },
+              ];
+            }),
+          ),
         };
         e.preventDefault();
         return;
@@ -1001,10 +1195,41 @@ export function TopologyCanvas({
                 x: interaction.startDrawing.x + deltaX,
                 y: interaction.startDrawing.y + deltaY,
               };
+        interaction.latestDrawing = nextDrawing;
         setPendingDrawings((prev) => ({
           ...prev,
           [interaction.drawingId!]: nextDrawing,
+          ...Object.fromEntries(
+            interaction.containedDrawingIds
+              .map((drawingId) => {
+                const original = drawings.find(
+                  (drawing) => drawing.id === drawingId,
+                );
+                const start = interaction.startDrawingPositions[drawingId];
+                if (!original || !start) return null;
+                return [
+                  drawingId,
+                  { ...original, x: start.x + deltaX, y: start.y + deltaY },
+                ] as const;
+              })
+              .filter((entry) => entry !== null),
+          ),
         }));
+        if (
+          interaction.mode === "move" &&
+          interaction.containedNodeIds.length
+        ) {
+          setPendingPositions((prev) => {
+            const next = { ...prev };
+            for (const nodeId of interaction.containedNodeIds) {
+              const start = interaction.startNodePositions[nodeId];
+              if (start) {
+                next[nodeId] = { x: start.x + deltaX, y: start.y + deltaY };
+              }
+            }
+            return next;
+          });
+        }
         return;
       }
 
@@ -1064,19 +1289,63 @@ export function TopologyCanvas({
       }
 
       if (drawingInteractionRef.current.active) {
-        const drawingId = drawingInteractionRef.current.drawingId;
-        const finalDrawing = drawingId ? pendingDrawings[drawingId] : undefined;
+        const interaction = drawingInteractionRef.current;
+        const drawingId = interaction.drawingId;
+        const finalDrawing = drawingId
+          ? (interaction.latestDrawing ?? pendingDrawings[drawingId])
+          : undefined;
         if (drawingId && finalDrawing) {
           commitDrawings(
             drawings.map((drawing) =>
-              drawing.id === drawingId ? finalDrawing : drawing,
+              drawing.id === drawingId
+                ? finalDrawing
+                : (pendingDrawings[drawing.id] ?? drawing),
             ),
           );
+        }
+        if (
+          interaction.mode === "move" &&
+          interaction.containedNodeIds.length
+        ) {
+          const moves = interaction.containedNodeIds
+            .map((nodeId) => {
+              const start = interaction.startNodePositions[nodeId];
+              if (!start || !finalDrawing || !interaction.startDrawing) {
+                return null;
+              }
+              return {
+                nodeId,
+                position: {
+                  x: start.x + finalDrawing.x - interaction.startDrawing.x,
+                  y: start.y + finalDrawing.y - interaction.startDrawing.y,
+                },
+              };
+            })
+            .filter((move) => move !== null);
+          if (moves.length > 0) {
+            if (onMoveNodes) {
+              void onMoveNodes(moves);
+            } else if (onMoveNode) {
+              for (const move of moves) {
+                onMoveNode(move.nodeId, move.position);
+              }
+            }
+          }
         }
         setPendingDrawings((prev) => {
           if (!drawingId) return prev;
           const next = { ...prev };
           delete next[drawingId];
+          for (const containedDrawingId of interaction.containedDrawingIds) {
+            delete next[containedDrawingId];
+          }
+          return next;
+        });
+        setPendingPositions((prev) => {
+          const next = { ...prev };
+          for (const nodeId of interaction.containedNodeIds) {
+            delete next[nodeId];
+          }
           return next;
         });
         drawingInteractionRef.current = {
@@ -1086,6 +1355,11 @@ export function TopologyCanvas({
           startX: 0,
           startY: 0,
           startDrawing: null,
+          latestDrawing: null,
+          containedNodeIds: [],
+          startNodePositions: {},
+          containedDrawingIds: [],
+          startDrawingPositions: {},
         };
         return;
       }
@@ -1167,6 +1441,7 @@ export function TopologyCanvas({
       drawings,
       commitDrawings,
       onMoveNode,
+      onMoveNodes,
       cableState.mode,
       cableState.sourceNodeId,
       clearCable,
@@ -1605,8 +1880,7 @@ export function TopologyCanvas({
           >
             {resolvedDrawings.map((drawing) => {
               const isSelected = drawing.id === selectedDrawingId;
-              const drawingCursor =
-                drawing.locked || !onUpdateCanvasDrawings ? "default" : "move";
+              const drawingCursor = onUpdateCanvasDrawings ? "move" : "default";
               return (
                 <g key={drawing.id}>
                   {drawing.kind === "image" ? (

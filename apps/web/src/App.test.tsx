@@ -52,6 +52,16 @@ function openLabsDrawer() {
   }
 }
 
+async function openInspectorPanel() {
+  const inspectorButton = await screen.findByRole("button", {
+    name: "Inspector",
+  });
+  if (!inspectorButton.classList.contains("active")) {
+    fireEvent.click(inspectorButton);
+  }
+  await screen.findByRole("button", { name: "Close Inspector" });
+}
+
 describe("App", () => {
   it("renders the shell", () => {
     render(<App />);
@@ -163,7 +173,7 @@ describe("App", () => {
     expect(document.querySelector(".floating-workspace-panel")).toBeNull();
   });
 
-  it("shows selected-object inspection inside the left workspace panel", async () => {
+  it("shows selected-object inspection after opening the inspector panel", async () => {
     const api = {
       listLabs: async () => [{ id: "lab-1", name: "Inspectable Lab" }],
       listCatalog: async () => [],
@@ -186,7 +196,11 @@ describe("App", () => {
 
     render(<App api={api} />);
 
-    await screen.findByRole("button", { name: "Close Inspector" });
+    await screen.findByText("Inspectable Lab");
+
+    expect(document.querySelector(".floating-workspace-panel")).toBeNull();
+
+    await openInspectorPanel();
 
     const workspacePanel = document.querySelector(".floating-workspace-panel");
     expect(workspacePanel).not.toBeNull();
@@ -224,9 +238,6 @@ describe("App", () => {
     };
 
     render(<App api={api} />);
-
-    await screen.findByRole("button", { name: "Close Inspector" });
-    fireEvent.click(screen.getByRole("button", { name: "Close Inspector" }));
 
     expect(
       screen.queryByRole("button", { name: "Close Inspector" }),
@@ -762,6 +773,7 @@ describe("App", () => {
     const node = screen.getByTestId("node-node-backup");
     fireEvent.mouseDown(node);
     fireEvent.click(node);
+    await openInspectorPanel();
 
     await waitFor(() => {
       expect(listRunningConfigBackups).toHaveBeenCalledWith(
@@ -808,6 +820,8 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    await openInspectorPanel();
+    await openInspectorPanel();
     await screen.findByRole("button", { name: "Delete Lab" });
 
     fireEvent.change(screen.getByLabelText("Lab name"), {
@@ -876,6 +890,8 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    await openInspectorPanel();
+    await openInspectorPanel();
     await screen.findByRole("button", { name: "Delete Lab" });
     fireEvent.click(screen.getByRole("checkbox", { name: "Auto Backup" }));
 
@@ -1137,6 +1153,8 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    await openInspectorPanel();
+    await openInspectorPanel();
     await screen.findByRole("button", { name: "Delete Lab" });
 
     fireEvent.click(screen.getByRole("button", { name: "Delete Lab" }));
@@ -1263,6 +1281,8 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    await openInspectorPanel();
+    await openInspectorPanel();
     await screen.findByRole("button", { name: "Power On Arista-Veos-1" });
 
     window.dispatchEvent(new Event("focus"));
@@ -1324,6 +1344,8 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    await openInspectorPanel();
+
     await screen.findByRole("button", { name: "Open Console" });
     fireEvent.doubleClick(screen.getByTestId("node-node-1"));
 
@@ -1377,6 +1399,8 @@ describe("App", () => {
     };
 
     render(<App api={api} />);
+
+    await openInspectorPanel();
 
     await screen.findByRole("button", { name: "Open Console" });
     fireEvent.change(screen.getByLabelText("Native Console Preference"), {
@@ -1454,6 +1478,8 @@ describe("App", () => {
         locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
       />,
     );
+
+    await openInspectorPanel();
 
     await screen.findByRole("button", { name: "Connect alpine-1" });
     fireEvent.change(screen.getByLabelText("SSH Relay User"), {
@@ -1606,6 +1632,8 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    await openInspectorPanel();
+
     await screen.findByRole("button", { name: "Open Console" });
     fireEvent.change(screen.getByLabelText("Native Console Preference"), {
       target: { value: "copy-command" },
@@ -1670,6 +1698,8 @@ describe("App", () => {
       />,
     );
 
+    await openInspectorPanel();
+
     await screen.findByRole("button", { name: "Open Console" });
     fireEvent.change(screen.getByLabelText("Native Console Preference"), {
       target: { value: "copy-command" },
@@ -1733,6 +1763,8 @@ describe("App", () => {
         locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
       />,
     );
+
+    await openInspectorPanel();
 
     await screen.findByRole("button", { name: "Open Console" });
     fireEvent.change(screen.getByLabelText("SSH Relay User"), {
@@ -1804,6 +1836,8 @@ describe("App", () => {
         locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
       />,
     );
+
+    await openInspectorPanel();
 
     await screen.findByRole("button", { name: "Connect alpine-1" });
     fireEvent.change(screen.getByLabelText("SSH Relay User"), {
@@ -1877,6 +1911,8 @@ describe("App", () => {
         locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
       />,
     );
+
+    await openInspectorPanel();
 
     await screen.findByRole("button", { name: "Open Console" });
     fireEvent.change(screen.getByLabelText("Native Console Preference"), {
@@ -1959,6 +1995,8 @@ describe("App", () => {
       />,
     );
 
+    await openInspectorPanel();
+
     await screen.findByRole("button", { name: "Open Console" });
     fireEvent.change(screen.getByLabelText("SSH Relay User"), {
       target: { value: "cass" },
@@ -2027,6 +2065,8 @@ describe("App", () => {
 
     render(<App api={api} />);
 
+    await openInspectorPanel();
+
     await screen.findByRole("button", { name: "Open Console" });
 
     expect(await screen.findByText("Console Port: 5004")).toBeInTheDocument();
@@ -2079,6 +2119,8 @@ describe("App", () => {
     };
 
     render(<App api={api} />);
+
+    await openInspectorPanel();
 
     await screen.findByRole("button", { name: "Copy Native Command" });
     fireEvent.click(
@@ -2142,6 +2184,8 @@ describe("App", () => {
         locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
       />,
     );
+
+    await openInspectorPanel();
 
     await screen.findByRole("button", { name: "Copy Native Command" });
     fireEvent.click(
@@ -2208,6 +2252,8 @@ describe("App", () => {
         locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
       />,
     );
+
+    await openInspectorPanel();
 
     await screen.findByRole("button", { name: "Copy Native Command" });
     fireEvent.click(
@@ -2289,6 +2335,8 @@ describe("App", () => {
         locationLike={{ protocol: "http:", hostname: "192.168.2.57" }}
       />,
     );
+
+    await openInspectorPanel();
 
     await screen.findByRole("button", { name: "Open Console" });
     fireEvent.change(screen.getByLabelText("Native Console Preference"), {
@@ -2858,6 +2906,7 @@ describe("App", () => {
       const node = await screen.findByTestId("node-node-1");
       fireEvent.mouseDown(node);
       fireEvent.click(node);
+      fireEvent.click(screen.getByRole("button", { name: "Inspector" }));
       const startupButton = await screen.findByRole("button", {
         name: "Startup Config",
       });

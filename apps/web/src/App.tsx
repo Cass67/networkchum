@@ -370,6 +370,15 @@ type ApiClient = {
     autoBackup?: boolean;
     document: LabDocumentData;
   }>;
+  moveNodes?: (
+    labId: string,
+    moves: Array<{ nodeId: string; position: { x: number; y: number } }>,
+  ) => Promise<{
+    id: string;
+    name: string;
+    autoBackup?: boolean;
+    document: LabDocumentData;
+  }>;
   updateCanvasDrawings?: (
     labId: string,
     drawings: CanvasDrawing[],
@@ -1243,7 +1252,6 @@ export function App({
     | "images"
     | null
   >(null);
-  const lastInspectorLabId = useRef<string | null>(null);
   const [startupConfigDialog, setStartupConfigDialog] = useState<{
     nodeId: string;
     nodeName: string;
@@ -1265,14 +1273,6 @@ export function App({
       // Ignore storage failures and keep the in-memory theme.
     }
   }, [themeMode]);
-
-  useEffect(() => {
-    if (!selectedLabId || lastInspectorLabId.current === selectedLabId) {
-      return;
-    }
-    lastInspectorLabId.current = selectedLabId;
-    setLeftTab((current) => current ?? "inspector");
-  }, [selectedLabId]);
 
   useEffect(() => {
     try {
@@ -2756,6 +2756,27 @@ export function App({
             try {
               const lab = await api.moveNode(selectedLabId, nodeId, position);
               applyLabUpdate(lab);
+            } catch {
+              /* keep existing state */
+            }
+          }}
+          onMoveNodes={async (moves) => {
+            if (!selectedLabId) return;
+            try {
+              if (api.moveNodes) {
+                const lab = await api.moveNodes(selectedLabId, moves);
+                applyLabUpdate(lab);
+                return;
+              }
+              if (!api.moveNode) return;
+              for (const move of moves) {
+                const lab = await api.moveNode(
+                  selectedLabId,
+                  move.nodeId,
+                  move.position,
+                );
+                applyLabUpdate(lab);
+              }
             } catch {
               /* keep existing state */
             }

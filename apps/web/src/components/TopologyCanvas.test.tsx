@@ -610,6 +610,10 @@ describe("TopologyCanvas", () => {
         clientY: 40,
       });
       fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("x", "110");
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("y", "130");
+
       fireEvent.mouseUp(svg);
 
       expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
@@ -617,7 +621,99 @@ describe("TopologyCanvas", () => {
       ]);
     });
 
-    it("does not move locked drawings", () => {
+    it("moves topology nodes inside a dragged drawing in one batch", () => {
+      const onMoveNode = vi.fn();
+      const onMoveNodes = vi.fn();
+      const onUpdateCanvasDrawings = vi.fn();
+      const frame = {
+        ...shape,
+        x: 20,
+        y: 20,
+        width: 420,
+        height: 180,
+      };
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[frame]}
+          onMoveNode={onMoveNode}
+          onMoveNodes={onMoveNodes}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+      fireEvent.mouseUp(svg);
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-1", x: 80, y: 100 }),
+      ]);
+      expect(onMoveNode).not.toHaveBeenCalled();
+      expect(onMoveNodes).toHaveBeenCalledWith([
+        { nodeId: "n1", position: { x: 110, y: 130 } },
+        { nodeId: "n2", position: { x: 310, y: 130 } },
+      ]);
+    });
+
+    it("moves text drawings inside a dragged drawing with the drawing", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      const frame = {
+        ...shape,
+        x: 20,
+        y: 20,
+        width: 420,
+        height: 180,
+      };
+      const textDrawing = {
+        id: "text-1",
+        kind: "text" as const,
+        x: 120,
+        y: 130,
+        width: 160,
+        height: 48,
+        text: "network",
+        fill: "#1d4ed8",
+        fontSize: 22,
+        opacity: 1,
+        locked: false,
+        zIndex: 2,
+      };
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[frame, textDrawing]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+      fireEvent.mouseUp(svg);
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-1", x: 80, y: 100 }),
+        expect.objectContaining({ id: "text-1", x: 180, y: 210 }),
+      ]);
+    });
+
+    it("moves locked drawings as bound frames", () => {
       const onUpdateCanvasDrawings = vi.fn();
       render(
         <TopologyCanvas
@@ -639,7 +735,10 @@ describe("TopologyCanvas", () => {
       fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
       fireEvent.mouseUp(svg);
 
-      expect(onUpdateCanvasDrawings).not.toHaveBeenCalled();
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-1", x: 80, y: 110 }),
+      ]);
+      expect(screen.queryByTestId("drawing-resize-shape-1")).toBeNull();
     });
 
     it("resizes drawings from the resize handle", () => {
@@ -874,6 +973,42 @@ describe("TopologyCanvas", () => {
       expect(transform?.scale).toBeCloseTo(1.1, 5);
       expect(transform?.x).toBeCloseTo(-10, 5);
       expect(transform?.y).toBeCloseTo(-7.5, 5);
+    });
+
+    it("starts oversized saved drawings centered at a sensible scale", async () => {
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[
+            {
+              id: "large-frame",
+              kind: "shape",
+              shape: "rectangle",
+              x: 0,
+              y: 0,
+              width: 1380,
+              height: 860,
+              fill: "#fde68a",
+              stroke: "#f59e0b",
+              opacity: 0.75,
+              locked: true,
+              zIndex: 1,
+            },
+          ]}
+        />,
+      );
+
+      await waitFor(() => {
+        const transform = parseViewportTransform(
+          screen.getByTestId("viewport-layer").getAttribute("transform"),
+        );
+        expect(transform).not.toBeNull();
+        expect(transform?.scale).toBeLessThan(1);
+        expect(transform?.x).toBeGreaterThan(0);
+        expect(transform?.y).toBeGreaterThan(0);
+      });
     });
 
     it("keeps drag coordinates correct after zooming", () => {

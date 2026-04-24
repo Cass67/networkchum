@@ -223,6 +223,43 @@ describe("createApiClient", () => {
     expect(lab.document.canvas?.drawings).toEqual(drawings);
   });
 
+  it("moves multiple nodes through the backend in one request", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        lab: {
+          id: "lab-1",
+          name: "Fetched Lab",
+          document: {
+            nodes: [
+              { id: "node-a", position: { x: 42, y: 99 } },
+              { id: "node-b", position: { x: 80, y: 120 } },
+            ],
+            networks: [],
+            attachments: [],
+          },
+        },
+      }),
+    }));
+
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+    const moves = [
+      { nodeId: "node-a", position: { x: 42, y: 99 } },
+      { nodeId: "node-b", position: { x: 80, y: 120 } },
+    ];
+
+    const lab = await client.moveNodes("lab-1", moves);
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/labs/lab-1/nodes/positions",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ moves }),
+      }),
+    );
+    expect(lab.document.nodes).toHaveLength(2);
+  });
+
   it("powers on a node through the backend", async () => {
     const fetcher = vi.fn(async () => ({
       ok: true,

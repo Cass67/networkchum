@@ -672,6 +672,24 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
       return payload.lab;
     },
 
+    async moveNodes(
+      labId: string,
+      moves: Array<{ nodeId: string; position: { x: number; y: number } }>,
+    ): Promise<LabDetails> {
+      const response = await fetcher(
+        `${baseUrl}/labs/${labId}/nodes/positions`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ moves }),
+        },
+      );
+      const payload = await parseResponse<{ lab: LabDetails }>(
+        response as Response,
+      );
+      return payload.lab;
+    },
+
     async renameNode(
       labId: string,
       nodeId: string,

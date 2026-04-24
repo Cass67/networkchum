@@ -119,6 +119,22 @@ export function moveNode(
   };
 }
 
+export function moveNodes(
+  document: LabDocument,
+  moves: Array<{ nodeId: string; position: { x: number; y: number } }>,
+): LabDocument {
+  const positionByNodeId = new Map(
+    moves.map((move) => [move.nodeId, move.position]),
+  );
+  return {
+    ...document,
+    nodes: document.nodes.map((node) => {
+      const position = positionByNodeId.get(node.id);
+      return position ? { ...node, position } : node;
+    }),
+  };
+}
+
 export function setCanvasDrawings(
   document: LabDocument,
   drawings: CanvasDrawing[],
