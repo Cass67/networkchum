@@ -123,6 +123,16 @@ ensure_sudo_session() {
   fi
 }
 
+ensure_dependencies_installed() {
+  case "$SCRIPT_NAME" in
+    dev | dev:api)
+      if ! "$NPM_PATH" ls --workspace @networkchum/api fast-xml-parser jszip >/dev/null 2>&1; then
+        die "dependencies are missing or stale; run: npm install"
+      fi
+      ;;
+  esac
+}
+
 resolve_lan_ip() {
   if command -v ip >/dev/null 2>&1; then
     ip route get 1.1.1.1 2>/dev/null | awk '
@@ -246,6 +256,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 cd "$ROOT_DIR"
+ensure_dependencies_installed
 ensure_sudo_session
 
 if [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev" ]; then

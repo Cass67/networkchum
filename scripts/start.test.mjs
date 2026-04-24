@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +16,24 @@ function runStart(args) {
   return spawnSync("sh", [startScript, "--dry-run", ...args], {
     cwd: rootDir,
     encoding: "utf8",
+  });
+}
+
+function runStartWithFakeNpm(args, npmScript) {
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "networkchum-start-"));
+  const npmPath = path.join(binDir, "npm");
+  const nodePath = path.join(binDir, "node");
+
+  fs.writeFileSync(npmPath, npmScript, { mode: 0o755 });
+  fs.writeFileSync(nodePath, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+
+  return spawnSync("sh", [startScript, ...args], {
+    cwd: rootDir,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`,
+    },
   });
 }
 
@@ -98,4 +118,15 @@ test("start.sh uses non-interactive sudo for the full stack api child", () => {
     result.stdout,
     /\[dry-run\] .*sudo -n env PATH=.*npm run dev:api/,
   );
+});
+
+test("start.sh fails early when dependencies are stale", () => {
+  const result = runStartWithFakeNpm(
+    ["localhost"],
+    '#!/bin/sh\nif [ "$1" = "ls" ]; then exit 1; fi\necho unexpected npm "$@" >&2\nexit 42\n',
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /dependencies are missing or stale/);
+  assert.match(result.stderr, /npm install/);
 });
