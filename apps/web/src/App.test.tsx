@@ -257,6 +257,91 @@ describe("App", () => {
     expect(panel.queryByText("node-one")).not.toBeInTheDocument();
   });
 
+  it("edits template defaults from the templates tab", async () => {
+    const updateTemplate = vi.fn(
+      async (
+        _templateId: string,
+        input: {
+          vcpu: number;
+          ramMb: number;
+          interfaceCount: number;
+          deviceRoleIcon?: DeviceRoleIcon;
+        },
+      ) => ({
+        id: "cisco-asr",
+        name: "Cisco ASR",
+        vendor: "Cisco",
+        runtime: "qemu",
+        deviceRoleIcon: input.deviceRoleIcon,
+        configSchema: {
+          vcpu: { default: input.vcpu, min: 2, max: 8 },
+          ramMb: { default: input.ramMb, min: 4096, max: 16384 },
+          interfaceCount: { default: input.interfaceCount, min: 4, max: 24 },
+        },
+      }),
+    );
+    const listTemplates = vi.fn(async () => [
+      {
+        id: "cisco-asr",
+        name: "Cisco ASR",
+        vendor: "Cisco",
+        runtime: "qemu",
+        deviceRoleIcon: "router" as const,
+        configSchema: {
+          vcpu: { default: 5, min: 2, max: 8 },
+          ramMb: { default: 8192, min: 4096, max: 16384 },
+          interfaceCount: { default: 8, min: 4, max: 24 },
+        },
+      },
+    ]);
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listTemplates,
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({ nodeId: "node-1", status: "running" }),
+      updateTemplate,
+    };
+
+    render(<App api={api} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Templates" }));
+
+    await screen.findByRole("button", { name: "Select Cisco ASR" });
+    await screen.findByText("VM • 5 vCPU • 8192 MB RAM • 8 interfaces");
+    fireEvent.change(screen.getByLabelText("vCPU"), {
+      target: { value: "6" },
+    });
+    fireEvent.change(screen.getByLabelText("RAM (MB)"), {
+      target: { value: "12288" },
+    });
+    fireEvent.change(screen.getByLabelText("Interfaces"), {
+      target: { value: "12" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Defaults" }));
+
+    await waitFor(() => {
+      expect(updateTemplate).toHaveBeenCalledWith("cisco-asr", {
+        vcpu: 6,
+        ramMb: 12288,
+        interfaceCount: 12,
+        deviceRoleIcon: "router",
+      });
+    });
+  });
+
   it("loads labs and catalog from the api client", async () => {
     const api = {
       listLabs: async () => [

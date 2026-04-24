@@ -24,6 +24,7 @@ import { LabDetails } from "./components/LabDetails.js";
 import { SelectionPanel } from "./components/SelectionPanel.js";
 import { StartupConfigDialog } from "./components/StartupConfigDialog.js";
 import { TemplateEditorDialog } from "./components/TemplateEditorDialog.js";
+import { TemplatesTab } from "./components/TemplatesTab.js";
 import { TopologyCanvas } from "./components/TopologyCanvas.js";
 import {
   isLocalPageHost,
@@ -1152,6 +1153,7 @@ export function App({
   const [newTerminalTemplate, setNewTerminalTemplate] = useState("");
   const [labs, setLabs] = useState<LabSummary[]>([]);
   const [catalog, setCatalog] = useState<CatalogSummary[]>(demoCatalog);
+  const [templates, setTemplates] = useState<TemplateSummary[]>(demoCatalog);
   const [imageBindableTemplates, setImageBindableTemplates] = useState<
     Array<{ id: string; name: string }>
   >(deriveImageBindableTemplates(demoCatalog));
@@ -1218,7 +1220,13 @@ export function App({
     fileName: string;
   }>(null);
   const [leftTab, setLeftTab] = useState<
-    "labs" | "inspector" | "devices" | "containers" | "images" | null
+    | "labs"
+    | "inspector"
+    | "devices"
+    | "templates"
+    | "containers"
+    | "images"
+    | null
   >(null);
   const lastInspectorLabId = useRef<string | null>(null);
   const [startupConfigDialog, setStartupConfigDialog] = useState<{
@@ -1365,6 +1373,7 @@ export function App({
         }
 
         setLabs(nextLabs);
+        setTemplates(nextTemplates.length > 0 ? nextTemplates : nextCatalog);
         setCatalog(nextCatalog);
         setImageBindableTemplates(
           deriveImageBindableTemplates(
@@ -1390,6 +1399,7 @@ export function App({
         }
 
         setLabs(demoLabs);
+        setTemplates(demoCatalog);
         setCatalog(demoCatalog);
         setImageBindableTemplates(deriveImageBindableTemplates(demoCatalog));
         setImages([]);
@@ -2018,9 +2028,25 @@ export function App({
       interfaceCount: { default: number; min: number; max: number };
     };
   }) {
-    setCatalog((current) =>
+    setTemplates((current) =>
       current.map((entry) =>
         entry.id === nextTemplate.id
+          ? {
+              ...entry,
+              name: nextTemplate.name,
+              vendor: nextTemplate.vendor,
+              runtime: nextTemplate.runtime,
+              configSchema: nextTemplate.configSchema,
+              deviceRoleIcon:
+                nextTemplate.deviceRoleIcon ?? entry.deviceRoleIcon,
+            }
+          : entry,
+      ),
+    );
+    setCatalog((current) =>
+      current.map((entry) =>
+        entry.id === nextTemplate.id ||
+        entry.id.startsWith(`${nextTemplate.id}:`)
           ? {
               ...entry,
               name: nextTemplate.name,
@@ -2178,9 +2204,11 @@ export function App({
         ? "Inspector"
         : effectiveLeftTab === "devices"
           ? "Devices"
-          : effectiveLeftTab === "containers"
-            ? "Containers"
-            : "Images";
+          : effectiveLeftTab === "templates"
+            ? "Templates"
+            : effectiveLeftTab === "containers"
+              ? "Containers"
+              : "Images";
   const leftPanelDescription =
     effectiveLeftTab === "labs"
       ? "Create labs, reopen saved topologies, and keep your active workspace in view."
@@ -2188,9 +2216,11 @@ export function App({
         ? "Selection details and runtime controls for the active lab object."
         : effectiveLeftTab === "devices"
           ? "Drop templates into the current lab without leaving the canvas."
-          : effectiveLeftTab === "containers"
-            ? "Discover container images, pull from registries, and turn them into reusable templates or one-off nodes."
-            : "Manage uploaded disk images and bind them to reusable templates.";
+          : effectiveLeftTab === "templates"
+            ? "Review and edit default CPU, memory, and interface counts for each platform."
+            : effectiveLeftTab === "containers"
+              ? "Discover container images, pull from registries, and turn them into reusable templates or one-off nodes."
+              : "Manage uploaded disk images and bind them to reusable templates.";
   const themeToggleLabel =
     themeMode === "dark" ? "Switch to day mode" : "Switch to night mode";
   const themeToggleText = themeMode === "dark" ? "Day Mode" : "Night Mode";
@@ -2216,6 +2246,7 @@ export function App({
     macOsTerminalRegistry.find(
       (entry) => entry.id === macOsTerminalPreference,
     ) ?? null;
+  const updateTemplate = api.updateTemplate;
 
   function handleSaveTerminal() {
     const label = newTerminalName.trim();
@@ -2310,7 +2341,14 @@ export function App({
       >
         <div className="floating-tab-group">
           {(
-            ["labs", "inspector", "devices", "containers", "images"] as const
+            [
+              "labs",
+              "inspector",
+              "devices",
+              "templates",
+              "containers",
+              "images",
+            ] as const
           ).map((tab) => (
             <button
               key={tab}
@@ -2326,9 +2364,11 @@ export function App({
                   ? "Inspector"
                   : tab === "devices"
                     ? "Devices"
-                    : tab === "containers"
-                      ? "Containers"
-                      : "Images"}
+                    : tab === "templates"
+                      ? "Templates"
+                      : tab === "containers"
+                        ? "Containers"
+                        : "Images"}
             </button>
           ))}
         </div>
@@ -2575,6 +2615,22 @@ export function App({
                 }
               />
             </>
+          )}
+          {effectiveLeftTab === "templates" && (
+            <TemplatesTab
+              templates={templates}
+              onSaveTemplate={
+                updateTemplate
+                  ? async (templateId, input) => {
+                      const nextTemplate = await updateTemplate(
+                        templateId,
+                        input,
+                      );
+                      applyTemplateUpdate(nextTemplate);
+                    }
+                  : undefined
+              }
+            />
           )}
           {effectiveLeftTab === "images" && (
             <ImageLibrary

@@ -639,6 +639,20 @@ body {
   gap: 0.9rem;
 }
 
+.entity-list--dense {
+  gap: 0.55rem;
+}
+
+.templates-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.template-list-card {
+  min-height: auto;
+}
+
 .list-card,
 .resource-card,
 .inspector-card,
