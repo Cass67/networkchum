@@ -774,7 +774,7 @@ export function TopologyCanvas({
 
   const commitDrawings = useCallback(
     (nextDrawings: CanvasDrawing[]) => {
-      void onUpdateCanvasDrawings?.(nextDrawings);
+      return onUpdateCanvasDrawings?.(nextDrawings);
     },
     [onUpdateCanvasDrawings],
   );
@@ -1327,7 +1327,7 @@ export function TopologyCanvas({
   );
 
   const handleSvgMouseUp = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+    async (e: React.MouseEvent<SVGSVGElement>) => {
       if (panState?.active) {
         setPanState(null);
         return;
@@ -1339,60 +1339,35 @@ export function TopologyCanvas({
         const finalDrawing = drawingId
           ? (interaction.latestDrawing ?? pendingDrawings[drawingId])
           : undefined;
-        if (drawingId && finalDrawing) {
-          commitDrawings(
-            drawings.map((drawing) =>
-              drawing.id === drawingId
-                ? finalDrawing
-                : (pendingDrawings[drawing.id] ?? drawing),
-            ),
-          );
-        }
-        if (
-          interaction.mode === "move" &&
-          interaction.containedNodeIds.length
-        ) {
-          const moves = interaction.containedNodeIds
-            .map((nodeId) => {
-              const start = interaction.startNodePositions[nodeId];
-              if (!start || !finalDrawing || !interaction.startDrawing) {
-                return null;
-              }
-              return {
-                nodeId,
-                position: {
-                  x: start.x + finalDrawing.x - interaction.startDrawing.x,
-                  y: start.y + finalDrawing.y - interaction.startDrawing.y,
-                },
-              };
-            })
-            .filter((move) => move !== null);
-          if (moves.length > 0) {
-            if (onMoveNodes) {
-              void onMoveNodes(moves);
-            } else if (onMoveNode) {
-              for (const move of moves) {
-                onMoveNode(move.nodeId, move.position);
-              }
-            }
-          }
-        }
-        setPendingDrawings((prev) => {
-          if (!drawingId) return prev;
-          const next = { ...prev };
-          delete next[drawingId];
-          for (const containedDrawingId of interaction.containedDrawingIds) {
-            delete next[containedDrawingId];
-          }
-          return next;
-        });
-        setPendingPositions((prev) => {
-          const next = { ...prev };
-          for (const nodeId of interaction.containedNodeIds) {
-            delete next[nodeId];
-          }
-          return next;
-        });
+        const finalDrawings =
+          drawingId && finalDrawing
+            ? drawings.map((drawing) =>
+                drawing.id === drawingId
+                  ? finalDrawing
+                  : (pendingDrawings[drawing.id] ?? drawing),
+              )
+            : null;
+        const moves =
+          interaction.mode === "move" && interaction.containedNodeIds.length
+            ? interaction.containedNodeIds
+                .map((nodeId) => {
+                  const start = interaction.startNodePositions[nodeId];
+                  if (!start || !finalDrawing || !interaction.startDrawing) {
+                    return null;
+                  }
+                  return {
+                    nodeId,
+                    position: {
+                      x: start.x + finalDrawing.x - interaction.startDrawing.x,
+                      y: start.y + finalDrawing.y - interaction.startDrawing.y,
+                    },
+                  };
+                })
+                .filter((move) => move !== null)
+            : [];
+        const containedNodeIds = interaction.containedNodeIds;
+        const containedDrawingIds = interaction.containedDrawingIds;
+
         drawingInteractionRef.current = {
           active: false,
           mode: "move",
@@ -1407,6 +1382,47 @@ export function TopologyCanvas({
           containedDrawingIds: [],
           startDrawingPositions: {},
         };
+
+        if (finalDrawings) {
+          try {
+            await commitDrawings(finalDrawings);
+          } catch {
+            /* keep optimistic canvas edits in place */
+          }
+        }
+        let nodeMoveSaved = true;
+        if (moves.length > 0) {
+          try {
+            if (onMoveNodes) {
+              await onMoveNodes(moves);
+            } else if (onMoveNode) {
+              for (const move of moves) {
+                await onMoveNode(move.nodeId, move.position);
+              }
+            }
+          } catch {
+            nodeMoveSaved = false;
+            /* keep optimistic node positions in place until the next refresh */
+          }
+        }
+        setPendingDrawings((prev) => {
+          if (!drawingId) return prev;
+          const next = { ...prev };
+          delete next[drawingId];
+          for (const containedDrawingId of containedDrawingIds) {
+            delete next[containedDrawingId];
+          }
+          return next;
+        });
+        if (nodeMoveSaved) {
+          setPendingPositions((prev) => {
+            const next = { ...prev };
+            for (const nodeId of containedNodeIds) {
+              delete next[nodeId];
+            }
+            return next;
+          });
+        }
         return;
       }
 

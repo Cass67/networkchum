@@ -148,6 +148,24 @@ describe("api", () => {
     });
   });
 
+  it("allows browser preflights for mutating lab requests", async () => {
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/labs/lab-1/nodes/positions",
+      headers: {
+        origin: "http://192.168.2.57:5173",
+        "access-control-request-method": "PATCH",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe(
+      "http://192.168.2.57:5173",
+    );
+    expect(response.headers["access-control-allow-methods"]).toContain("PATCH");
+  });
+
   it("returns built-in templates", async () => {
     const response = await app.inject({ method: "GET", url: "/templates" });
     const payload = response.json() as {

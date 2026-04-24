@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -624,7 +625,7 @@ describe("TopologyCanvas", () => {
       expect(onMoveNodes).not.toHaveBeenCalled();
     });
 
-    it("moves topology nodes inside a dragged locked drawing in one batch", () => {
+    it("moves topology nodes inside a dragged locked drawing in one batch", async () => {
       const onMoveNode = vi.fn();
       const onMoveNodes = vi.fn();
       const onUpdateCanvasDrawings = vi.fn();
@@ -665,11 +666,119 @@ describe("TopologyCanvas", () => {
       expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
         expect.objectContaining({ id: "shape-1", x: 80, y: 100 }),
       ]);
-      expect(onMoveNode).not.toHaveBeenCalled();
-      expect(onMoveNodes).toHaveBeenCalledWith([
-        { nodeId: "n1", position: { x: 110, y: 130 } },
-        { nodeId: "n2", position: { x: 310, y: 130 } },
-      ]);
+      await waitFor(() => {
+        expect(onMoveNode).not.toHaveBeenCalled();
+        expect(onMoveNodes).toHaveBeenCalledWith([
+          { nodeId: "n1", position: { x: 110, y: 130 } },
+          { nodeId: "n2", position: { x: 310, y: 130 } },
+        ]);
+      });
+    });
+
+    it("keeps locked-frame node positions bound until the node move save completes", async () => {
+      let resolveDrawingSave: (() => void) | undefined;
+      let resolveNodeSave: (() => void) | undefined;
+      const onUpdateCanvasDrawings = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveDrawingSave = resolve;
+          }),
+      );
+      const onMoveNodes = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveNodeSave = resolve;
+          }),
+      );
+      const frame = {
+        ...shape,
+        locked: true,
+        x: 20,
+        y: 20,
+        width: 420,
+        height: 180,
+      };
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[frame]}
+          onMoveNodes={onMoveNodes}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+      fireEvent.mouseUp(svg);
+
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("x", "110");
+      expect(onUpdateCanvasDrawings).toHaveBeenCalled();
+      expect(onMoveNodes).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveDrawingSave?.();
+      });
+
+      await waitFor(() => {
+        expect(onMoveNodes).toHaveBeenCalledWith([
+          { nodeId: "n1", position: { x: 110, y: 130 } },
+          { nodeId: "n2", position: { x: 310, y: 130 } },
+        ]);
+      });
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("x", "110");
+
+      await act(async () => {
+        resolveNodeSave?.();
+      });
+    });
+
+    it("keeps locked-frame node positions visible when the node move save fails", async () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      const onMoveNodes = vi.fn(async () => {
+        throw new Error("blocked by preflight");
+      });
+      const frame = {
+        ...shape,
+        locked: true,
+        x: 20,
+        y: 20,
+        width: 420,
+        height: 180,
+      };
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[frame]}
+          onMoveNodes={onMoveNodes}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseMove(svg, { clientX: 90, clientY: 120 });
+      fireEvent.mouseUp(svg);
+
+      await waitFor(() => {
+        expect(onMoveNodes).toHaveBeenCalled();
+      });
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("x", "110");
+      expect(screen.getByTestId("node-hitbox-n1")).toHaveAttribute("y", "130");
     });
 
     it("leaves text drawings inside an unlocked dragged drawing in place", () => {

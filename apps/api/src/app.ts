@@ -27,7 +27,10 @@ export type AppDependencies = {
 export function buildApp(dependencies: AppDependencies = {}) {
   const app = Fastify({ bodyLimit: 10 * 1024 * 1024 * 1024 }); // 10 GB
 
-  void app.register(cors, { origin: true });
+  void app.register(cors, {
+    origin: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  });
   void app.register(multipart, {
     limits: { fileSize: 10 * 1024 * 1024 * 1024 },
   }); // 10 GB
