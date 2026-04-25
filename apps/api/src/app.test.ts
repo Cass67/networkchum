@@ -215,6 +215,47 @@ describe("api", () => {
     );
   });
 
+  it("commits imported cabling into lab networks and attachments", async () => {
+    const previewResponse = await app.inject({
+      method: "POST",
+      url: "/imports/topology/preview",
+      headers: { "content-type": "multipart/form-data; boundary=----test" },
+      payload:
+        "------test\r\n" +
+        'Content-Disposition: form-data; name="file"; filename="demo.unl"\r\n' +
+        "Content-Type: application/xml\r\n\r\n" +
+        '<lab name="Demo"><topology><nodes>' +
+        '<node id="1" name="R1" type="qemu" template="linux" image="alpine" ethernet="1"><interfaces><interface id="0" name="eth0" network_id="1" /></interfaces></node>' +
+        '<node id="2" name="R2" type="qemu" template="linux" image="alpine" ethernet="1"><interfaces><interface id="0" name="eth0" network_id="1" /></interfaces></node>' +
+        '</nodes><networks><network id="1" name="lan1" /></networks></topology></lab>\r\n' +
+        "------test--\r\n",
+    });
+    const draftId = (previewResponse.json() as { preview: { draftId: string } })
+      .preview.draftId;
+
+    const commitResponse = await app.inject({
+      method: "POST",
+      url: `/imports/topology/${draftId}/commit`,
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({
+        name: "Imported Demo",
+        mappings: [
+          {
+            templateKey: "qemu:linux:alpine",
+            templateId: "linux-alpine-container",
+          },
+        ],
+      }),
+    });
+
+    const payload = commitResponse.json() as {
+      lab: { document: { networks: unknown[]; attachments: unknown[] } };
+    };
+    expect(commitResponse.statusCode).toBe(201);
+    expect(payload.lab.document.networks).toHaveLength(1);
+    expect(payload.lab.document.attachments).toHaveLength(2);
+  });
+
   it("commits an import draft without excluded unresolved nodes", async () => {
     const previewResponse = await app.inject({
       method: "POST",

@@ -52,6 +52,15 @@ const topology: NormalizedImportedTopology = {
       networkName: "net1",
     },
   ],
+  networks: [
+    {
+      name: "net1",
+      endpoints: [
+        { nodeId: "1", interfaceName: "Gi0/0" },
+        { nodeId: "2", interfaceName: "Gi0/0" },
+      ],
+    },
+  ],
 };
 
 describe("buildLabDocumentFromImport", () => {
@@ -77,6 +86,45 @@ describe("buildLabDocumentFromImport", () => {
     expect(document.startupConfigSets[0]?.nodeConfigs[0]?.config).toBe(
       "hostname R1",
     );
+  });
+
+  it("creates one imported network with all imported endpoint attachments", () => {
+    const document = buildLabDocumentFromImport({
+      labId: "lab-import",
+      labName: "Imported",
+      topology: {
+        ...topology,
+        nodes: [
+          ...topology.nodes,
+          {
+            foreignId: "3",
+            name: "R3",
+            templateName: "vios",
+            imageName: "vios",
+            runtimeHint: "qemu",
+            position: { x: 400, y: 20 },
+            interfaceNames: ["Gi0/0"],
+          },
+        ],
+        networks: [
+          {
+            name: "lan1",
+            endpoints: [
+              { nodeId: "1", interfaceName: "Gi0/0" },
+              { nodeId: "2", interfaceName: "Gi0/0" },
+              { nodeId: "3", interfaceName: "Gi0/0" },
+            ],
+          },
+        ],
+      },
+      resolvedMappings: new Map([
+        ["qemu:vios:vios", { template, imageId: "img-vios" }],
+      ]),
+    });
+
+    expect(document.networks).toHaveLength(1);
+    expect(document.networks[0]?.name).toBe("lan1");
+    expect(document.attachments).toHaveLength(3);
   });
 
   it("omits excluded imported nodes and their links", () => {

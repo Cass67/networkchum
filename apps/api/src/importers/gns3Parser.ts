@@ -3,6 +3,7 @@ import type { ImportIssue } from "@networkchum/shared";
 import { gridPosition, numericValue } from "./normalize.js";
 import type {
   NormalizedImportedLink,
+  NormalizedImportedNetwork,
   NormalizedImportedNode,
   NormalizedImportedTopology,
   TopologyPayload,
@@ -110,6 +111,7 @@ export function parseGns3Topology(
 
   const nodeIds = new Set(nodes.map((node) => node.foreignId));
   const links: NormalizedImportedLink[] = [];
+  const importedNetworks: NormalizedImportedNetwork[] = [];
   for (const link of rawLinks) {
     const endpoints = asArray(link.nodes);
     if (endpoints.length < 2) {
@@ -132,12 +134,26 @@ export function parseGns3Topology(
       });
       continue;
     }
-    links.push({
+    const normalizedLink = {
       sourceNodeId,
       sourceInterface: portNameByKey.get(portKey(source)) ?? "eth0",
       targetNodeId,
       targetInterface: portNameByKey.get(portKey(target)) ?? "eth0",
       networkName: stringValue(link.link_id) ?? undefined,
+    };
+    links.push(normalizedLink);
+    importedNetworks.push({
+      name: normalizedLink.networkName ?? `link-${links.length}`,
+      endpoints: [
+        {
+          nodeId: normalizedLink.sourceNodeId,
+          interfaceName: normalizedLink.sourceInterface,
+        },
+        {
+          nodeId: normalizedLink.targetNodeId,
+          interfaceName: normalizedLink.targetInterface,
+        },
+      ],
     });
   }
 
@@ -153,6 +169,7 @@ export function parseGns3Topology(
       "Imported Lab",
     nodes,
     links,
+    networks: importedNetworks,
     issues,
   };
 }

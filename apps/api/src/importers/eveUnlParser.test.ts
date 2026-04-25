@@ -15,6 +15,11 @@ const unl = `
           <config id="0">hostname R1</config>
         </configs>
       </node>
+      <node id="3" name="R3" type="qemu" template="vios" image="vios-adventerprisek9" left="500" top="200" ethernet="1">
+        <interfaces>
+          <interface id="0" name="Gi0/0" type="ethernet" network_id="1" />
+        </interfaces>
+      </node>
       <node id="2" name="R2" type="qemu" template="vios" image="vios-adventerprisek9" left="300" top="200" ethernet="1">
         <interfaces>
           <interface id="0" name="Gi0/0" type="ethernet" network_id="1" />
@@ -39,7 +44,7 @@ describe("parseEveUnlTopology", () => {
     });
 
     expect(result.name).toBe("OSPF Lab");
-    expect(result.nodes).toHaveLength(2);
+    expect(result.nodes).toHaveLength(3);
     expect(result.nodes[0]).toMatchObject({
       name: "R1",
       templateName: "vios",
@@ -49,14 +54,19 @@ describe("parseEveUnlTopology", () => {
       interfaceNames: ["Gi0/0", "Gi0/1"],
       startupConfig: "hostname R1",
     });
-    expect(result.links).toEqual([
-      {
-        sourceNodeId: "1",
-        sourceInterface: "Gi0/0",
-        targetNodeId: "2",
-        targetInterface: "Gi0/0",
-        networkName: "net1",
-      },
-    ]);
+    expect(result.networks).toHaveLength(1);
+    expect(result.networks?.[0]?.name).toBe("net1");
+    expect(result.networks?.[0]?.endpoints).toEqual(
+      expect.arrayContaining([
+        { nodeId: "1", interfaceName: "Gi0/0" },
+        { nodeId: "2", interfaceName: "Gi0/0" },
+        { nodeId: "3", interfaceName: "Gi0/0" },
+      ]),
+    );
+    expect(result.issues).not.toContainEqual(
+      expect.objectContaining({
+        message: "Skipped multi-access network net1.",
+      }),
+    );
   });
 });

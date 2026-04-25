@@ -34,6 +34,14 @@ export type NormalizedImportedLink = {
   networkName?: string;
 };
 
+export type NormalizedImportedNetwork = {
+  name: string;
+  endpoints: Array<{
+    nodeId: string;
+    interfaceName: string;
+  }>;
+};
+
 export type NormalizedImportedTopology = {
   source: {
     format: ImportFormat;
@@ -43,5 +51,6 @@ export type NormalizedImportedTopology = {
   name: string;
   nodes: NormalizedImportedNode[];
   links: NormalizedImportedLink[];
+  networks?: NormalizedImportedNetwork[];
   issues: ImportIssue[];
 };

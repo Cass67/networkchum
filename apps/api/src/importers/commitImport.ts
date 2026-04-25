@@ -43,6 +43,22 @@ export function buildLabDocumentFromImport(
       !excludedNodeIds.has(link.sourceNodeId) &&
       !excludedNodeIds.has(link.targetNodeId),
   );
+  const importedNetworks =
+    input.topology.networks
+      ?.map((network) => ({
+        ...network,
+        endpoints: network.endpoints.filter(
+          (endpoint) => !excludedNodeIds.has(endpoint.nodeId),
+        ),
+      }))
+      .filter((network) => network.endpoints.length >= 2) ??
+    importedLinks.map((link, index) => ({
+      name: link.networkName || `link-${index + 1}`,
+      endpoints: [
+        { nodeId: link.sourceNodeId, interfaceName: link.sourceInterface },
+        { nodeId: link.targetNodeId, interfaceName: link.targetInterface },
+      ],
+    }));
 
   const nodes = importedNodes.map((importedNode) => {
     const mapping = input.resolvedMappings.get(
@@ -104,22 +120,21 @@ export function buildLabDocumentFromImport(
     };
   });
 
-  const networks = importedLinks.map((link, index) => ({
+  const networks = importedNetworks.map((network, index) => ({
     id: `net-import-${index}-${randomSuffix()}`,
     kind: "ethernet" as const,
-    name: link.networkName || `link-${index + 1}`,
+    name: network.name || `link-${index + 1}`,
     visible: false,
   }));
 
-  const attachments = importedLinks.flatMap((link, index) => {
+  const attachments = importedNetworks.flatMap((importedNetwork, index) => {
     const network = networks[index]!;
-    const sourceInterfaceId = interfaceIdByNodeAndName.get(
-      `${link.sourceNodeId}:${link.sourceInterface}`,
-    );
-    const targetInterfaceId = interfaceIdByNodeAndName.get(
-      `${link.targetNodeId}:${link.targetInterface}`,
-    );
-    return [sourceInterfaceId, targetInterfaceId]
+    return importedNetwork.endpoints
+      .map((endpoint) =>
+        interfaceIdByNodeAndName.get(
+          `${endpoint.nodeId}:${endpoint.interfaceName}`,
+        ),
+      )
       .filter((interfaceId): interfaceId is string => Boolean(interfaceId))
       .map((interfaceId) => ({ interfaceId, networkId: network.id }));
   });

@@ -4,6 +4,7 @@ import type { ImportIssue } from "@networkchum/shared";
 import { asArray, gridPosition, numericValue } from "./normalize.js";
 import type {
   NormalizedImportedLink,
+  NormalizedImportedNetwork,
   NormalizedImportedNode,
   NormalizedImportedTopology,
   TopologyPayload,
@@ -146,14 +147,23 @@ export function parseEveUnlTopology(
   });
 
   const links: NormalizedImportedLink[] = [];
+  const importedNetworks: NormalizedImportedNetwork[] = [];
   for (const [networkId, endpoints] of attachmentByNetwork) {
-    if (endpoints.length !== 2) {
+    if (endpoints.length < 2) {
       issues.push({
         severity: "warning",
-        message: `Skipped multi-access network ${networks.get(networkId) ?? networkId}.`,
+        message: `Skipped one-ended network ${networks.get(networkId) ?? networkId}.`,
       });
       continue;
     }
+    importedNetworks.push({
+      name: networks.get(networkId) ?? `network-${networkId}`,
+      endpoints: endpoints.map((endpoint) => ({
+        nodeId: endpoint.nodeId,
+        interfaceName: endpoint.interfaceName,
+      })),
+    });
+    if (endpoints.length !== 2) continue;
     links.push({
       sourceNodeId: endpoints[0]!.nodeId,
       sourceInterface: endpoints[0]!.interfaceName,
@@ -175,6 +185,7 @@ export function parseEveUnlTopology(
       "Imported Lab",
     nodes,
     links,
+    networks: importedNetworks,
     issues,
   };
 }
