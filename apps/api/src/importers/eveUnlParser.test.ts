@@ -69,4 +69,40 @@ describe("parseEveUnlTopology", () => {
       }),
     );
   });
+
+  it("reads EVE interfaces that are direct children of node elements", () => {
+    const result = parseEveUnlTopology({
+      format: "eve-unl",
+      originalFileName: "network.unl",
+      topologyPath: "network.unl",
+      content: `
+        <lab name="network">
+          <topology>
+            <nodes>
+              <node id="1" name="PE1" type="qemu" template="csr1000vng" image="csr1000vng-17.03.05" left="100" top="100" ethernet="8">
+                <interface id="0" name="Gi1" type="ethernet" network_id="13" />
+              </node>
+              <node id="2" name="P1" type="qemu" template="csr1000vng" image="csr1000vng-17.03.05" left="200" top="100" ethernet="8">
+                <interface id="0" name="Gi1" type="ethernet" network_id="13" />
+              </node>
+            </nodes>
+            <networks>
+              <network id="13" type="bridge" name="PE1iface_0" />
+            </networks>
+          </topology>
+        </lab>`,
+      ignoredFiles: [],
+    });
+
+    expect(result.nodes[0]?.interfaceNames).toContain("Gi1");
+    expect(result.networks).toEqual([
+      {
+        name: "PE1iface_0",
+        endpoints: [
+          { nodeId: "1", interfaceName: "Gi1" },
+          { nodeId: "2", interfaceName: "Gi1" },
+        ],
+      },
+    ]);
+  });
 });

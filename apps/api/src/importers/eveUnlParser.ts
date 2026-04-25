@@ -39,9 +39,10 @@ function textValue(value: unknown): string | null {
 
 function collectInterfaces(node: XmlRecord): XmlRecord[] {
   const interfacesRoot = objectValue(node.interfaces);
-  return asArray(interfacesRoot.interface as XmlRecord | XmlRecord[]).map(
-    objectValue,
-  );
+  return [
+    ...asArray(interfacesRoot.interface as XmlRecord | XmlRecord[]),
+    ...asArray(node.interface as XmlRecord | XmlRecord[]),
+  ].map(objectValue);
 }
 
 function interfaceNames(node: XmlRecord, interfaces: XmlRecord[]): string[] {
