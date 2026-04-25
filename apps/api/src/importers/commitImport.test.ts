@@ -78,4 +78,22 @@ describe("buildLabDocumentFromImport", () => {
       "hostname R1",
     );
   });
+
+  it("omits excluded imported nodes and their links", () => {
+    const document = buildLabDocumentFromImport({
+      labId: "lab-import",
+      labName: "Imported",
+      topology,
+      resolvedMappings: new Map([
+        ["qemu:vios:vios", { template, imageId: "img-vios" }],
+      ]),
+      excludedNodeIds: ["2"],
+    });
+
+    expect(document.nodes).toHaveLength(1);
+    expect(document.nodes[0]?.name).toBe("R1");
+    expect(document.networks).toHaveLength(0);
+    expect(document.attachments).toHaveLength(0);
+    expect(document.startupConfigSets[0]?.nodeConfigs).toHaveLength(1);
+  });
 });

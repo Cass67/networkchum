@@ -78,6 +78,12 @@ export const importRoutes: FastifyPluginAsync<AppDependencies> = async (
       .object({ draftId: z.string().min(1) })
       .parse(request.params);
     const body = ImportCommitRequestSchema.parse(request.body);
+    const excludedNodeIds = z
+      .object({
+        excludedNodeIds: z.array(z.string().min(1)).default(() => []),
+      })
+      .passthrough()
+      .parse(request.body).excludedNodeIds;
     const draft = await getImportDraft(params.draftId);
     if (!draft) {
       return reply.code(404).send({ message: "Import draft not found" });
@@ -89,6 +95,7 @@ export const importRoutes: FastifyPluginAsync<AppDependencies> = async (
     const bodyMappings = new Map(
       body.mappings.map((mapping) => [mapping.templateKey, mapping]),
     );
+    const excludedNodeIdSet = new Set(excludedNodeIds);
     const resolvedMappings = new Map<
       string,
       {
@@ -98,6 +105,7 @@ export const importRoutes: FastifyPluginAsync<AppDependencies> = async (
     >();
 
     for (const node of draft.topology.nodes) {
+      if (excludedNodeIdSet.has(node.foreignId)) continue;
       const key = importedTemplateKey(node);
       if (resolvedMappings.has(key)) continue;
 
@@ -146,6 +154,7 @@ export const importRoutes: FastifyPluginAsync<AppDependencies> = async (
       labName,
       topology: draft.topology,
       resolvedMappings,
+      excludedNodeIds,
     });
     const lab = await createLabFromDocument(labName, document);
     await deleteImportDraft(params.draftId);

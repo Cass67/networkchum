@@ -38,22 +38,31 @@ export function ImportTopologyDialog({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mappings, setMappings] = useState<MappingDraft>({});
+  const [excludedNodeIds, setExcludedNodeIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const includedNodes = useMemo(() => {
+    if (!preview) return [];
+    return preview.nodes.filter((node) => !excludedNodeIds.has(node.foreignId));
+  }, [excludedNodeIds, preview]);
 
   const unresolvedKeys = useMemo(() => {
     if (!preview) return [];
     return [
       ...new Set(
-        preview.nodes
+        includedNodes
           .filter((node) => node.status === "unresolved")
           .map((node) => node.templateKey),
       ),
     ];
-  }, [preview]);
+  }, [includedNodes, preview]);
 
   const canCommit =
     preview &&
+    includedNodes.length > 0 &&
     unresolvedKeys.every((key) => Boolean(mappings[key]?.templateId)) &&
     !busy;
 
@@ -68,6 +77,7 @@ export function ImportTopologyDialog({
     try {
       const nextPreview = await onPreview(file);
       setPreview(nextPreview);
+      setExcludedNodeIds(new Set());
       const nextMappings: MappingDraft = {};
       for (const node of nextPreview.nodes) {
         if (node.status === "matched" && node.matchedTemplateId) {
@@ -96,11 +106,21 @@ export function ImportTopologyDialog({
     try {
       await onCommit(preview.draftId, {
         name: preview.labName,
-        mappings: Object.entries(mappings).map(([templateKey, mapping]) => ({
-          templateKey,
-          templateId: mapping.templateId,
-          imageId: mapping.imageId || null,
-        })),
+        mappings: [
+          ...new Set(includedNodes.map((node) => node.templateKey)),
+        ].flatMap((templateKey) => {
+          const mapping = mappings[templateKey];
+          return mapping?.templateId
+            ? [
+                {
+                  templateKey,
+                  templateId: mapping.templateId,
+                  imageId: mapping.imageId || null,
+                },
+              ]
+            : [];
+        }),
+        excludedNodeIds: Array.from(excludedNodeIds),
       });
     } catch (nextError) {
       setError(
@@ -151,6 +171,7 @@ export function ImportTopologyDialog({
               setFile(event.target.files?.[0] ?? null);
               setPreview(null);
               setMappings({});
+              setExcludedNodeIds(new Set());
             }}
           />
         </label>
@@ -172,8 +193,11 @@ export function ImportTopologyDialog({
             <div className="import-summary">
               <strong>{preview.labName}</strong>
               <span>{preview.source.format}</span>
-              <span>{preview.summary.nodes} nodes</span>
+              <span>{includedNodes.length} nodes</span>
               <span>{preview.summary.links} links</span>
+              {excludedNodeIds.size > 0 ? (
+                <span>{excludedNodeIds.size} removed</span>
+              ) : null}
             </div>
             {preview.issues.length > 0 ? (
               <ul className="import-issues">
@@ -187,7 +211,7 @@ export function ImportTopologyDialog({
               role="table"
               aria-label="Import Nodes"
             >
-              {preview.nodes.map((node) => {
+              {includedNodes.map((node) => {
                 const mapping = mappings[node.templateKey];
                 const selectedTemplateId =
                   mapping?.templateId ?? node.matchedTemplateId ?? "";
@@ -257,18 +281,32 @@ export function ImportTopologyDialog({
                         ))}
                       </select>
                     </label>
+                    <button
+                      type="button"
+                      className="btn btn-secondary import-remove-button"
+                      aria-label={`Remove ${node.name}`}
+                      onClick={() =>
+                        setExcludedNodeIds((current) => {
+                          const next = new Set(current);
+                          next.add(node.foreignId);
+                          return next;
+                        })
+                      }
+                    >
+                      Remove
+                    </button>
                   </div>
                 );
               })}
             </div>
-            <div className="dialog-actions">
+            <div className="dialog-actions import-commit-actions">
               <button
                 type="button"
                 className="btn btn-primary"
                 disabled={!canCommit}
                 onClick={() => void handleCommit()}
               >
-                Import Lab
+                Create Lab
               </button>
             </div>
           </div>

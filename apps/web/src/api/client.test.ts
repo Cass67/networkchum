@@ -131,11 +131,25 @@ describe("createApiClient", () => {
           imageId: "img-1",
         },
       ],
+      excludedNodeIds: ["2"],
     });
 
     expect(fetcher).toHaveBeenCalledWith(
       "/api/imports/topology/draft-1/commit",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "Demo",
+          mappings: [
+            {
+              templateKey: "qemu:vios:vios",
+              templateId: "cisco-iosv",
+              imageId: "img-1",
+            },
+          ],
+          excludedNodeIds: ["2"],
+        }),
+      }),
     );
     expect(lab.id).toBe("lab-1");
   });

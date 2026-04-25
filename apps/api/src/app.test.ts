@@ -215,6 +215,41 @@ describe("api", () => {
     );
   });
 
+  it("commits an import draft without excluded unresolved nodes", async () => {
+    const previewResponse = await app.inject({
+      method: "POST",
+      url: "/imports/topology/preview",
+      headers: { "content-type": "multipart/form-data; boundary=----test" },
+      payload:
+        "------test\r\n" +
+        'Content-Disposition: form-data; name="file"; filename="demo.unl"\r\n' +
+        "Content-Type: application/xml\r\n\r\n" +
+        '<lab name="Demo"><topology><nodes>' +
+        '<node id="1" name="Mystery" type="qemu" template="mystery" image="missing" ethernet="1" />' +
+        "</nodes></topology></lab>\r\n" +
+        "------test--\r\n",
+    });
+    const draftId = (previewResponse.json() as { preview: { draftId: string } })
+      .preview.draftId;
+
+    const commitResponse = await app.inject({
+      method: "POST",
+      url: `/imports/topology/${draftId}/commit`,
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({
+        name: "Imported Demo",
+        mappings: [],
+        excludedNodeIds: ["1"],
+      }),
+    });
+
+    expect(commitResponse.statusCode).toBe(201);
+    expect(
+      (commitResponse.json() as { lab: { document: { nodes: unknown[] } } }).lab
+        .document.nodes,
+    ).toHaveLength(0);
+  });
+
   it("returns built-in templates", async () => {
     const response = await app.inject({ method: "GET", url: "/templates" });
     const payload = response.json() as {

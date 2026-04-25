@@ -58,6 +58,7 @@ export const ImportMappingSchema = z.object({
 export const ImportCommitRequestSchema = z.object({
   name: z.string().trim().min(1).optional(),
   mappings: z.array(ImportMappingSchema).default(() => []),
+  excludedNodeIds: z.array(z.string().min(1)).default(() => []),
 });
 
 export type ImportFormat = z.infer<typeof ImportFormatSchema>;

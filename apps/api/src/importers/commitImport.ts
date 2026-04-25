@@ -14,6 +14,7 @@ type BuildLabDocumentInput = {
   labName: string;
   topology: NormalizedImportedTopology;
   resolvedMappings: Map<string, ResolvedImportMapping>;
+  excludedNodeIds?: string[];
 };
 
 function randomSuffix(): string {
@@ -33,8 +34,17 @@ export function buildLabDocumentFromImport(
 ): LabDocument {
   const nodeIdByForeignId = new Map<string, string>();
   const interfaceIdByNodeAndName = new Map<string, string>();
+  const excludedNodeIds = new Set(input.excludedNodeIds ?? []);
+  const importedNodes = input.topology.nodes.filter(
+    (node) => !excludedNodeIds.has(node.foreignId),
+  );
+  const importedLinks = input.topology.links.filter(
+    (link) =>
+      !excludedNodeIds.has(link.sourceNodeId) &&
+      !excludedNodeIds.has(link.targetNodeId),
+  );
 
-  const nodes = input.topology.nodes.map((importedNode) => {
+  const nodes = importedNodes.map((importedNode) => {
     const mapping = input.resolvedMappings.get(
       importedTemplateKey(importedNode),
     );
@@ -94,14 +104,14 @@ export function buildLabDocumentFromImport(
     };
   });
 
-  const networks = input.topology.links.map((link, index) => ({
+  const networks = importedLinks.map((link, index) => ({
     id: `net-import-${index}-${randomSuffix()}`,
     kind: "ethernet" as const,
     name: link.networkName || `link-${index + 1}`,
     visible: false,
   }));
 
-  const attachments = input.topology.links.flatMap((link, index) => {
+  const attachments = importedLinks.flatMap((link, index) => {
     const network = networks[index]!;
     const sourceInterfaceId = interfaceIdByNodeAndName.get(
       `${link.sourceNodeId}:${link.sourceInterface}`,
@@ -114,7 +124,7 @@ export function buildLabDocumentFromImport(
       .map((interfaceId) => ({ interfaceId, networkId: network.id }));
   });
 
-  const startupNodeConfigs = input.topology.nodes.flatMap((node) => {
+  const startupNodeConfigs = importedNodes.flatMap((node) => {
     if (!node.startupConfig) return [];
     const nodeId = nodeIdByForeignId.get(node.foreignId);
     return nodeId ? [{ nodeId, config: node.startupConfig }] : [];

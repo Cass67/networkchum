@@ -29,7 +29,7 @@ describe("import topology schemas", () => {
     expect(preview.nodes[0]?.status).toBe("unresolved");
   });
 
-  it("accepts commit mappings keyed by template key", () => {
+  it("accepts commit mappings and excluded imported nodes", () => {
     const request = ImportCommitRequestSchema.parse({
       name: "Imported Lab",
       mappings: [
@@ -39,8 +39,10 @@ describe("import topology schemas", () => {
           imageId: "img-1",
         },
       ],
+      excludedNodeIds: ["node-2"],
     });
 
     expect(request.mappings[0]?.imageId).toBe("img-1");
+    expect(request.excludedNodeIds).toEqual(["node-2"]);
   });
 });
