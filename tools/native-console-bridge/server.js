@@ -1,6 +1,7 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 export const BRIDGE_HOST = "127.0.0.1";
 export const BRIDGE_PORT = 4010;
@@ -245,7 +246,12 @@ export function createBridgeServer(options = {}) {
   });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMainModule =
+  import.meta.main === true ||
+  (process.argv[1] !== undefined &&
+    realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]));
+
+if (isMainModule) {
   const server = createBridgeServer();
   server.listen(BRIDGE_PORT, BRIDGE_HOST, () => {
     console.log(
