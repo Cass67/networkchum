@@ -20,6 +20,7 @@ describe("ipCommand", () => {
 
   it("routes ip through sudo when NETWORKCHUM_IP_SUDO=1", () => {
     process.env.NETWORKCHUM_IP_SUDO = "1";
+    delete process.env.NETWORKCHUM_IP_PATH;
     expect(ipCommand(["tuntap", "add", "dev", "tap0", "mode", "tap"])).toEqual([
       "sudo",
       "-n",
@@ -31,5 +32,18 @@ describe("ipCommand", () => {
       "mode",
       "tap",
     ]);
+  });
+
+  it("uses an absolute ip path when NETWORKCHUM_IP_PATH is set", () => {
+    process.env.NETWORKCHUM_IP_SUDO = "1";
+    process.env.NETWORKCHUM_IP_PATH = "/usr/sbin/ip";
+    expect(ipCommand(["link", "show"])).toEqual([
+      "sudo",
+      "-n",
+      "/usr/sbin/ip",
+      "link",
+      "show",
+    ]);
+    delete process.env.NETWORKCHUM_IP_PATH;
   });
 });

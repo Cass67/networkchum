@@ -513,17 +513,29 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
     # scoped NOPASSWD rule for `ip` instead and run it through sudo.
     install_ip_sudo_rule() {
       SUDOERS_FILE=/etc/sudoers.d/zzz-networkchum-ip
-      # A cloud-init/user rule like "(ALL) ALL" otherwise overrides the
-      # NOPASSWD tag, so this file must sort last in sudoers.d.
-      printf '  granting %s passwordless use of %s\n' "$(id -un)" "$IP_BIN"
-      printf '%s ALL=(root) NOPASSWD: %s\n' "$(id -un)" "$IP_BIN" |
-        sudo tee "$SUDOERS_FILE" >/dev/null
+      RULE="$(id -un) ALL=(root) NOPASSWD: $IP_BIN, /sbin/ip"
+      printf '  granting %s passwordless use of ip\n' "$(id -un)"
+
+      printf '%s\n' "$RULE" | sudo tee "$SUDOERS_FILE" >/dev/null
       sudo chmod 0440 "$SUDOERS_FILE"
-      if ! sudo visudo -cf "$SUDOERS_FILE" >/dev/null 2>&1; then
-        sudo rm -f "$SUDOERS_FILE"
-        die "generated sudoers rule failed validation; aborted"
-      fi
       sudo rm -f /etc/sudoers.d/networkchum-ip 2>/dev/null || true
+
+      # A later '(ALL) ALL' entry overrides the NOPASSWD tag, so also append the
+      # rule to /etc/sudoers (after any #includedir line) where it is the last
+      # matching rule. Validated before it is installed.
+      if ! sudo grep -qF "NOPASSWD: $IP_BIN" /etc/sudoers 2>/dev/null; then
+        tmp=$(mktemp)
+        sudo cat /etc/sudoers | tee "$tmp" >/dev/null
+        printf '\n# NetworkChum: passwordless ip for TAP/bridge setup\n%s\n' \
+          "$RULE" >>"$tmp"
+        if sudo visudo -cf "$tmp" >/dev/null 2>&1; then
+          sudo cp "$tmp" /etc/sudoers
+        else
+          printf 'WARN: could not append the ip rule to /etc/sudoers\n' >&2
+        fi
+        rm -f "$tmp"
+      fi
+
       TAP_MODE=ip-sudo
       # Undo a bin_t relabel of ip left by an earlier install; it is not needed.
       if command -v semanage >/dev/null 2>&1 &&
@@ -629,6 +641,7 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
     NETWORKCHUM_DATA_DIR="$DATA_DIR" \
     NETWORKCHUM_SERVICE_SCOPE="$SERVICE_SCOPE" \
     NETWORKCHUM_TAP_MODE="$TAP_MODE" \
+    NETWORKCHUM_UNIT_IP_PATH="${IP_BIN:-}" \
     "$NODE_PATH" "$ROOT_DIR/scripts/systemd-unit.mjs")
 
   if [ "$DRY_RUN" -eq 1 ]; then

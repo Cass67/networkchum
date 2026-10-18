@@ -6,8 +6,9 @@
 // grants a narrowly scoped NOPASSWD rule for `ip` and sets
 // NETWORKCHUM_IP_SUDO=1, so privileged network setup runs via sudo instead.
 export function ipCommand(args: string[]): string[] {
+  const ipPath = process.env.NETWORKCHUM_IP_PATH?.trim() || "ip";
   if (process.env.NETWORKCHUM_IP_SUDO === "1") {
-    return ["sudo", "-n", "ip", ...args];
+    return ["sudo", "-n", ipPath, ...args];
   }
-  return ["ip", ...args];
+  return [ipPath, ...args];
 }

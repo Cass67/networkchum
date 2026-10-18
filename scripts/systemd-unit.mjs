@@ -71,6 +71,10 @@ if (scope === "system" && tapMode === "ambient") {
 
 if (tapMode === "ip-sudo") {
   service.push("Environment=NETWORKCHUM_IP_SUDO=1");
+  const ipPath = process.env.NETWORKCHUM_UNIT_IP_PATH ?? "";
+  if (ipPath) {
+    service.push(`Environment=NETWORKCHUM_IP_PATH=${ipPath}`);
+  }
 }
 
 if (tapMode === "socket") {

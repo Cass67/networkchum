@@ -114,6 +114,23 @@ test("ip-sudo tap mode enables sudo for ip in the unit", () => {
   assert.doesNotMatch(result.stdout, /AmbientCapabilities/);
 });
 
+test("ip-sudo mode pins the ip path when provided", () => {
+  const result = runUnit({
+    NETWORKCHUM_UNIT_USER: "cass",
+    NETWORKCHUM_ROOT: "/home/cass/networkchum",
+    NETWORKCHUM_BIND_MODE: "lan",
+    NETWORKCHUM_SERVICE_SCOPE: "user",
+    NETWORKCHUM_TAP_MODE: "ip-sudo",
+    NETWORKCHUM_UNIT_IP_PATH: "/usr/sbin/ip",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /^Environment=NETWORKCHUM_IP_PATH=\/usr\/sbin\/ip$/m,
+  );
+});
+
 test("socket tap mode forces socket networking", () => {
   const result = runUnit({
     NETWORKCHUM_UNIT_USER: "cass",
