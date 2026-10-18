@@ -1,3 +1,5 @@
+import { ipCommand } from "./ipCommand.js";
+
 type CommandResult = {
   ok: boolean;
   stdout: string;
@@ -5,6 +7,14 @@ type CommandResult = {
 };
 
 type RunCommand = (command: string, args: string[]) => Promise<CommandResult>;
+
+async function runIp(
+  runCommand: RunCommand,
+  args: string[],
+): Promise<CommandResult> {
+  const command = ipCommand(args);
+  return runCommand(command[0]!, command.slice(1));
+}
 
 type LinkInfo = {
   ifname: string;
@@ -72,7 +82,7 @@ function defaultRoutesForInterface(
 }
 
 function routeReplaceCommand(route: RouteInfo, bridgeName: string): string[] {
-  const command = ["ip", "route", "replace", "default"];
+  const command = ipCommand(["route", "replace", "default"]);
   if (route.gateway) {
     command.push("via", route.gateway);
   }
@@ -115,41 +125,43 @@ export function planManagementBridgeUplinkCommands(
     input.uplinkLink.address &&
     input.bridgeLink.address !== input.uplinkLink.address
   ) {
-    commands.push([
-      "ip",
-      "link",
-      "set",
-      "dev",
-      input.bridgeName,
-      "address",
-      input.uplinkLink.address,
-    ]);
+    commands.push(
+      ipCommand([
+        "link",
+        "set",
+        "dev",
+        input.bridgeName,
+        "address",
+        input.uplinkLink.address,
+      ]),
+    );
   }
 
-  commands.push(["ip", "link", "set", "dev", input.bridgeName, "up"]);
+  commands.push(ipCommand(["link", "set", "dev", input.bridgeName, "up"]));
 
   for (const cidr of uplinkCidrs) {
     if (!bridgeCidrs.has(cidr)) {
-      commands.push(["ip", "addr", "add", cidr, "dev", input.bridgeName]);
+      commands.push(ipCommand(["addr", "add", cidr, "dev", input.bridgeName]));
     }
   }
 
   if (input.uplinkLink.master !== input.bridgeName) {
-    commands.push([
-      "ip",
-      "link",
-      "set",
-      "dev",
-      input.uplinkName,
-      "master",
-      input.bridgeName,
-    ]);
+    commands.push(
+      ipCommand([
+        "link",
+        "set",
+        "dev",
+        input.uplinkName,
+        "master",
+        input.bridgeName,
+      ]),
+    );
   }
 
-  commands.push(["ip", "link", "set", "dev", input.uplinkName, "up"]);
+  commands.push(ipCommand(["link", "set", "dev", input.uplinkName, "up"]));
 
   for (const cidr of uplinkCidrs) {
-    commands.push(["ip", "addr", "del", cidr, "dev", input.uplinkName]);
+    commands.push(ipCommand(["addr", "del", cidr, "dev", input.uplinkName]));
   }
 
   for (const route of uplinkRoutes) {
@@ -172,7 +184,7 @@ async function queryLinkInfo(
   runCommand: RunCommand,
   interfaceName: string,
 ): Promise<LinkInfo | null> {
-  const result = await runCommand("ip", [
+  const result = await runIp(runCommand, [
     "-json",
     "link",
     "show",
@@ -190,7 +202,7 @@ async function queryAddressInfo(
   runCommand: RunCommand,
   interfaceName: string,
 ): Promise<AddressInfo[] | null> {
-  const result = await runCommand("ip", [
+  const result = await runIp(runCommand, [
     "-json",
     "addr",
     "show",
@@ -210,7 +222,7 @@ async function queryAddressInfo(
 async function queryDefaultRoutes(
   runCommand: RunCommand,
 ): Promise<RouteInfo[] | null> {
-  const result = await runCommand("ip", ["-json", "route", "show", "default"]);
+  const result = await runIp(runCommand, ["-json", "route", "show", "default"]);
   if (!result.ok) {
     return null;
   }
@@ -222,7 +234,7 @@ async function queryBridgeMembers(
   runCommand: RunCommand,
   bridgeName: string,
 ): Promise<LinkInfo[] | null> {
-  const result = await runCommand("ip", [
+  const result = await runIp(runCommand, [
     "-json",
     "link",
     "show",

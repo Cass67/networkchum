@@ -12,6 +12,7 @@ import {
   getNodeAttachmentsForContainer,
 } from "../network/dockerNetworking.js";
 import { buildCommand } from "../network/buildCommands.js";
+import { ipCommand } from "../network/ipCommand.js";
 import { ensureManagementBridgeUplink } from "../network/managementUplink.js";
 import { reconcileTopology, bridgeName } from "../network/reconcileTopology.js";
 import {
@@ -1244,13 +1245,14 @@ export async function powerOffNode(
               dependencies.isBridgeInterface ?? isLinuxBridgeInterface,
             ))
           ) {
-            await runCommand("ip", [
+            const delCmd = ipCommand([
               "link",
               "set",
               "dev",
               physicalNic,
               "nomaster",
-            ]).catch(() => {});
+            ]);
+            await runCommand(delCmd[0]!, delCmd.slice(1)).catch(() => {});
           }
         }
       }
@@ -1287,7 +1289,8 @@ export async function powerOffNode(
 
           for (const slot of attachedSlots) {
             const tap = tapName(labId, nodeId, slot);
-            const result = await runCommand("ip", ["link", "del", "dev", tap]);
+            const delCmd = ipCommand(["link", "del", "dev", tap]);
+            const result = await runCommand(delCmd[0]!, delCmd.slice(1));
             if (!result.ok) {
               console.warn(
                 `[powerNode] TAP cleanup for ${tap}: ${result.stderr.trim()}`,

@@ -51,13 +51,26 @@ if (dataDir) {
   service.push(`Environment=NETWORKCHUM_DATA_DIR=${dataDir}`);
 }
 
-// Two supported ways to get CAP_NET_ADMIN for TAP/bridge setup:
-//  - ambient: the service process itself holds the capability. Only possible
-//    for a system unit, since a user manager cannot grant new capabilities.
-//  - ip-capability: `ip` carries the capability as a file capability, so the
-//    service process stays completely unprivileged and podman stays rootless.
+// Write logs to a file the operator can always read. The systemd user journal
+// is not readable by default on RHEL-family hosts (no systemd-journal group
+// membership), which makes failures invisible.
+service.push(
+  `StandardOutput=append:${root}/.networkchum/service.log`,
+  `StandardError=append:${root}/.networkchum/service.log`,
+);
+
+// Ways to get CAP_NET_ADMIN for TAP/bridge setup:
+//  - ambient: the system unit process holds the capability directly.
+//  - ip-capability: `ip` carries a file capability (works where SELinux
+//    honours file capabilities).
+//  - ip-sudo: the service runs `ip` through sudo via a NOPASSWD rule, needed
+//    on SELinux hosts that do not apply file capabilities to the user domain.
 if (scope === "system" && tapMode === "ambient") {
   service.push("AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW");
+}
+
+if (tapMode === "ip-sudo") {
+  service.push("Environment=NETWORKCHUM_IP_SUDO=1");
 }
 
 service.push(

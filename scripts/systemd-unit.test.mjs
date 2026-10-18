@@ -38,6 +38,14 @@ test("systemd unit runs the production serve command as the given user", () => {
   assert.match(result.stdout, /^Environment=PATH=.*\/usr\/sbin.*$/m);
   assert.match(
     result.stdout,
+    /^StandardOutput=append:\/home\/cass\/networkchum\/\.networkchum\/service\.log$/m,
+  );
+  assert.match(
+    result.stdout,
+    /^StandardError=append:\/home\/cass\/networkchum\/\.networkchum\/service\.log$/m,
+  );
+  assert.match(
+    result.stdout,
     /^AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW$/m,
   );
   // Rootless podman needs the default bounding set for user namespaces.
@@ -90,6 +98,20 @@ test("user-scope unit omits User= and installs into default.target", () => {
   assert.doesNotMatch(result.stdout, /network-online/);
   assert.match(result.stdout, /^WantedBy=default\.target$/m);
   assert.match(result.stdout, /^ExecStart=.*start\.sh serve$/m);
+});
+
+test("ip-sudo tap mode enables sudo for ip in the unit", () => {
+  const result = runUnit({
+    NETWORKCHUM_UNIT_USER: "cass",
+    NETWORKCHUM_ROOT: "/home/cass/networkchum",
+    NETWORKCHUM_BIND_MODE: "lan",
+    NETWORKCHUM_SERVICE_SCOPE: "user",
+    NETWORKCHUM_TAP_MODE: "ip-sudo",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^Environment=NETWORKCHUM_IP_SUDO=1$/m);
+  assert.doesNotMatch(result.stdout, /AmbientCapabilities/);
 });
 
 test("systemd unit requires a user and a root", () => {

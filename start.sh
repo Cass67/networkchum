@@ -26,7 +26,7 @@ die() {
 
 print_usage() {
   cat <<'EOF'
-Usage: ./start.sh [--dry-run] [--sudo-api] [localhost|lan|interface] [dev|dev:api|dev:web|dev:bridge|serve|doctor|forget|clean|install-service|uninstall-service] [--data-dir PATH]
+Usage: ./start.sh [--dry-run] [--sudo-api] [localhost|lan|interface] [dev|dev:api|dev:web|dev:bridge|serve|doctor|forget|clean|logs|install-service|uninstall-service] [--data-dir PATH]
 
 Starts NetworkChum in localhost mode by default.
 
@@ -44,6 +44,7 @@ Scripts:
   doctor           Print config and host diagnostics, then exit (read-only)
   forget           Clear the saved last-run defaults
   clean            Remove exited NetworkChum containers (add --sudo-api for root's store)
+  logs             Tail the service log file
   install-service  Install + start a systemd unit (Linux, needs sudo)
   uninstall-service  Stop + remove the systemd unit
 
@@ -255,7 +256,7 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -gt 0 ] || die "--service-user requires a name"
       SERVICE_USER=$1
       ;;
-    dev | dev:api | dev:web | dev:bridge | serve | doctor | forget | clean | install-service | uninstall-service)
+    dev | dev:api | dev:web | dev:bridge | serve | doctor | forget | clean | logs | install-service | uninstall-service)
       SCRIPT_NAME=$1
       ;;
     --help | -h)
@@ -268,6 +269,14 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$SCRIPT_NAME" = "logs" ]; then
+  LOG_FILE=$ROOT_DIR/.networkchum/service.log
+  if [ ! -f "$LOG_FILE" ]; then
+    die "no service log at $LOG_FILE (has the service started yet?)"
+  fi
+  exec tail -n 200 -f "$LOG_FILE"
+fi
 
 if [ "$SCRIPT_NAME" = "forget" ]; then
   if [ -f "$CONFIG_FILE" ]; then
@@ -467,6 +476,8 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
       "$NPM_PATH" install
     fi
 
+    mkdir -p "$ROOT_DIR/.networkchum"
+
     if [ ! -f "$ROOT_DIR/apps/api/dist/server.js" ] ||
       [ ! -f "$ROOT_DIR/apps/web/dist/index.html" ]; then
       printf 'Building production assets (one-time)...\n'
@@ -498,56 +509,84 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
       printf '  granted cap_net_admin,cap_net_raw to %s\n' "$IP_BIN"
     }
 
-    # On RHEL-family SELinux, `ip` is labelled ifconfig_exec_t and its domain
-    # transition suppresses file capabilities, so setcap has no effect. Relabel
-    # the binary to bin_t so it runs in the caller's domain and the file
-    # capability is honoured.
-    relabel_ip_for_file_caps() {
-      if ! command -v getenforce >/dev/null 2>&1 ||
-        [ "$(getenforce 2>/dev/null)" != "Enforcing" ]; then
-        return 0
+    # On RHEL-family SELinux hosts, file capabilities set on `ip` are not applied
+    # to the unconfined user domain, so setcap has no effect. Grant a narrowly
+    # scoped NOPASSWD rule for `ip` instead and run it through sudo.
+    install_ip_sudo_rule() {
+      SUDOERS_FILE=/etc/sudoers.d/networkchum-ip
+      printf '  granting %s passwordless use of %s\n' "$(id -un)" "$IP_BIN"
+      printf '%s ALL=(root) NOPASSWD: %s\n' "$(id -un)" "$IP_BIN" |
+        sudo tee "$SUDOERS_FILE" >/dev/null
+      sudo chmod 0440 "$SUDOERS_FILE"
+      if ! sudo visudo -cf "$SUDOERS_FILE" >/dev/null 2>&1; then
+        sudo rm -f "$SUDOERS_FILE"
+        die "generated sudoers rule failed validation; aborted"
       fi
-      if [ "$(stat -c %C "$IP_BIN" 2>/dev/null | grep -c ':bin_t:')" = "1" ]; then
-        return 0
+      TAP_MODE=ip-sudo
+      # Undo a bin_t relabel of ip left by an earlier install; it is not needed.
+      if command -v semanage >/dev/null 2>&1 &&
+        [ "$(stat -c %C "$IP_BIN" 2>/dev/null | grep -c ':bin_t:')" = "1" ]; then
+        sudo semanage fcontext -d "$IP_BIN" 2>/dev/null || true
+        sudo restorecon "$IP_BIN" 2>/dev/null || true
       fi
-      command -v semanage >/dev/null 2>&1 ||
-        die "semanage not found; cannot relabel $IP_BIN for file capabilities (install policycoreutils-python-utils)"
-      printf '  relabelling %s to bin_t so the file capability takes effect\n' \
-        "$IP_BIN"
-      sudo semanage fcontext -a -t bin_t "$IP_BIN" 2>/dev/null ||
-        sudo semanage fcontext -m -t bin_t "$IP_BIN" 2>/dev/null || true
-      sudo restorecon "$IP_BIN"
     }
 
     # Rootless podman needs the cpu/cpuset/io controllers delegated to the user
     # manager; RHEL delegates only memory+pids by default, so `podman run --cpus`
-    # fails with "controller `cpu` is not available".
+    # fails with "controller `cpu` is not available". Persist it, then apply it
+    # to the running user manager so no restart is needed.
     enable_user_cgroup_delegation() {
       DELEGATE_FILE=/etc/systemd/system/user@.service.d/delegate.conf
-      if [ -f "$DELEGATE_FILE" ] && grep -q "cpu" "$DELEGATE_FILE"; then
-        return 0
+      if [ ! -f "$DELEGATE_FILE" ] || ! grep -q cpu "$DELEGATE_FILE"; then
+        printf '  delegating cgroup controllers to user services for rootless podman\n'
+        sudo mkdir -p /etc/systemd/system/user@.service.d
+        printf '[Service]\nDelegate=cpu cpuset io memory pids\n' |
+          sudo tee "$DELEGATE_FILE" >/dev/null
+        sudo systemctl daemon-reload
       fi
-      printf '  delegating cgroup controllers to user services for rootless podman\n'
-      sudo mkdir -p /etc/systemd/system/user@.service.d
-      printf '[Service]\nDelegate=cpu cpuset io memory pids\n' |
-        sudo tee "$DELEGATE_FILE" >/dev/null
-      sudo systemctl daemon-reload
-      NEEDS_USER_MANAGER_RESTART=1
+
+      USER_SLICE=/sys/fs/cgroup/user.slice/user-$(id -u).slice
+      USER_MGR_CGROUP=$USER_SLICE/user@$(id -u).service
+      for level in /sys/fs/cgroup /sys/fs/cgroup/user.slice \
+        "$USER_SLICE" "$USER_MGR_CGROUP"; do
+        [ -d "$level" ] || continue
+        printf '+cpu +cpuset +io\n' |
+          sudo tee "$level/cgroup.subtree_control" >/dev/null 2>&1 || true
+      done
+
+      if grep -qw cpu "$USER_MGR_CGROUP/cgroup.controllers" 2>/dev/null; then
+        printf '  verified: cpu controller delegated to the user manager\n'
+      else
+        NEEDS_USER_MANAGER_RESTART=1
+      fi
     }
 
     if [ "$SERVICE_SCOPE" = "user" ]; then
-      # A user manager cannot grant ambient capabilities; use the ip file cap.
-      printf 'Configuring TAP capability for the user service...\n'
-      grant_ip_capability
-      relabel_ip_for_file_caps
-      enable_user_cgroup_delegation
-      if ip tuntap add dev nc-verify0 mode tap >/dev/null 2>&1; then
-        ip link del nc-verify0 >/dev/null 2>&1 || true
-        printf '  verified: ip can create TAP devices\n'
+      # A user manager cannot grant ambient capabilities; use sudo or setcap.
+      IP_BIN=$(readlink -f "$(command -v ip)") ||
+        die "ip not found; cannot configure TAP"
+      if command -v getenforce >/dev/null 2>&1 &&
+        [ "$(getenforce 2>/dev/null)" = "Enforcing" ]; then
+        printf 'Configuring TAP capability via sudo (SELinux host)...\n'
+        install_ip_sudo_rule
+        if sudo -n "$IP_BIN" tuntap add dev nc-verify0 mode tap \
+          >/dev/null 2>&1; then
+          sudo -n "$IP_BIN" link del nc-verify0 >/dev/null 2>&1 || true
+          printf '  verified: ip can create TAP devices (via sudo)\n'
+        else
+          printf 'WARN: could not create a TAP device even via sudo\n' >&2
+        fi
       else
-        printf 'WARN: ip still cannot create a TAP device; TAP labs may fail (check getenforce / getcap %s)\n' \
-          "$IP_BIN" >&2
+        printf 'Configuring TAP capability via setcap...\n'
+        grant_ip_capability
+        if ip tuntap add dev nc-verify0 mode tap >/dev/null 2>&1; then
+          ip link del nc-verify0 >/dev/null 2>&1 || true
+          printf '  verified: ip can create TAP devices\n'
+        else
+          printf 'WARN: ip still cannot create a TAP device; TAP labs may fail\n' >&2
+        fi
       fi
+      enable_user_cgroup_delegation
     else
       probe_ambient_capabilities() {
         sudo systemd-run --collect --quiet --wait --pipe \
@@ -614,8 +653,13 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
       printf 'It will start on boot (linger enabled). Logs: journalctl --user -u %s -f\n' \
         "$UNIT_NAME"
       if [ "${NEEDS_USER_MANAGER_RESTART:-0}" = "1" ]; then
-        printf 'One more step for rootless podman (or reboot): sudo systemctl restart user@%s.service\n' \
+        printf 'Applying cgroup delegation: restarting user@%s.service in 3s (your session will drop; reconnect)\n' \
           "$(id -u)"
+        sudo systemd-run --collect --quiet \
+          --unit=networkchum-usermgr-restart --on-active=3 \
+          systemctl restart "user@$(id -u).service" ||
+          printf 'Could not schedule the restart. Run: sudo systemctl restart user@%s.service\n' \
+            "$(id -u)" >&2
       fi
     else
       printf 'networkchum.service failed to stay active. Recent logs:\n' >&2

@@ -1,5 +1,6 @@
 import os from "node:os";
 
+import { ipCommand } from "./ipCommand.js";
 import type { NetworkOperation } from "./types.js";
 
 function currentUser(): string | null {
@@ -16,14 +17,20 @@ function currentUser(): string | null {
 export function buildCommand(op: NetworkOperation): string[] {
   switch (op.kind) {
     case "create-bridge":
-      return ["ip", "link", "add", "name", op.bridgeName, "type", "bridge"];
+      return ipCommand([
+        "link",
+        "add",
+        "name",
+        op.bridgeName,
+        "type",
+        "bridge",
+      ]);
     case "delete-bridge":
-      return ["ip", "link", "del", "name", op.bridgeName];
+      return ipCommand(["link", "del", "name", op.bridgeName]);
     case "create-tap": {
       const user = currentUser();
       return user
-        ? [
-            "ip",
+        ? ipCommand([
             "tuntap",
             "add",
             "dev",
@@ -32,26 +39,24 @@ export function buildCommand(op: NetworkOperation): string[] {
             "tap",
             "user",
             user,
-          ]
-        : ["ip", "tuntap", "add", "dev", op.tapName, "mode", "tap"];
+          ])
+        : ipCommand(["tuntap", "add", "dev", op.tapName, "mode", "tap"]);
     }
     case "delete-tap":
-      return ["ip", "link", "del", "dev", op.tapName];
+      return ipCommand(["link", "del", "dev", op.tapName]);
     case "attach-to-bridge":
-      return [
-        "ip",
+      return ipCommand([
         "link",
         "set",
         "dev",
         op.interfaceName,
         "master",
         op.bridgeName,
-      ];
+      ]);
     case "detach-from-bridge":
-      return ["ip", "link", "set", "dev", op.interfaceName, "nomaster"];
+      return ipCommand(["link", "set", "dev", op.interfaceName, "nomaster"]);
     case "create-veth-pair":
-      return [
-        "ip",
+      return ipCommand([
         "link",
         "add",
         "name",
@@ -61,12 +66,12 @@ export function buildCommand(op: NetworkOperation): string[] {
         "peer",
         "name",
         op.vethRight,
-      ];
+      ]);
     case "delete-veth":
-      return ["ip", "link", "del", "dev", op.vethName];
+      return ipCommand(["link", "del", "dev", op.vethName]);
     case "set-interface-up":
-      return ["ip", "link", "set", "dev", op.interfaceName, "up"];
+      return ipCommand(["link", "set", "dev", op.interfaceName, "up"]);
     case "set-interface-down":
-      return ["ip", "link", "set", "dev", op.interfaceName, "down"];
+      return ipCommand(["link", "set", "dev", op.interfaceName, "down"]);
   }
 }

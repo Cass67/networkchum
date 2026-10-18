@@ -10,6 +10,7 @@ import {
   resolveCloudBridge,
   shouldDetachCloudUplink,
 } from "./cloudUplink.js";
+import { ipCommand } from "./ipCommand.js";
 
 type CommandResult = {
   ok: boolean;
@@ -120,13 +121,8 @@ async function detachInterfaceFromBridge(
     return;
   }
 
-  const result = await runtime.runCommand("ip", [
-    "link",
-    "set",
-    "dev",
-    interfaceName,
-    "nomaster",
-  ]);
+  const cmd = ipCommand(["link", "set", "dev", interfaceName, "nomaster"]);
+  const result = await runtime.runCommand(cmd[0]!, cmd.slice(1));
 
   if (!result.ok) {
     (deps.warn ?? defaultWarn)(

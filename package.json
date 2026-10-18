@@ -13,6 +13,7 @@
     "start:lan": "./start.sh lan",
     "doctor": "./start.sh doctor",
     "clean": "./start.sh clean",
+    "logs": "./start.sh logs",
     "serve": "./start.sh serve",
     "install-service": "./start.sh install-service",
     "uninstall-service": "./start.sh uninstall-service",

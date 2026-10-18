@@ -276,6 +276,7 @@ From the repo root:
 ./start.sh
 ./start.sh doctor
 ./start.sh clean
+./start.sh logs
 ./start.sh serve
 npm run dev
 npm run dev:api
@@ -308,17 +309,20 @@ npm install
 - picks the service scope: on SELinux hosts where the checkout lives under your
   home directory it installs a **per-user** service with lingering (SELinux won't
   let a system unit exec a `user_home_t` script); otherwise a system service
-- on a system service, probes whether ambient `CAP_NET_ADMIN` works alongside
-  rootless podman and falls back to granting the capability to `ip`; a per-user
-  service always uses the `ip` capability
-- enables it at boot, starts it, and confirms it stayed active
+- grants TAP/bridge capability automatically: ambient `CAP_NET_ADMIN` on a system
+  service (falling back to a file capability on `ip`), or a narrowly scoped
+  passwordless `sudo` rule for `ip` on SELinux hosts that don't apply file
+  capabilities to the user domain
+- enables it at boot, starts it, and confirms it stayed active (including a live
+  TAP creation check)
 
 The service runs as **your user, not root**, so containers are rootless and show
 up in your own `podman ps` — no separate root store, and the connect command works.
 
 - Preview with `--dry-run` (prints the unit and commands, changes nothing).
 - Run as another user with `--service-user NAME`.
-- Logs: `journalctl -u networkchum.service -f` (system) or
+- Logs: `./start.sh logs` (the service writes `.networkchum/service.log`), or
+  `journalctl -u networkchum.service -f` (system) /
   `journalctl --user -u networkchum.service -f` (user).
 - Remove it with `./start.sh uninstall-service`.
 
