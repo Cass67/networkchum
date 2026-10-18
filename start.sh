@@ -498,10 +498,56 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
       printf '  granted cap_net_admin,cap_net_raw to %s\n' "$IP_BIN"
     }
 
+    # On RHEL-family SELinux, `ip` is labelled ifconfig_exec_t and its domain
+    # transition suppresses file capabilities, so setcap has no effect. Relabel
+    # the binary to bin_t so it runs in the caller's domain and the file
+    # capability is honoured.
+    relabel_ip_for_file_caps() {
+      if ! command -v getenforce >/dev/null 2>&1 ||
+        [ "$(getenforce 2>/dev/null)" != "Enforcing" ]; then
+        return 0
+      fi
+      if [ "$(stat -c %C "$IP_BIN" 2>/dev/null | grep -c ':bin_t:')" = "1" ]; then
+        return 0
+      fi
+      command -v semanage >/dev/null 2>&1 ||
+        die "semanage not found; cannot relabel $IP_BIN for file capabilities (install policycoreutils-python-utils)"
+      printf '  relabelling %s to bin_t so the file capability takes effect\n' \
+        "$IP_BIN"
+      sudo semanage fcontext -a -t bin_t "$IP_BIN" 2>/dev/null ||
+        sudo semanage fcontext -m -t bin_t "$IP_BIN" 2>/dev/null || true
+      sudo restorecon "$IP_BIN"
+    }
+
+    # Rootless podman needs the cpu/cpuset/io controllers delegated to the user
+    # manager; RHEL delegates only memory+pids by default, so `podman run --cpus`
+    # fails with "controller `cpu` is not available".
+    enable_user_cgroup_delegation() {
+      DELEGATE_FILE=/etc/systemd/system/user@.service.d/delegate.conf
+      if [ -f "$DELEGATE_FILE" ] && grep -q "cpu" "$DELEGATE_FILE"; then
+        return 0
+      fi
+      printf '  delegating cgroup controllers to user services for rootless podman\n'
+      sudo mkdir -p /etc/systemd/system/user@.service.d
+      printf '[Service]\nDelegate=cpu cpuset io memory pids\n' |
+        sudo tee "$DELEGATE_FILE" >/dev/null
+      sudo systemctl daemon-reload
+      NEEDS_USER_MANAGER_RESTART=1
+    }
+
     if [ "$SERVICE_SCOPE" = "user" ]; then
       # A user manager cannot grant ambient capabilities; use the ip file cap.
       printf 'Configuring TAP capability for the user service...\n'
       grant_ip_capability
+      relabel_ip_for_file_caps
+      enable_user_cgroup_delegation
+      if ip tuntap add dev nc-verify0 mode tap >/dev/null 2>&1; then
+        ip link del nc-verify0 >/dev/null 2>&1 || true
+        printf '  verified: ip can create TAP devices\n'
+      else
+        printf 'WARN: ip still cannot create a TAP device; TAP labs may fail (check getenforce / getcap %s)\n' \
+          "$IP_BIN" >&2
+      fi
     else
       probe_ambient_capabilities() {
         sudo systemd-run --collect --quiet --wait --pipe \
@@ -567,6 +613,10 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
         "$UNIT_USER" "$MODE" "${DATA_DIR:-<default>}" "$TAP_MODE"
       printf 'It will start on boot (linger enabled). Logs: journalctl --user -u %s -f\n' \
         "$UNIT_NAME"
+      if [ "${NEEDS_USER_MANAGER_RESTART:-0}" = "1" ]; then
+        printf 'One more step for rootless podman (or reboot): sudo systemctl restart user@%s.service\n' \
+          "$(id -u)"
+      fi
     else
       printf 'networkchum.service failed to stay active. Recent logs:\n' >&2
       user_systemctl status "$UNIT_NAME" -l --no-pager >&2 || true
