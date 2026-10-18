@@ -131,6 +131,22 @@ test("ip-sudo mode pins the ip path when provided", () => {
   );
 });
 
+test("management uplink name is written into the unit", () => {
+  const result = runUnit({
+    NETWORKCHUM_UNIT_USER: "cass",
+    NETWORKCHUM_ROOT: "/home/cass/networkchum",
+    NETWORKCHUM_BIND_MODE: "lan",
+    NETWORKCHUM_SERVICE_SCOPE: "user",
+    NETWORKCHUM_UNIT_MANAGEMENT_UPLINK: "ens19",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /^Environment=NETWORKCHUM_MANAGEMENT_UPLINK=ens19$/m,
+  );
+});
+
 test("socket tap mode forces socket networking", () => {
   const result = runUnit({
     NETWORKCHUM_UNIT_USER: "cass",

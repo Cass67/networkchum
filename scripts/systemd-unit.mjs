@@ -81,6 +81,11 @@ if (tapMode === "socket") {
   service.push("Environment=NETWORKCHUM_NETWORK_BACKEND=socket");
 }
 
+const managementUplink = process.env.NETWORKCHUM_UNIT_MANAGEMENT_UPLINK ?? "";
+if (managementUplink) {
+  service.push(`Environment=NETWORKCHUM_MANAGEMENT_UPLINK=${managementUplink}`);
+}
+
 service.push(
   `ExecStart=${root}/start.sh serve`,
   "Restart=on-failure",

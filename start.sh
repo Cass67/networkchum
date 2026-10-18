@@ -498,6 +498,13 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
       fi
     done
 
+    uplink=${NETWORKCHUM_MANAGEMENT_UPLINK:-}
+    if [ -n "$uplink" ] && [ "$uplink" != "none" ] && [ "$uplink" != "auto" ] &&
+      [ ! -e "/sys/class/net/$uplink" ]; then
+      printf 'WARN: NETWORKCHUM_MANAGEMENT_UPLINK=%s does not exist on this host\n' \
+        "$uplink" >&2
+    fi
+
     grant_ip_capability() {
       IP_BIN=$(readlink -f "$(command -v ip)") ||
         die "ip not found; cannot grant the TAP capability"
@@ -642,6 +649,7 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
     NETWORKCHUM_SERVICE_SCOPE="$SERVICE_SCOPE" \
     NETWORKCHUM_TAP_MODE="$TAP_MODE" \
     NETWORKCHUM_UNIT_IP_PATH="${IP_BIN:-}" \
+    NETWORKCHUM_UNIT_MANAGEMENT_UPLINK="${NETWORKCHUM_MANAGEMENT_UPLINK:-}" \
     "$NODE_PATH" "$ROOT_DIR/scripts/systemd-unit.mjs")
 
   if [ "$DRY_RUN" -eq 1 ]; then
