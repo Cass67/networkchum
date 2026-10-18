@@ -4,10 +4,20 @@ set -eu
 ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 DRY_RUN=0
-MODE="localhost"
 SCRIPT_NAME="dev"
-DATA_DIR=""
 SUDO_API=0
+SERVICE_USER=""
+MODE=${NETWORKCHUM_BIND_MODE:-localhost}
+DATA_DIR=${NETWORKCHUM_DATA_DIR:-}
+MODE_SET=0
+DATA_DIR_SET=0
+if [ -n "${NETWORKCHUM_BIND_MODE:-}" ]; then
+  MODE_SET=1
+fi
+if [ -n "${NETWORKCHUM_DATA_DIR:-}" ]; then
+  DATA_DIR_SET=1
+fi
+CONFIG_FILE=${NETWORKCHUM_START_CONFIG:-"$ROOT_DIR/.networkchum/start.conf"}
 
 die() {
   printf 'error: %s\n' "$*" >&2
@@ -16,7 +26,7 @@ die() {
 
 print_usage() {
   cat <<'EOF'
-Usage: ./start.sh [--dry-run] [--sudo-api] [localhost|lan|interface] [dev|dev:api|dev:web|dev:bridge] [--data-dir PATH]
+Usage: ./start.sh [--dry-run] [--sudo-api] [localhost|lan|interface] [dev|dev:api|dev:web|dev:bridge|serve|doctor|forget|clean|install-service|uninstall-service] [--data-dir PATH]
 
 Starts NetworkChum in localhost mode by default.
 
@@ -26,14 +36,41 @@ Modes:
   interface   Alias for lan
 
 Scripts:
-  dev         Start the full stack (default)
-  dev:api     Start the API only
-  dev:web     Start the web UI only
-  dev:bridge  Start the native console bridge only
+  dev              Start the full stack (default)
+  dev:api          Start the API only
+  dev:web          Start the web UI only
+  dev:bridge       Start the native console bridge only
+  serve            Run the production build (requires: npm run build)
+  doctor           Print config and host diagnostics, then exit (read-only)
+  forget           Clear the saved last-run defaults
+  clean            Remove exited NetworkChum containers (add --sudo-api for root's store)
+  install-service  Install + start a systemd unit (Linux, needs sudo)
+  uninstall-service  Stop + remove the systemd unit
 
 Options:
-  --sudo-api  On Linux, run the API with sudo so TAP/bridge setup can work
+  --data-dir PATH       Data directory for labs and images (default: apps/api/data)
+  --sudo-api            On Linux, run the API with sudo so TAP/bridge setup can work
+  --service-user NAME   User for the systemd service (default: current/SUDO_USER)
+
+start.sh remembers the mode and --data-dir from the previous run and reuses them
+when you do not pass them again. Pass them explicitly to override, or clear the
+saved defaults with: ./start.sh forget
 EOF
+}
+
+read_config_value() {
+  config_key=$1
+  [ -f "$CONFIG_FILE" ] || return 0
+  sed -n "s/^${config_key}=//p" "$CONFIG_FILE" | head -n 1
+}
+
+save_config() {
+  mkdir -p "$(dirname "$CONFIG_FILE")"
+  {
+    printf '# NetworkChum start.sh last-run defaults. Auto-generated; delete with: ./start.sh forget\n'
+    printf 'MODE=%s\n' "$MODE"
+    printf 'DATA_DIR=%s\n' "$DATA_DIR"
+  } >"$CONFIG_FILE"
 }
 
 resolve_npm() {
@@ -194,22 +231,31 @@ while [ "$#" -gt 0 ]; do
       ;;
     localhost)
       MODE="localhost"
+      MODE_SET=1
       ;;
     lan | interface)
       MODE="lan"
+      MODE_SET=1
       ;;
     --data-dir)
       shift
       [ "$#" -gt 0 ] || die "--data-dir requires a path"
       DATA_DIR=$1
+      DATA_DIR_SET=1
       ;;
     --data-dir=*)
       DATA_DIR=${1#--data-dir=}
+      DATA_DIR_SET=1
       ;;
     --sudo-api)
       SUDO_API=1
       ;;
-    dev | dev:api | dev:web | dev:bridge)
+    --service-user)
+      shift
+      [ "$#" -gt 0 ] || die "--service-user requires a name"
+      SERVICE_USER=$1
+      ;;
+    dev | dev:api | dev:web | dev:bridge | serve | doctor | forget | clean | install-service | uninstall-service)
       SCRIPT_NAME=$1
       ;;
     --help | -h)
@@ -223,12 +269,237 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+if [ "$SCRIPT_NAME" = "forget" ]; then
+  if [ -f "$CONFIG_FILE" ]; then
+    rm -f "$CONFIG_FILE"
+    printf 'Cleared saved last-run defaults (%s)\n' "$CONFIG_FILE"
+  else
+    printf 'No saved last-run defaults to clear\n'
+  fi
+  exit 0
+fi
+
+if [ "$SCRIPT_NAME" = "clean" ]; then
+  if command -v podman >/dev/null 2>&1; then
+    CLEAN_ENGINE=podman
+  elif command -v docker >/dev/null 2>&1; then
+    CLEAN_ENGINE=docker
+  else
+    die "neither podman nor docker found on PATH"
+  fi
+
+  run_engine() {
+    if [ "$SUDO_API" -eq 1 ]; then
+      sudo "$CLEAN_ENGINE" "$@"
+    else
+      "$CLEAN_ENGINE" "$@"
+    fi
+  }
+
+  if ! CLEAN_IDS=$(run_engine ps -a --filter name=networkchum- \
+    --filter status=exited -q); then
+    die "failed to list containers with $CLEAN_ENGINE; if the API runs as root, retry with: ./start.sh --sudo-api clean"
+  fi
+
+  if [ -z "$CLEAN_IDS" ]; then
+    printf 'No exited NetworkChum containers to remove (%s, user=%s)\n' \
+      "$CLEAN_ENGINE" "$(id -un)"
+    exit 0
+  fi
+
+  printf 'Exited NetworkChum containers (%s, user=%s):\n' \
+    "$CLEAN_ENGINE" "$(id -un)"
+  printf '%s\n' "$CLEAN_IDS"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '[dry-run] would run: %s rm -f <ids above>\n' "$CLEAN_ENGINE"
+    exit 0
+  fi
+
+  for clean_id in $CLEAN_IDS; do
+    run_engine rm -f "$clean_id"
+  done
+  printf 'Removed %s container(s)\n' "$(printf '%s\n' "$CLEAN_IDS" | wc -l | tr -d ' ')"
+  exit 0
+fi
+
+RESTORED=0
+if [ "$MODE_SET" -eq 0 ]; then
+  saved_mode=$(read_config_value MODE)
+  if [ -n "$saved_mode" ]; then
+    MODE=$saved_mode
+    RESTORED=1
+  fi
+fi
+if [ "$DATA_DIR_SET" -eq 0 ]; then
+  saved_data_dir=$(read_config_value DATA_DIR)
+  if [ -n "$saved_data_dir" ]; then
+    DATA_DIR=$saved_data_dir
+    RESTORED=1
+  fi
+fi
+
+if [ "$RESTORED" -eq 1 ]; then
+  printf 'Using saved last-run defaults from %s (mode=%s, data-dir=%s)\n' \
+    "$CONFIG_FILE" "$MODE" "${DATA_DIR:-<default>}"
+  printf 'Override with explicit args, or clear them with: ./start.sh forget\n'
+fi
+
 TARGET_PORT=$(resolve_target_port)
 TARGET_LABEL=$(resolve_target_label)
 NPM_PATH=$(resolve_npm)
 NODE_PATH=$(resolve_node "$NPM_PATH")
 ROOT_PATH=$(resolve_root_path "$NPM_PATH" "$NODE_PATH")
 ENV_PREFIX=$(build_env_prefix)
+
+if [ "$SCRIPT_NAME" = "doctor" ]; then
+  cd "$ROOT_DIR"
+  if [ -n "$DATA_DIR" ]; then
+    export NETWORKCHUM_DATA_DIR="$DATA_DIR"
+  fi
+  export NETWORKCHUM_BIND_MODE="$MODE"
+  exec "$NODE_PATH" "$ROOT_DIR/scripts/doctor.mjs"
+fi
+
+if [ "$SCRIPT_NAME" = "serve" ]; then
+  API_CMD="$ENV_PREFIX $NODE_PATH $ROOT_DIR/apps/api/dist/server.js"
+  WEB_CMD="$ENV_PREFIX $NODE_PATH $ROOT_DIR/scripts/serve-web.mjs"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '[dry-run] %s %s exec concurrently -- -k -n api,web "%s" "%s"\n' \
+      "$ENV_PREFIX" "$NPM_PATH" "$API_CMD" "$WEB_CMD"
+    exit 0
+  fi
+  [ -f "$ROOT_DIR/apps/api/dist/server.js" ] ||
+    die "no production API build at apps/api/dist; run: npm run build"
+  [ -f "$ROOT_DIR/apps/web/dist/index.html" ] ||
+    die "no production web build at apps/web/dist; run: npm run build"
+  cd "$ROOT_DIR"
+  exec sh -c "$NPM_PATH exec concurrently -- -k -n api,web \"$API_CMD\" \"$WEB_CMD\""
+fi
+
+if [ "$SCRIPT_NAME" = "install-service" ] ||
+  [ "$SCRIPT_NAME" = "uninstall-service" ]; then
+  UNIT_NAME=networkchum.service
+  UNIT_PATH=/etc/systemd/system/$UNIT_NAME
+
+  if [ "$SCRIPT_NAME" = "uninstall-service" ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+      printf '[dry-run] sudo systemctl disable --now %s\n' "$UNIT_NAME"
+      printf '[dry-run] sudo rm -f %s\n' "$UNIT_PATH"
+      printf '[dry-run] sudo systemctl daemon-reload\n'
+      exit 0
+    fi
+    command -v systemctl >/dev/null 2>&1 ||
+      die "systemd (systemctl) not found; uninstall-service supports Linux systemd hosts only"
+    sudo systemctl disable --now "$UNIT_NAME" || true
+    sudo rm -f "$UNIT_PATH"
+    sudo systemctl daemon-reload
+    printf 'Removed %s\n' "$UNIT_NAME"
+    exit 0
+  fi
+
+  UNIT_USER=${SERVICE_USER:-${SUDO_USER:-$(id -un)}}
+  TAP_MODE=ambient
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '# (dry-run) a real install probes ambient capabilities and falls back to setcap on ip\n'
+  else
+    command -v systemctl >/dev/null 2>&1 ||
+      die "systemd (systemctl) not found; install-service supports Linux systemd hosts only"
+
+    # Re-running install should update an existing service cleanly.
+    if systemctl is-active --quiet "$UNIT_NAME"; then
+      sudo systemctl stop "$UNIT_NAME"
+    fi
+
+    if [ ! -x "$ROOT_DIR/node_modules/.bin/concurrently" ]; then
+      printf 'Installing dependencies (one-time)...\n'
+      "$NPM_PATH" install
+    fi
+
+    if [ ! -f "$ROOT_DIR/apps/api/dist/server.js" ] ||
+      [ ! -f "$ROOT_DIR/apps/web/dist/index.html" ]; then
+      printf 'Building production assets (one-time)...\n'
+      "$NPM_PATH" run build
+    fi
+
+    port_in_use() {
+      if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+      else
+        return 1
+      fi
+    }
+    for port in 4000 5173; do
+      if port_in_use "$port"; then
+        die "port $port is already in use. Stop the running stack first (e.g. Ctrl-C the dev stack, then: sudo pkill -f 'tsx watch src/server.ts'; pkill -f 'vite --port 5173'), then re-run."
+      fi
+    done
+
+    probe_ambient_capabilities() {
+      sudo systemd-run --collect --quiet --wait --pipe \
+        --unit=networkchum-cap-probe \
+        --uid="$1" \
+        --gid="$(id -gn "$1")" \
+        --property=AmbientCapabilities="CAP_NET_ADMIN CAP_NET_RAW" \
+        /bin/sh -c '
+          ip tuntap add dev nc-cap-probe0 mode tap >/dev/null 2>&1 || exit 10
+          ip link del dev nc-cap-probe0 >/dev/null 2>&1 || true
+          if command -v podman >/dev/null 2>&1; then
+            podman unshare true >/dev/null 2>&1 || exit 20
+          fi
+          exit 0
+        '
+    }
+
+    printf 'Probing TAP capability model as %s...\n' "$UNIT_USER"
+    if probe_ambient_capabilities "$UNIT_USER"; then
+      TAP_MODE=ambient
+      printf '  ambient CAP_NET_ADMIN works with rootless podman\n'
+    else
+      probe_status=$?
+      printf '  ambient CAP_NET_ADMIN unusable (probe exit %s); using setcap on ip\n' \
+        "$probe_status"
+      IP_BIN=$(readlink -f "$(command -v ip)") ||
+        die "ip not found; cannot grant the TAP capability"
+      command -v setcap >/dev/null 2>&1 ||
+        die "setcap not found (install libcap); cannot grant the TAP capability"
+      sudo setcap cap_net_admin,cap_net_raw+ep "$IP_BIN"
+      TAP_MODE=ip-capability
+      printf '  granted cap_net_admin,cap_net_raw to %s\n' "$IP_BIN"
+    fi
+  fi
+
+  UNIT_CONTENT=$(NETWORKCHUM_UNIT_USER="$UNIT_USER" \
+    NETWORKCHUM_ROOT="$ROOT_DIR" \
+    NETWORKCHUM_BIND_MODE="$MODE" \
+    NETWORKCHUM_DATA_DIR="$DATA_DIR" \
+    NETWORKCHUM_TAP_MODE="$TAP_MODE" \
+    "$NODE_PATH" "$ROOT_DIR/scripts/systemd-unit.mjs")
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '# would write %s\n%s\n' "$UNIT_PATH" "$UNIT_CONTENT"
+    printf '[dry-run] sudo systemctl daemon-reload\n'
+    printf '[dry-run] sudo systemctl enable --now %s\n' "$UNIT_NAME"
+    exit 0
+  fi
+
+  printf '%s\n' "$UNIT_CONTENT" | sudo tee "$UNIT_PATH" >/dev/null
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now "$UNIT_NAME"
+
+  sleep 2
+  if systemctl is-active --quiet "$UNIT_NAME"; then
+    printf 'networkchum.service is active (user=%s, mode=%s, data-dir=%s, tap=%s)\n' \
+      "$UNIT_USER" "$MODE" "${DATA_DIR:-<default>}" "$TAP_MODE"
+    printf 'It will start on boot. Logs: journalctl -u %s -f\n' "$UNIT_NAME"
+  else
+    printf 'networkchum.service failed to stay active. Recent logs:\n' >&2
+    sudo journalctl -u "$UNIT_NAME" -n 40 --no-pager >&2 || true
+    exit 1
+  fi
+  exit 0
+fi
 
 if [ "$MODE" = "lan" ]; then
   LAN_IP=$(resolve_lan_ip || true)
@@ -258,6 +529,7 @@ fi
 cd "$ROOT_DIR"
 ensure_dependencies_installed
 ensure_sudo_session
+save_config
 
 if [ "$SUDO_API" -eq 1 ] && [ "$SCRIPT_NAME" = "dev" ]; then
   API_CMD=$(build_sudo_api_command "$NPM_PATH" "$ROOT_PATH" "-n")

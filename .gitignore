@@ -5,6 +5,7 @@ coverage/
 apps/api/data/
 .superpowers/
 .worktrees/
+.networkchum/
 apps/web/.playwright-cli/
 packages/shared/src/*.js
 packages/shared/src/*.d.ts

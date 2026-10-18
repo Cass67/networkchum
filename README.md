@@ -91,15 +91,38 @@ npm install
 Start the full stack:
 
 ```bash
-npm run dev
+./start.sh
 ```
 
 That starts:
 
 - the API on `http://127.0.0.1:4000`
 - the web UI on `http://127.0.0.1:5173`
+- the native console bridge on `http://127.0.0.1:4010`
 
-The Vite dev server proxies `/api` requests to the backend automatically.
+The web UI calls the API directly on port `4000`; there is no `/api` proxy.
+
+Before starting, check what the app will actually load:
+
+```bash
+./start.sh doctor
+```
+
+`doctor` prints the resolved data dir and images dir, how many images are found and bound to templates, the host tools (QEMU, `/dev/kvm`, Podman/Docker), and port status. If the device catalog is missing VM devices, run `doctor` first — the usual cause is that the app is pointed at a data dir with no `images/*.qcow2`.
+
+Point the app at your image data dir explicitly when it lives outside the repo:
+
+```bash
+./start.sh --data-dir ~/networkchum-data
+```
+
+`start.sh` remembers the mode and `--data-dir` you used last (in `.networkchum/start.conf`) and reuses them when you do not pass them again. It prints a notice when it does. Override by passing the args, or clear the saved defaults with:
+
+```bash
+./start.sh forget
+```
+
+`npm run dev` is the lower-level equivalent of `./start.sh`: it runs the same three processes but skips the `start.sh` checks and never sets a data dir, so it falls back to `apps/api/data`.
 
 If you already have a stale local dev server running, reset both processes with:
 
@@ -227,11 +250,33 @@ Use the `Containers` tab when you want to work with OCI images instead of QCOW2 
 - after selecting or pulling an image, you can either save it as a reusable template or create a one-off node in the active lab
 - saved reusable container templates also appear in `Devices`
 
+### Container stores are per-user
+
+Container engines keep a separate store per user. NetworkChum runs containers as
+whatever user runs the API, so:
+
+- run the API as your normal user → containers appear in your `podman ps`
+- run it with `--sudo-api` (or as a root systemd service) → containers live in
+  **root's** store and only show up via `sudo podman ps`
+
+A clean power-off removes the container, but a reboot, a killed API, or a data
+reset can leave orphaned containers behind. `./start.sh doctor` shows which
+engine and store are in use. Remove exited NetworkChum containers with:
+
+```bash
+./start.sh clean              # the invoking user's store
+./start.sh --sudo-api clean   # root's store
+```
+
 ## Useful Scripts
 
 From the repo root:
 
 ```bash
+./start.sh
+./start.sh doctor
+./start.sh clean
+./start.sh serve
 npm run dev
 npm run dev:api
 npm run dev:web
@@ -247,6 +292,41 @@ npm run build --workspace @networkchum/web
 npm run test --workspace @networkchum/api
 npm run test --workspace @networkchum/web
 ```
+
+## Install on a Linux host (one command)
+
+```bash
+npm install
+./start.sh lan install-service --data-dir ~/networkchum-data
+```
+
+`install-service` handles the rest:
+
+- installs dependencies and builds the production assets if they are missing
+- stops an existing NetworkChum service on re-run, and refuses if ports 4000/5173
+  are held by something else
+- probes whether ambient `CAP_NET_ADMIN` works alongside rootless podman; if it
+  does not, it falls back to granting the capability to `ip`
+- writes `/etc/systemd/system/networkchum.service`, enables it at boot, starts it,
+  and confirms it stayed active
+
+The service runs as **your user, not root**, so containers are rootless and show
+up in your own `podman ps` — no separate root store, and the connect command works.
+
+- Preview with `--dry-run` (prints the unit and commands, changes nothing).
+- Run as another user with `--service-user NAME`.
+- Logs: `journalctl -u networkchum.service -f`.
+- Remove it with `./start.sh uninstall-service`.
+
+To run the production build in the foreground instead of as a service:
+
+```bash
+npm run build
+./start.sh serve --data-dir ~/networkchum-data
+```
+
+`serve` runs the API on `:4000` and the built UI on `:5173`, with no watchers. It
+does not run the native console bridge (a per-user, localhost-only sidecar).
 
 ## API Surface
 
