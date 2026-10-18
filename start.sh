@@ -424,7 +424,9 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
     fi
 
     port_in_use() {
-      if command -v lsof >/dev/null 2>&1; then
+      if command -v ss >/dev/null 2>&1; then
+        ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$1$"
+      elif command -v lsof >/dev/null 2>&1; then
         lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
       else
         return 1
