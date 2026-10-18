@@ -159,7 +159,18 @@ Linux operator notes:
 - create a cloud node with `Cloud Role = Management`
 - use bridge group `management` unless you intentionally want a separate management segment
 - run `./start.sh lan --sudo-api ...` when the API needs permission to create TAP devices and managed bridges
-- if you want a management bridge tied to a physical uplink, handle that bridge membership on the host OS rather than binding a cloud directly to the active NIC
+- LAN bridging is **off by default**. NetworkChum will not move your host's network
+  into `nc-mgmt` unless you opt in with `NETWORKCHUM_MANAGEMENT_UPLINK`:
+  - `NETWORKCHUM_MANAGEMENT_UPLINK=<interface>` — bridge that interface (use a
+    **dedicated NIC**; the host keeps its own management NIC)
+  - `NETWORKCHUM_MANAGEMENT_UPLINK=auto` — let NetworkChum pick. It chooses the
+    interface carrying the default route, which is usually the one you are
+    connected through. A failure mid-setup leaves the host unreachable, so only
+    use this when the default route is not your management path.
+  - `NETWORKCHUM_MANAGEMENT_UPLINK=none` (default) — no host uplink; management
+    clouds stay isolated
+- if you prefer to own the bridge setup, create `nc-mgmt` and its uplink on the
+  host OS (NetworkManager, netplan, etc.) and leave the env var at `none`
 
 If you want that API elevation to run without an interactive sudo prompt, add a constrained `sudoers` rule for the exact API command on that host:
 

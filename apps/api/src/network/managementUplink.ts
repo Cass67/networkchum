@@ -52,7 +52,11 @@ function isLanBindMode() {
 }
 
 function managementUplinkPreference() {
-  return process.env.NETWORKCHUM_MANAGEMENT_UPLINK?.trim() || "auto";
+  // Default to "none": auto-migrating the host's default-route interface into
+  // nc-mgmt takes over the NIC the operator is usually connected through, and a
+  // partial failure leaves the host unreachable. Opt in explicitly with
+  // NETWORKCHUM_MANAGEMENT_UPLINK=<interface> (ideally a dedicated NIC) or =auto.
+  return process.env.NETWORKCHUM_MANAGEMENT_UPLINK?.trim() || "none";
 }
 
 function ipv4Cidrs(addresses: AddressInfo[]): string[] {
@@ -330,7 +334,7 @@ export async function ensureManagementBridgeUplink(
     return {
       ok: false,
       message:
-        "Management bridge 'nc-mgmt' could not find a usable host uplink. Set NETWORKCHUM_MANAGEMENT_UPLINK=<interface> or NETWORKCHUM_MANAGEMENT_UPLINK=none to disable automatic LAN bridging.",
+        "Management bridge 'nc-mgmt' is not bridged to the LAN. Set NETWORKCHUM_MANAGEMENT_UPLINK=<interface> (use a dedicated NIC — not the interface carrying the default route, or you can lose host connectivity) to bridge it, or =auto to let NetworkChum choose (risky: it picks the default-route NIC).",
     };
   }
 

@@ -182,4 +182,51 @@ describe("managementUplink", () => {
       "nc-mgmt",
     ]);
   });
+
+  it("does not enslave the default-route interface by default", async () => {
+    process.env.NETWORKCHUM_BIND_MODE = "lan";
+
+    const commands: string[][] = [];
+    const result = await ensureManagementBridgeUplink(
+      async (command, args) => {
+        commands.push([command, ...args]);
+        const invocation = `${command} ${args.join(" ")}`;
+
+        if (invocation === "ip -json route show default") {
+          return {
+            ok: true,
+            stdout: JSON.stringify([
+              { dst: "default", gateway: "192.168.2.254", dev: "enp6s18" },
+            ]),
+            stderr: "",
+          };
+        }
+        if (invocation === "ip -json addr show dev nc-mgmt") {
+          return {
+            ok: true,
+            stdout: JSON.stringify([{ addr_info: [] }]),
+            stderr: "",
+          };
+        }
+        return { ok: true, stdout: "[]", stderr: "" };
+      },
+      new Map([["net-1", "nc-mgmt"]]),
+    );
+
+    // The interface carrying the default route (the operator's NIC) must never
+    // be taken over without an explicit NETWORKCHUM_MANAGEMENT_UPLINK opt-in.
+    expect(commands).not.toContainEqual([
+      "ip",
+      "link",
+      "set",
+      "dev",
+      "enp6s18",
+      "master",
+      "nc-mgmt",
+    ]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("NETWORKCHUM_MANAGEMENT_UPLINK");
+    }
+  });
 });
