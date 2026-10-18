@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspace @networkchum/shared && npm run build --workspace @networkchum/api && npm run build --workspace @networkchum/web",
     "test": "npm run test --workspaces",
     "test:scripts": "node --test scripts/start.test.mjs scripts/doctor.test.mjs scripts/serve-web.test.mjs scripts/systemd-unit.test.mjs scripts/web-bind.test.mjs",
     "start": "./start.sh",

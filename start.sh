@@ -569,7 +569,7 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
         "$UNIT_NAME"
     else
       printf 'networkchum.service failed to stay active. Recent logs:\n' >&2
-      user_systemctl status "$UNIT_NAME" --no-pager >&2 || true
+      user_systemctl status "$UNIT_NAME" -l --no-pager >&2 || true
       exit 1
     fi
   else
