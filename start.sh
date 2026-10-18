@@ -478,11 +478,10 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
 
     mkdir -p "$ROOT_DIR/.networkchum"
 
-    if [ ! -f "$ROOT_DIR/apps/api/dist/server.js" ] ||
-      [ ! -f "$ROOT_DIR/apps/web/dist/index.html" ]; then
-      printf 'Building production assets (one-time)...\n'
-      "$NPM_PATH" run build
-    fi
+    # Always rebuild: the guard on dist/server.js alone let a stale build survive
+    # an upgrade (e.g. new modules that were never emitted).
+    printf 'Building production assets...\n'
+    "$NPM_PATH" run build
 
     port_in_use() {
       if command -v ss >/dev/null 2>&1; then

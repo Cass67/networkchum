@@ -95,6 +95,11 @@ function logNetworking(): Promise<void> {
 }
 
 async function logTapCapability(): Promise<void> {
+  if (process.env.NETWORKCHUM_IP_SUDO === "1") {
+    console.log("[startup] networking: tap backend, CAP_NET_ADMIN via sudo ip");
+    return;
+  }
+
   if (hasEffectiveCapability(CAP_NET_ADMIN)) {
     console.log("[startup] networking: tap backend, CAP_NET_ADMIN present");
     return;
