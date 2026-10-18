@@ -305,17 +305,21 @@ npm install
 - installs dependencies and builds the production assets if they are missing
 - stops an existing NetworkChum service on re-run, and refuses if ports 4000/5173
   are held by something else
-- probes whether ambient `CAP_NET_ADMIN` works alongside rootless podman; if it
-  does not, it falls back to granting the capability to `ip`
-- writes `/etc/systemd/system/networkchum.service`, enables it at boot, starts it,
-  and confirms it stayed active
+- picks the service scope: on SELinux hosts where the checkout lives under your
+  home directory it installs a **per-user** service with lingering (SELinux won't
+  let a system unit exec a `user_home_t` script); otherwise a system service
+- on a system service, probes whether ambient `CAP_NET_ADMIN` works alongside
+  rootless podman and falls back to granting the capability to `ip`; a per-user
+  service always uses the `ip` capability
+- enables it at boot, starts it, and confirms it stayed active
 
 The service runs as **your user, not root**, so containers are rootless and show
 up in your own `podman ps` — no separate root store, and the connect command works.
 
 - Preview with `--dry-run` (prints the unit and commands, changes nothing).
 - Run as another user with `--service-user NAME`.
-- Logs: `journalctl -u networkchum.service -f`.
+- Logs: `journalctl -u networkchum.service -f` (system) or
+  `journalctl --user -u networkchum.service -f` (user).
 - Remove it with `./start.sh uninstall-service`.
 
 To run the production build in the foreground instead of as a service:

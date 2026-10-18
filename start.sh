@@ -380,35 +380,85 @@ fi
 if [ "$SCRIPT_NAME" = "install-service" ] ||
   [ "$SCRIPT_NAME" = "uninstall-service" ]; then
   UNIT_NAME=networkchum.service
-  UNIT_PATH=/etc/systemd/system/$UNIT_NAME
+  SYSTEM_UNIT_PATH=/etc/systemd/system/$UNIT_NAME
+  USER_UNIT_PATH=${HOME:-/home/$(id -un)}/.config/systemd/user/$UNIT_NAME
+  USER_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+
+  user_systemctl() {
+    XDG_RUNTIME_DIR="$USER_RUNTIME_DIR" systemctl --user "$@"
+  }
 
   if [ "$SCRIPT_NAME" = "uninstall-service" ]; then
     if [ "$DRY_RUN" -eq 1 ]; then
       printf '[dry-run] sudo systemctl disable --now %s\n' "$UNIT_NAME"
-      printf '[dry-run] sudo rm -f %s\n' "$UNIT_PATH"
+      printf '[dry-run] sudo rm -f %s\n' "$SYSTEM_UNIT_PATH"
       printf '[dry-run] sudo systemctl daemon-reload\n'
+      printf '[dry-run] systemctl --user disable --now %s\n' "$UNIT_NAME"
+      printf '[dry-run] rm -f %s\n' "$USER_UNIT_PATH"
+      printf '[dry-run] systemctl --user daemon-reload\n'
       exit 0
     fi
     command -v systemctl >/dev/null 2>&1 ||
       die "systemd (systemctl) not found; uninstall-service supports Linux systemd hosts only"
-    sudo systemctl disable --now "$UNIT_NAME" || true
-    sudo rm -f "$UNIT_PATH"
-    sudo systemctl daemon-reload
+    if [ -f "$SYSTEM_UNIT_PATH" ]; then
+      sudo systemctl disable --now "$UNIT_NAME" || true
+      sudo rm -f "$SYSTEM_UNIT_PATH"
+      sudo systemctl daemon-reload
+    fi
+    if [ -f "$USER_UNIT_PATH" ]; then
+      user_systemctl disable --now "$UNIT_NAME" || true
+      rm -f "$USER_UNIT_PATH"
+      user_systemctl daemon-reload || true
+    fi
     printf 'Removed %s\n' "$UNIT_NAME"
     exit 0
   fi
 
   UNIT_USER=${SERVICE_USER:-${SUDO_USER:-$(id -un)}}
   TAP_MODE=ambient
+  SERVICE_SCOPE=system
+
+  # SELinux denies a system unit (init_t) from executing a checkout under a home
+  # directory (user_home_t). A per-user service runs in the user's unconfined
+  # domain, so select that automatically on such hosts.
+  if command -v getenforce >/dev/null 2>&1 &&
+    [ "$(getenforce 2>/dev/null)" = "Enforcing" ]; then
+    case "$ROOT_DIR" in
+      "${HOME:-/nonexistent}"/*) SERVICE_SCOPE=user ;;
+    esac
+  fi
+  # User scope can only manage the invoking user's own service.
+  if [ "$SERVICE_SCOPE" = "user" ] && [ "$UNIT_USER" != "$(id -un)" ]; then
+    SERVICE_SCOPE=system
+  fi
+
+  if [ "$SERVICE_SCOPE" = "user" ]; then
+    UNIT_PATH=$USER_UNIT_PATH
+  else
+    UNIT_PATH=$SYSTEM_UNIT_PATH
+  fi
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf '# (dry-run) a real install probes ambient capabilities and falls back to setcap on ip\n'
+    printf '# (dry-run) scope=%s; a real install probes capabilities and may use setcap on ip\n' \
+      "$SERVICE_SCOPE"
   else
     command -v systemctl >/dev/null 2>&1 ||
       die "systemd (systemctl) not found; install-service supports Linux systemd hosts only"
 
+    # Remove a stale system unit when switching this install to a user service.
+    if [ "$SERVICE_SCOPE" = "user" ] && [ -f "$SYSTEM_UNIT_PATH" ]; then
+      printf 'Removing stale system unit %s\n' "$SYSTEM_UNIT_PATH"
+      sudo systemctl disable --now "$UNIT_NAME" || true
+      sudo rm -f "$SYSTEM_UNIT_PATH"
+      sudo systemctl daemon-reload
+    fi
+
     # Re-running install should update an existing service cleanly.
-    if systemctl is-active --quiet "$UNIT_NAME"; then
+    if [ "$SERVICE_SCOPE" = "user" ]; then
+      if user_systemctl is-active --quiet "$UNIT_NAME"; then
+        user_systemctl stop "$UNIT_NAME"
+      fi
+    elif systemctl is-active --quiet "$UNIT_NAME"; then
       sudo systemctl stop "$UNIT_NAME"
     fi
 
@@ -438,30 +488,7 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
       fi
     done
 
-    probe_ambient_capabilities() {
-      sudo systemd-run --collect --quiet --wait --pipe \
-        --unit=networkchum-cap-probe \
-        --uid="$1" \
-        --gid="$(id -gn "$1")" \
-        --property=AmbientCapabilities="CAP_NET_ADMIN CAP_NET_RAW" \
-        /bin/sh -c '
-          ip tuntap add dev nc-cap-probe0 mode tap >/dev/null 2>&1 || exit 10
-          ip link del dev nc-cap-probe0 >/dev/null 2>&1 || true
-          if command -v podman >/dev/null 2>&1; then
-            podman unshare true >/dev/null 2>&1 || exit 20
-          fi
-          exit 0
-        '
-    }
-
-    printf 'Probing TAP capability model as %s...\n' "$UNIT_USER"
-    if probe_ambient_capabilities "$UNIT_USER"; then
-      TAP_MODE=ambient
-      printf '  ambient CAP_NET_ADMIN works with rootless podman\n'
-    else
-      probe_status=$?
-      printf '  ambient CAP_NET_ADMIN unusable (probe exit %s); using setcap on ip\n' \
-        "$probe_status"
+    grant_ip_capability() {
       IP_BIN=$(readlink -f "$(command -v ip)") ||
         die "ip not found; cannot grant the TAP capability"
       command -v setcap >/dev/null 2>&1 ||
@@ -469,6 +496,39 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
       sudo setcap cap_net_admin,cap_net_raw+ep "$IP_BIN"
       TAP_MODE=ip-capability
       printf '  granted cap_net_admin,cap_net_raw to %s\n' "$IP_BIN"
+    }
+
+    if [ "$SERVICE_SCOPE" = "user" ]; then
+      # A user manager cannot grant ambient capabilities; use the ip file cap.
+      printf 'Configuring TAP capability for the user service...\n'
+      grant_ip_capability
+    else
+      probe_ambient_capabilities() {
+        sudo systemd-run --collect --quiet --wait --pipe \
+          --unit=networkchum-cap-probe \
+          --uid="$1" \
+          --gid="$(id -gn "$1")" \
+          --property=AmbientCapabilities="CAP_NET_ADMIN CAP_NET_RAW" \
+          /bin/sh -c '
+            ip tuntap add dev nc-cap-probe0 mode tap >/dev/null 2>&1 || exit 10
+            ip link del dev nc-cap-probe0 >/dev/null 2>&1 || true
+            if command -v podman >/dev/null 2>&1; then
+              podman unshare true >/dev/null 2>&1 || exit 20
+            fi
+            exit 0
+          '
+      }
+
+      printf 'Probing TAP capability model as %s...\n' "$UNIT_USER"
+      if probe_ambient_capabilities "$UNIT_USER"; then
+        TAP_MODE=ambient
+        printf '  ambient CAP_NET_ADMIN works with rootless podman\n'
+      else
+        probe_status=$?
+        printf '  ambient CAP_NET_ADMIN unusable (probe exit %s); using setcap on ip\n' \
+          "$probe_status"
+        grant_ip_capability
+      fi
     fi
   fi
 
@@ -476,29 +536,57 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
     NETWORKCHUM_ROOT="$ROOT_DIR" \
     NETWORKCHUM_BIND_MODE="$MODE" \
     NETWORKCHUM_DATA_DIR="$DATA_DIR" \
+    NETWORKCHUM_SERVICE_SCOPE="$SERVICE_SCOPE" \
     NETWORKCHUM_TAP_MODE="$TAP_MODE" \
     "$NODE_PATH" "$ROOT_DIR/scripts/systemd-unit.mjs")
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf '# would write %s\n%s\n' "$UNIT_PATH" "$UNIT_CONTENT"
-    printf '[dry-run] sudo systemctl daemon-reload\n'
-    printf '[dry-run] sudo systemctl enable --now %s\n' "$UNIT_NAME"
+    if [ "$SERVICE_SCOPE" = "user" ]; then
+      printf '[dry-run] mkdir -p %s\n' "$(dirname "$UNIT_PATH")"
+      printf '[dry-run] systemctl --user daemon-reload\n'
+      printf '[dry-run] systemctl --user enable --now %s\n' "$UNIT_NAME"
+      printf '[dry-run] sudo loginctl enable-linger %s\n' "$UNIT_USER"
+    else
+      printf '[dry-run] sudo systemctl daemon-reload\n'
+      printf '[dry-run] sudo systemctl enable --now %s\n' "$UNIT_NAME"
+    fi
     exit 0
   fi
 
-  printf '%s\n' "$UNIT_CONTENT" | sudo tee "$UNIT_PATH" >/dev/null
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now "$UNIT_NAME"
+  if [ "$SERVICE_SCOPE" = "user" ]; then
+    mkdir -p "$(dirname "$UNIT_PATH")"
+    printf '%s\n' "$UNIT_CONTENT" >"$UNIT_PATH"
+    user_systemctl daemon-reload
+    user_systemctl enable --now "$UNIT_NAME"
+    sudo loginctl enable-linger "$UNIT_USER"
 
-  sleep 2
-  if systemctl is-active --quiet "$UNIT_NAME"; then
-    printf 'networkchum.service is active (user=%s, mode=%s, data-dir=%s, tap=%s)\n' \
-      "$UNIT_USER" "$MODE" "${DATA_DIR:-<default>}" "$TAP_MODE"
-    printf 'It will start on boot. Logs: journalctl -u %s -f\n' "$UNIT_NAME"
+    sleep 2
+    if user_systemctl is-active --quiet "$UNIT_NAME"; then
+      printf 'networkchum.service is active (user scope, user=%s, mode=%s, data-dir=%s, tap=%s)\n' \
+        "$UNIT_USER" "$MODE" "${DATA_DIR:-<default>}" "$TAP_MODE"
+      printf 'It will start on boot (linger enabled). Logs: journalctl --user -u %s -f\n' \
+        "$UNIT_NAME"
+    else
+      printf 'networkchum.service failed to stay active. Recent logs:\n' >&2
+      user_systemctl status "$UNIT_NAME" --no-pager >&2 || true
+      exit 1
+    fi
   else
-    printf 'networkchum.service failed to stay active. Recent logs:\n' >&2
-    sudo journalctl -u "$UNIT_NAME" -n 40 --no-pager >&2 || true
-    exit 1
+    printf '%s\n' "$UNIT_CONTENT" | sudo tee "$UNIT_PATH" >/dev/null
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now "$UNIT_NAME"
+
+    sleep 2
+    if systemctl is-active --quiet "$UNIT_NAME"; then
+      printf 'networkchum.service is active (system scope, user=%s, mode=%s, data-dir=%s, tap=%s)\n' \
+        "$UNIT_USER" "$MODE" "${DATA_DIR:-<default>}" "$TAP_MODE"
+      printf 'It will start on boot. Logs: journalctl -u %s -f\n' "$UNIT_NAME"
+    else
+      printf 'networkchum.service failed to stay active. Recent logs:\n' >&2
+      sudo journalctl -u "$UNIT_NAME" -n 40 --no-pager >&2 || true
+      exit 1
+    fi
   fi
   exit 0
 fi

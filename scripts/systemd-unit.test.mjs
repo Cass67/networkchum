@@ -74,6 +74,24 @@ test("systemd unit can use the ip setcap fallback instead of ambient caps", () =
   assert.match(result.stdout, /^ExecStart=.*start\.sh serve$/m);
 });
 
+test("user-scope unit omits User= and installs into default.target", () => {
+  const result = runUnit({
+    NETWORKCHUM_UNIT_USER: "cass",
+    NETWORKCHUM_ROOT: "/home/cass/networkchum",
+    NETWORKCHUM_BIND_MODE: "lan",
+    NETWORKCHUM_DATA_DIR: "/home/cass/networkchum-data",
+    NETWORKCHUM_SERVICE_SCOPE: "user",
+    NETWORKCHUM_TAP_MODE: "ip-capability",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /^User=/m);
+  assert.doesNotMatch(result.stdout, /^AmbientCapabilities=/m);
+  assert.doesNotMatch(result.stdout, /network-online/);
+  assert.match(result.stdout, /^WantedBy=default\.target$/m);
+  assert.match(result.stdout, /^ExecStart=.*start\.sh serve$/m);
+});
+
 test("systemd unit requires a user and a root", () => {
   const missingUser = runUnit({
     NETWORKCHUM_UNIT_USER: "",
