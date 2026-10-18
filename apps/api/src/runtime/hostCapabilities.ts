@@ -121,5 +121,12 @@ export function getNetworkBackendForPlatform(
 }
 
 export function getNetworkBackend(): "tap" | "socket" {
+  // NETWORKCHUM_NETWORK_BACKEND lets an install fall back to socket networking
+  // when the host cannot grant CAP_NET_ADMIN (e.g. a systemd user service on an
+  // SELinux host). Socket networking needs no capabilities.
+  const override = process.env.NETWORKCHUM_NETWORK_BACKEND;
+  if (override === "tap" || override === "socket") {
+    return override;
+  }
   return getNetworkBackendForPlatform(getPlatform());
 }

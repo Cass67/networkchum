@@ -512,7 +512,9 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
     # to the unconfined user domain, so setcap has no effect. Grant a narrowly
     # scoped NOPASSWD rule for `ip` instead and run it through sudo.
     install_ip_sudo_rule() {
-      SUDOERS_FILE=/etc/sudoers.d/networkchum-ip
+      SUDOERS_FILE=/etc/sudoers.d/zzz-networkchum-ip
+      # A cloud-init/user rule like "(ALL) ALL" otherwise overrides the
+      # NOPASSWD tag, so this file must sort last in sudoers.d.
       printf '  granting %s passwordless use of %s\n' "$(id -un)" "$IP_BIN"
       printf '%s ALL=(root) NOPASSWD: %s\n' "$(id -un)" "$IP_BIN" |
         sudo tee "$SUDOERS_FILE" >/dev/null
@@ -521,6 +523,7 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
         sudo rm -f "$SUDOERS_FILE"
         die "generated sudoers rule failed validation; aborted"
       fi
+      sudo rm -f /etc/sudoers.d/networkchum-ip 2>/dev/null || true
       TAP_MODE=ip-sudo
       # Undo a bin_t relabel of ip left by an earlier install; it is not needed.
       if command -v semanage >/dev/null 2>&1 &&
@@ -568,12 +571,16 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
         [ "$(getenforce 2>/dev/null)" = "Enforcing" ]; then
         printf 'Configuring TAP capability via sudo (SELinux host)...\n'
         install_ip_sudo_rule
+        # Clear any cached sudo credential so this really tests the rule.
+        sudo -k 2>/dev/null || true
         if sudo -n "$IP_BIN" tuntap add dev nc-verify0 mode tap \
           >/dev/null 2>&1; then
           sudo -n "$IP_BIN" link del nc-verify0 >/dev/null 2>&1 || true
           printf '  verified: ip can create TAP devices (via sudo)\n'
         else
-          printf 'WARN: could not create a TAP device even via sudo\n' >&2
+          printf 'WARN: sudo still needs a password for ip; using socket networking\n' \
+            >&2
+          TAP_MODE=socket
         fi
       else
         printf 'Configuring TAP capability via setcap...\n'

@@ -73,6 +73,10 @@ if (tapMode === "ip-sudo") {
   service.push("Environment=NETWORKCHUM_IP_SUDO=1");
 }
 
+if (tapMode === "socket") {
+  service.push("Environment=NETWORKCHUM_NETWORK_BACKEND=socket");
+}
+
 service.push(
   `ExecStart=${root}/start.sh serve`,
   "Restart=on-failure",

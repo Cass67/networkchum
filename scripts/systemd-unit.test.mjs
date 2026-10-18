@@ -114,6 +114,22 @@ test("ip-sudo tap mode enables sudo for ip in the unit", () => {
   assert.doesNotMatch(result.stdout, /AmbientCapabilities/);
 });
 
+test("socket tap mode forces socket networking", () => {
+  const result = runUnit({
+    NETWORKCHUM_UNIT_USER: "cass",
+    NETWORKCHUM_ROOT: "/home/cass/networkchum",
+    NETWORKCHUM_BIND_MODE: "lan",
+    NETWORKCHUM_SERVICE_SCOPE: "user",
+    NETWORKCHUM_TAP_MODE: "socket",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /^Environment=NETWORKCHUM_NETWORK_BACKEND=socket$/m,
+  );
+});
+
 test("systemd unit requires a user and a root", () => {
   const missingUser = runUnit({
     NETWORKCHUM_UNIT_USER: "",
