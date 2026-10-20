@@ -2141,7 +2141,15 @@ describe("lab bridge nodes", () => {
 
     expect(response.statusCode).toBe(201);
     const payload = response.json() as {
-      lab: { document: { nodes: Array<{ config: { peerLabId?: string } }> } };
+      lab: {
+        document: {
+          nodes: Array<{
+            id: string;
+            name: string;
+            config: { peerLabId?: string };
+          }>;
+        };
+      };
     };
     const node = payload.lab.document.nodes.find((n) => n.name === "NY-Bridge");
     expect(node?.config.peerLabId).toBe("lab-1792526674794-b51xfk");
