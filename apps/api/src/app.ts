@@ -4,6 +4,7 @@ import websocket from "@fastify/websocket";
 import Fastify, { type FastifyRequest } from "fastify";
 import { timingSafeEqual } from "node:crypto";
 
+import { aiRoutes } from "./routes/ai.js";
 import { catalogRoutes } from "./routes/catalog.js";
 import { consoleRoutes } from "./routes/console.js";
 import { containerRoutes } from "./routes/containers.js";
@@ -79,6 +80,7 @@ export function buildApp(dependencies: AppDependencies = {}) {
   void app.register(websocket);
 
   app.register(healthRoutes);
+  app.register(aiRoutes, dependencies);
   app.register(consoleRoutes);
   app.register(templateRoutes);
   app.register(imageRoutes);

@@ -1,4 +1,8 @@
 import type {
+  AiLabCommitRequest,
+  AiLabPreview,
+  AiProviderSettings,
+  AiProviderSettingsView,
   CanvasDrawing,
   CloudRole,
   ImportCommitRequest,
@@ -462,6 +466,52 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
 
     async getLab(labId: string): Promise<LabDetails> {
       const response = await fetcher(`${baseUrl}/labs/${labId}`);
+      const payload = await parseResponse<{ lab: LabDetails }>(
+        response as Response,
+      );
+      return payload.lab;
+    },
+
+    async getAiProvider(): Promise<AiProviderSettingsView | null> {
+      const response = await fetcher(`${baseUrl}/ai/provider`);
+      const payload = await parseResponse<{
+        provider: AiProviderSettingsView | null;
+      }>(response as Response);
+      return payload.provider;
+    },
+
+    async saveAiProvider(
+      settings: AiProviderSettings,
+    ): Promise<AiProviderSettingsView> {
+      const response = await fetcher(`${baseUrl}/ai/provider`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+      const payload = await parseResponse<{
+        provider: AiProviderSettingsView;
+      }>(response as Response);
+      return payload.provider;
+    },
+
+    async previewAiLab(prompt: string): Promise<AiLabPreview> {
+      const response = await fetcher(`${baseUrl}/ai/labs/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const payload = await parseResponse<{ preview: AiLabPreview }>(
+        response as Response,
+      );
+      return payload.preview;
+    },
+
+    async commitAiLab(input: AiLabCommitRequest): Promise<LabDetails> {
+      const response = await fetcher(`${baseUrl}/ai/labs/commit`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
       const payload = await parseResponse<{ lab: LabDetails }>(
         response as Response,
       );

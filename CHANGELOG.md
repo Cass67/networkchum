@@ -4,6 +4,14 @@
 
 ### Added
 
+- **AI Lab Builder**: point the lab at an LLM (OpenAI-compatible endpoint or
+  Anthropic) and describe a lab in plain English; a network-engineer system
+  prompt with the live device catalog makes the model emit a constrained
+  `AiLabSpec` JSON, the API resolves it against the catalog, clamps resources,
+  and validates the full `LabDocument` before a preview/commit two-step
+  creates the lab (`POST /ai/provider`, `/ai/labs/preview`, `/ai/labs/commit`;
+  provider keys stored in the data dir, never returned to the browser;
+  "Build with AI" in the Labs panel; see `docs/agent-builder.md`)
 - **Lab interconnect**: a Lab Bridge node in each lab merges the cabled
   networks into one broadcast domain across labs (mutual peer references;
   management uplink networks excluded; qemu VMs over the socket virtual

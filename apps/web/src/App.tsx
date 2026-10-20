@@ -1,5 +1,9 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  AiLabCommitRequest,
+  AiLabPreview,
+  AiProviderSettings,
+  AiProviderSettingsView,
   CanvasDrawing,
   CloudRole,
   ImportCommitRequest,
@@ -21,6 +25,7 @@ import type {
   RunningConfigBackupRecord,
 } from "./api/client.js";
 import { AddNodeDialog } from "./components/AddNodeDialog.js";
+import { AiLabBuilderDialog } from "./components/AiLabBuilderDialog.js";
 import { CloudNodeSettingsDialog } from "./components/CloudNodeSettingsDialog.js";
 import { ConfirmDialog } from "./components/ConfirmDialog.js";
 import { ContextMenu } from "./components/ContextMenu.js";
@@ -241,6 +246,17 @@ type ApiClient = {
     document: LabDocumentData;
   }>;
   deleteLab?: (labId: string) => Promise<{ labId: string }>;
+  getAiProvider?: () => Promise<AiProviderSettingsView | null>;
+  saveAiProvider?: (
+    settings: AiProviderSettings,
+  ) => Promise<AiProviderSettingsView>;
+  previewAiLab?: (prompt: string) => Promise<AiLabPreview>;
+  commitAiLab?: (input: AiLabCommitRequest) => Promise<{
+    id: string;
+    name: string;
+    autoBackup?: boolean;
+    document: LabDocumentData;
+  }>;
   previewTopologyImport?: (file: File) => Promise<ImportPreview>;
   commitTopologyImport?: (
     draftId: string,
@@ -1265,6 +1281,7 @@ export function App({
   }, []);
   const [showImportTopologyDialog, setShowImportTopologyDialog] =
     useState(false);
+  const [showAiLabBuilderDialog, setShowAiLabBuilderDialog] = useState(false);
   const [dialogTemplateId, setDialogTemplateId] = useState<string | null>(null);
   const [consoleNode, setConsoleNode] = useState<{
     nodeId: string;
@@ -1681,6 +1698,28 @@ export function App({
     setSelectedCableId(null);
     setSelectedImageId(null);
     setShowImportTopologyDialog(false);
+    setLeftTab("inspector");
+  }
+
+  async function handleCommitAiLab(input: AiLabCommitRequest) {
+    if (!api.commitAiLab) {
+      return;
+    }
+    const generatedLab = await api.commitAiLab(input);
+    setLabs((current) => [
+      ...current.filter((lab) => lab.id !== generatedLab.id),
+      {
+        id: generatedLab.id,
+        name: generatedLab.name,
+        autoBackup: generatedLab.autoBackup,
+      },
+    ]);
+    setSelectedLab(generatedLab);
+    setSelectedLabId(generatedLab.id);
+    setSelectedNodeId(null);
+    setSelectedCableId(null);
+    setSelectedImageId(null);
+    setShowAiLabBuilderDialog(false);
     setLeftTab("inspector");
   }
 
@@ -2661,6 +2700,15 @@ export function App({
                 >
                   Import Lab
                 </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  aria-label="Build Lab with AI"
+                  disabled={!api.previewAiLab || !api.commitAiLab}
+                  onClick={() => setShowAiLabBuilderDialog(true)}
+                >
+                  Build with AI
+                </button>
               </div>
               {createLabError ? (
                 <p
@@ -3279,6 +3327,29 @@ export function App({
           return api.previewTopologyImport(file);
         }}
         onCommit={handleCommitTopologyImport}
+      />
+      <AiLabBuilderDialog
+        open={showAiLabBuilderDialog}
+        onClose={() => setShowAiLabBuilderDialog(false)}
+        onLoadProvider={async () => {
+          if (!api.getAiProvider) {
+            throw new Error("AI provider settings are unavailable");
+          }
+          return api.getAiProvider();
+        }}
+        onSaveProvider={async (settings) => {
+          if (!api.saveAiProvider) {
+            throw new Error("AI provider settings are unavailable");
+          }
+          return api.saveAiProvider(settings);
+        }}
+        onPreview={async (prompt) => {
+          if (!api.previewAiLab) {
+            throw new Error("AI lab generation is unavailable");
+          }
+          return api.previewAiLab(prompt);
+        }}
+        onCommit={handleCommitAiLab}
       />
       {editingTemplate ? (
         <TemplateEditorDialog
