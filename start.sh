@@ -650,17 +650,25 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
       if command -v getenforce >/dev/null 2>&1 &&
         [ "$(getenforce 2>/dev/null)" = "Enforcing" ]; then
         printf 'Configuring TAP capability via sudo (SELinux host)...\n'
-        install_ip_sudo_rule
-        # Clear any cached sudo credential so this really tests the rule.
+        # Verify before granting: hosts that already carry the passwordless ip
+        # rule (original interactive install) must reinstall without a TTY.
         sudo -k 2>/dev/null || true
         if sudo -n "$IP_BIN" tuntap add dev nc-verify0 mode tap \
           >/dev/null 2>&1; then
           sudo -n "$IP_BIN" link del nc-verify0 >/dev/null 2>&1 || true
           printf '  verified: ip can create TAP devices (via sudo)\n'
         else
-          printf 'WARN: sudo still needs a password for ip; using socket networking\n' \
-            >&2
-          TAP_MODE=socket
+          install_ip_sudo_rule
+          sudo -k 2>/dev/null || true
+          if sudo -n "$IP_BIN" tuntap add dev nc-verify0 mode tap \
+            >/dev/null 2>&1; then
+            sudo -n "$IP_BIN" link del nc-verify0 >/dev/null 2>&1 || true
+            printf '  verified: ip can create TAP devices (via sudo)\n'
+          else
+            printf 'WARN: sudo still needs a password for ip; using socket networking\n' \
+              >&2
+            TAP_MODE=socket
+          fi
         fi
       else
         printf 'Configuring TAP capability via setcap...\n'
