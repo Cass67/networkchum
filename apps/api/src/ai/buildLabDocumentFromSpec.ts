@@ -94,6 +94,13 @@ export type BuildLabDocumentFromSpecInput = {
   spec: AiLabSpec;
   templates: Template[];
   images: ImageRecord[];
+  // Mirrors the Add Node flow: the host-detected qemu acceleration
+  // (kvm/hvf/tcg/none) instead of the template's static boot.acceleration
+  // string, which qemu rejects ("-accel hardware").
+  accelerationMode?: string | null;
+  // Restrict resolution to the devices selected in the dialog. Hints resolve
+  // only within this set; anything outside it becomes an unresolved node.
+  allowedTemplateIds?: Array<string>;
 };
 
 /**
@@ -106,10 +113,16 @@ export function buildLabDocumentFromSpec(
   input: BuildLabDocumentFromSpecInput,
 ): AiLabPreview {
   const issues: ImportIssue[] = [];
-  const templates = input.templates.filter(
+  const allowedTemplateIds = input.allowedTemplateIds?.length
+    ? new Set(input.allowedTemplateIds)
+    : null;
+  const allTemplates = input.templates.filter(
     (template) =>
       template.runtime === "qemu" || template.runtime === "container",
   );
+  const templates = allowedTemplateIds
+    ? allTemplates.filter((template) => allowedTemplateIds.has(template.id))
+    : allTemplates;
   const tokenized = templates.map((template) => ({
     template,
     tokens: [
@@ -149,9 +162,13 @@ export function buildLabDocumentFromSpec(
     if (!template) {
       issues.push({
         severity: "error",
-        message: `No template for "${specNode.templateId}". Available templates: ${templates
-          .map((entry) => entry.id)
-          .join(", ")}`,
+        message: allowedTemplateIds
+          ? `No template for "${specNode.templateId}" among the selected devices. Selected templates: ${templates
+              .map((entry) => entry.id)
+              .join(", ")}`
+          : `No template for "${specNode.templateId}". Available templates: ${templates
+              .map((entry) => entry.id)
+              .join(", ")}`,
         nodeName: specNode.name,
       });
       previewNodes.push({
@@ -319,7 +336,12 @@ export function buildLabDocumentFromSpec(
             : template.configSchema.ramMb.default,
         interfaceCount,
         nicModel: template.boot.nicModel,
-        accelerationMode: template.boot.acceleration,
+        // Mirrors the Add Node flow: qemu nodes get the host-detected
+        // acceleration; everything else keeps the template's static value.
+        accelerationMode:
+          template.runtime === "qemu"
+            ? (input.accelerationMode ?? template.boot.acceleration)
+            : template.boot.acceleration,
         bridgeInterface: null,
         containerImageRef: template.container?.imageRef,
         containerRegistry: template.container?.registry,

@@ -86,6 +86,7 @@ type CatalogSummary = {
   vendor?: string;
   runtime?: string;
   deviceRoleIcon?: DeviceRoleIcon;
+  imageId?: string | null;
   container?: {
     imageRef: string;
     registry: string;
@@ -251,7 +252,10 @@ type ApiClient = {
   saveAiProvider?: (
     settings: AiProviderSettings,
   ) => Promise<AiProviderSettingsView>;
-  previewAiLab?: (prompt: string) => Promise<AiLabPreview>;
+  previewAiLab?: (
+    prompt: string,
+    devices?: Array<string>,
+  ) => Promise<AiLabPreview>;
   probeAiModels?: (input: {
     provider: AiProviderKind;
     baseUrl: string;
@@ -3337,6 +3341,12 @@ export function App({
       <AiLabBuilderDialog
         open={showAiLabBuilderDialog}
         onClose={() => setShowAiLabBuilderDialog(false)}
+        devices={catalog.map((entry) => ({
+          id: entry.id,
+          name: entry.name,
+          runtime: entry.runtime,
+          imageId: entry.imageId,
+        }))}
         onLoadProvider={async () => {
           if (!api.getAiProvider) {
             throw new Error("AI provider settings are unavailable");
@@ -3355,11 +3365,11 @@ export function App({
           }
           return api.probeAiModels(input);
         }}
-        onPreview={async (prompt) => {
+        onPreview={async (prompt, devices) => {
           if (!api.previewAiLab) {
             throw new Error("AI lab generation is unavailable");
           }
-          return api.previewAiLab(prompt);
+          return api.previewAiLab(prompt, devices);
         }}
         onCommit={handleCommitAiLab}
       />

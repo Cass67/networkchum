@@ -15,6 +15,10 @@ type BuildLabDocumentInput = {
   topology: NormalizedImportedTopology;
   resolvedMappings: Map<string, ResolvedImportMapping>;
   excludedNodeIds?: string[];
+  // Host-detected qemu acceleration (kvm/hvf/tcg/none), mirroring the Add
+  // Node flow; the template's static boot.acceleration is not a valid
+  // qemu -accel value.
+  accelerationMode?: string | null;
 };
 
 function randomSuffix(): string {
@@ -108,7 +112,10 @@ export function buildLabDocumentFromImport(
             : template.configSchema.ramMb.default,
         interfaceCount,
         nicModel: template.boot.nicModel,
-        accelerationMode: template.boot.acceleration,
+        accelerationMode:
+          template.runtime === "qemu"
+            ? (input.accelerationMode ?? template.boot.acceleration)
+            : template.boot.acceleration,
         bridgeInterface: null,
         containerImageRef: template.container?.imageRef,
         containerRegistry: template.container?.registry,

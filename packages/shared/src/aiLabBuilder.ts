@@ -113,5 +113,8 @@ export type AiLabPreview = z.infer<typeof AiLabPreviewSchema>;
 export const AiLabCommitRequestSchema = z.object({
   name: z.string().trim().min(1),
   spec: AiLabSpecSchema,
+  // Restrict resolution to the devices the user picked in the dialog; a spec
+  // resolving outside this set is rejected at commit.
+  allowedTemplateIds: z.array(z.string().min(1)).default(() => []),
 });
 export type AiLabCommitRequest = z.infer<typeof AiLabCommitRequestSchema>;

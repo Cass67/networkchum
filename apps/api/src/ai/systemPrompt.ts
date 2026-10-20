@@ -32,13 +32,28 @@ function catalogLine(template: Template, imageBound: boolean): string {
 export function buildSystemPrompt(input: {
   templates: Template[];
   images: ImageRecord[];
+  // When the user hand-picked devices in the dialog, the catalog narrows to
+  // exactly those and the prompt demands one node per selected device.
+  devices?: Array<string>;
 }): string {
   const boundTemplateIds = new Set(
     input.images
       .filter((image) => image.catalogState === "active" && image.templateId)
       .map((image) => image.templateId),
   );
-  const catalog = input.templates
+  const selectedTemplates =
+    input.devices && input.devices.length > 0
+      ? input.templates.filter((template) =>
+          input.devices!.includes(template.id),
+        )
+      : input.templates;
+  const deviceConstraint =
+    input.devices && input.devices.length > 0
+      ? `\n## Selected devices (hard constraint)\n\nThe user hand-picked these devices in the dialog. Every node in \"nodes\" MUST use one of these templateId values, and the node list must cover the selected devices exactly as the user's request asks (e.g. two routers of the same model = two nodes with that templateId). Do not add any node whose templateId is not in this list:\n\n${input.devices
+          .map((id) => `- ${id}`)
+          .join("\n")}\n`
+      : "";
+  const catalog = selectedTemplates
     .filter(
       (template) =>
         template.runtime === "qemu" || template.runtime === "container",
@@ -104,7 +119,7 @@ Request: "two XRv9k routers connected to one Ubuntu host, routers also link to e
   ]
 }
 
-## Device catalog (use these templateId values verbatim)
+${deviceConstraint}\n## Device catalog (use these templateId values verbatim)
 
 ${catalog}
 `;

@@ -511,11 +511,16 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
       return payload;
     },
 
-    async previewAiLab(prompt: string): Promise<AiLabPreview> {
+    async previewAiLab(
+      prompt: string,
+      devices: Array<string> = [],
+    ): Promise<AiLabPreview> {
       const response = await fetcher(`${baseUrl}/ai/labs/preview`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify(
+          devices.length > 0 ? { prompt, devices } : { prompt },
+        ),
       });
       const payload = await parseResponse<{ preview: AiLabPreview }>(
         response as Response,

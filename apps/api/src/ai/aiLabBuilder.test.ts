@@ -98,6 +98,8 @@ describe("buildLabDocumentFromSpec", () => {
       members: Array<{ node: string; interfaceIndex?: number }>;
     }>;
     images?: ImageRecord[];
+    accelerationMode?: string | null;
+    allowedTemplateIds?: Array<string>;
   }) {
     return buildLabDocumentFromSpec({
       labId: "lab-test",
@@ -111,6 +113,8 @@ describe("buildLabDocumentFromSpec", () => {
       },
       templates,
       images: specInput.images ?? [routerImage],
+      accelerationMode: specInput.accelerationMode,
+      allowedTemplateIds: specInput.allowedTemplateIds,
     });
   }
 
@@ -217,6 +221,50 @@ describe("buildLabDocumentFromSpec", () => {
     expect(
       document.nodes.find((node) => node.name === "r1")?.config.ramMb,
     ).toBe(4096);
+  });
+
+  it("uses the host-detected acceleration for qemu nodes, not the template string", () => {
+    const preview = build({
+      nodes: [
+        { name: "r1", templateId: "cisco-xrv9k" },
+        { name: "host1", templateId: "linux-ubuntu-container" },
+      ],
+      links: [],
+      accelerationMode: "kvm",
+    });
+    const document = LabDocumentSchema.parse(preview.document);
+    expect(
+      document.nodes.find((node) => node.name === "r1")?.config
+        .accelerationMode,
+    ).toBe("kvm");
+    expect(
+      document.nodes.find((node) => node.name === "host1")?.config
+        .accelerationMode,
+    ).toBe("none");
+  });
+
+  it("restricts resolution to the selected devices", () => {
+    const preview = build({
+      nodes: [
+        { name: "r1", templateId: "csr1000v" },
+        { name: "mystery", templateId: "arista-veos" },
+      ],
+      links: [],
+      allowedTemplateIds: ["cisco-xrv9k"],
+    });
+
+    expect(preview.nodes.find((node) => node.name === "r1")?.status).toBe(
+      "unresolved",
+    );
+    expect(preview.nodes.find((node) => node.name === "mystery")?.status).toBe(
+      "unresolved",
+    );
+    expect(preview.document).toBeNull();
+    expect(
+      preview.issues.some((issue) =>
+        issue.message.includes("among the selected devices"),
+      ),
+    ).toBe(true);
   });
 
   it("warns but succeeds when a qemu template has no bound image", () => {
@@ -640,6 +688,48 @@ describe("ai routes", () => {
     });
     expect(response.statusCode).toBe(502);
     expect(response.json().message).toContain("responded 403");
+  });
+
+  it("narrows the prompt and resolution to the selected devices", async () => {
+    calls.length = 0;
+    llmResponses = [
+      {
+        body: {
+          choices: [{ message: { content: JSON.stringify(validSpec) } }],
+        },
+      },
+    ];
+    const response = await app.inject({
+      method: "POST",
+      url: "/ai/labs/preview",
+      payload: {
+        prompt: "the two csr routers from my device list",
+        devices: ["cisco-xrv9k"],
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(calls[0]?.init?.body).toContain(
+      "Selected devices (hard constraint)",
+    );
+    expect(calls[0]?.init?.body).toContain("- cisco-xrv9k");
+  });
+
+  it("rejects commits that resolve outside the allowed device set", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/ai/labs/commit",
+      payload: {
+        name: "AI-lan",
+        allowedTemplateIds: ["cisco-xrv9k"],
+        spec: {
+          name: "AI-lan",
+          nodes: [{ name: "sw1", templateId: "arista-veos" }],
+          links: [],
+        },
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().message).toContain("among the selected devices");
   });
 
   it("talks to the anthropic provider with native headers", async () => {

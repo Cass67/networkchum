@@ -134,11 +134,13 @@ export async function generateLabSpec(input: {
   settings: AiProviderSettings;
   templates: Template[];
   images: ImageRecord[];
+  devices?: Array<string>;
   fetcher: typeof fetch;
 }): Promise<{ spec: AiLabSpec; rounds: number }> {
   const system = buildSystemPrompt({
     templates: input.templates,
     images: input.images,
+    devices: input.devices,
   });
   const messages: LlmMessage[] = [
     { role: "system", content: system },

@@ -12,7 +12,10 @@
   creates the lab (`POST /ai/provider`, `/ai/labs/preview`, `/ai/labs/commit`;
   provider keys stored in the data dir, never returned to the browser;
   "Build with AI" in the Labs panel; endpoint model lists are detected
-  automatically (`POST /ai/provider/probe`); see `docs/agent-builder.md`)
+  automatically (`POST /ai/provider/probe`); qemu nodes use the host-detected
+  acceleration like the Add Node flow; the dialog supports hand-picking
+  devices so the AI wires only those; dialogs get a solid `.dialog` base
+  (the canvas no longer bleeds through); see `docs/agent-builder.md`)
 - **Lab interconnect**: a Lab Bridge node in each lab merges the cabled
   networks into one broadcast domain across labs (mutual peer references;
   management uplink networks excluded; qemu VMs over the socket virtual

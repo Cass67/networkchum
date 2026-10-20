@@ -8,6 +8,7 @@ import { listImages } from "../images/imageStore.js";
 import { createLabFromDocument } from "../labs/labStore.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import { buildLabDocumentFromImport } from "../importers/commitImport.js";
+import { detectAccelerationMode } from "../runtime/hostCapabilities.js";
 import {
   buildImportPreview,
   matchImportedNode,
@@ -149,12 +150,14 @@ export const importRoutes: FastifyPluginAsync<AppDependencies> = async (
 
     const labId = `lab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const labName = body.name?.trim() || draft.topology.name;
+    const acceleration = await detectAccelerationMode();
     const document = buildLabDocumentFromImport({
       labId,
       labName,
       topology: draft.topology,
       resolvedMappings,
       excludedNodeIds,
+      accelerationMode: acceleration.mode,
     });
     const lab = await createLabFromDocument(labName, document);
     await deleteImportDraft(params.draftId);

@@ -5,9 +5,17 @@ import type {
   AiProviderSettingsView,
 } from "@networkchum/shared";
 
+export type AiDeviceOption = {
+  id: string;
+  name: string;
+  runtime?: string;
+  imageId?: string | null;
+};
+
 type AiLabBuilderDialogProps = {
   open: boolean;
   onClose: () => void;
+  devices: Array<AiDeviceOption>;
   onLoadProvider: () => Promise<AiProviderSettingsView | null>;
   onSaveProvider: (
     settings: AiProviderSettings,
@@ -17,10 +25,11 @@ type AiLabBuilderDialogProps = {
     baseUrl: string;
     apiKey?: string | null;
   }) => Promise<{ models: Array<string> }>;
-  onPreview: (prompt: string) => Promise<AiLabPreview>;
+  onPreview: (prompt: string, devices: Array<string>) => Promise<AiLabPreview>;
   onCommit: (input: {
     name: string;
     spec: AiLabPreview["spec"];
+    allowedTemplateIds: Array<string>;
   }) => Promise<void>;
 };
 
@@ -35,6 +44,7 @@ const PROVIDER_BASE_URL_HINTS: Record<AiProviderSettings["provider"], string> =
 export function AiLabBuilderDialog({
   open,
   onClose,
+  devices,
   onLoadProvider,
   onSaveProvider,
   onProbeModels,
@@ -48,6 +58,9 @@ export function AiLabBuilderDialog({
   const [apiKey, setApiKey] = useState("");
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [modelOptions, setModelOptions] = useState<Array<string>>([]);
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [detecting, setDetecting] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -161,12 +174,30 @@ export function AiLabBuilderDialog({
     }
   }
 
+  function toggleDevice(deviceId: string) {
+    setSelectedDeviceIds((current) => {
+      const next = new Set(current);
+      if (next.has(deviceId)) {
+        next.delete(deviceId);
+      } else {
+        next.add(deviceId);
+      }
+      return next;
+    });
+    // The preview was generated for a different device set; drop it so the
+    // operator regenerates against the new selection.
+    setPreview(null);
+  }
+
   async function handlePreview() {
     setBusy(true);
     setError(null);
     setSavedNotice(false);
     try {
-      const nextPreview = await onPreview(prompt);
+      const selectedDevices = devices
+        .filter((device) => selectedDeviceIds.has(device.id))
+        .map((device) => device.id);
+      const nextPreview = await onPreview(prompt, selectedDevices);
       setPreview(nextPreview);
     } catch (nextError) {
       setError(
@@ -182,7 +213,17 @@ export function AiLabBuilderDialog({
     setBusy(true);
     setError(null);
     try {
-      await onCommit({ name: preview.labName, spec: preview.spec });
+      await onCommit({
+        name: preview.labName,
+        spec: preview.spec,
+        allowedTemplateIds: [
+          ...new Set(
+            preview.nodes
+              .map((node) => node.templateId)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ],
+      });
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Commit failed",
@@ -308,6 +349,36 @@ export function AiLabBuilderDialog({
             ) : null}
           </div>
         </div>
+
+        {devices.length > 0 ? (
+          <fieldset className="ai-devices">
+            <span className="field-label">Devices</span>
+            <span className="field-hint">
+              Optional: hand-pick the exact devices and the AI wires only these
+              into the lab; leave everything unchecked to let the AI choose from
+              the whole catalog.
+            </span>
+            <div className="ai-device-list">
+              {devices.map((device) => (
+                <label key={device.id} className="field-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selectedDeviceIds.has(device.id)}
+                    onChange={() => toggleDevice(device.id)}
+                  />
+                  <span>
+                    {device.name}
+                    {device.runtime === "container"
+                      ? " (container)"
+                      : device.imageId
+                        ? " (image bound)"
+                        : " (no image)"}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : null}
 
         <label className="field">
           <span className="field-label">Lab Spec</span>

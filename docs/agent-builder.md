@@ -231,13 +231,17 @@ export function buildLabDocumentFromSpec(input: {
   spec: AiLabSpec;
   templates: Template[];
   images: ImageRecord[];
-  imageIdByTemplateId: Map<string, string | null>; // precomputed binding
+  accelerationMode?: string | null; // host-detected (kvm/hvf/tcg/none)
+  allowedTemplateIds?: Array<string>; // dialog-selected devices
 }): AiLabPreview;
 ```
 
 Resolution algorithm (deterministic, so preview == commit):
 
-1. **Template resolution.** For each node, in order:
+1. **Template resolution.** For each node, in order (when
+   `allowedTemplateIds` is provided, the searchable catalog narrows to those
+   templates and hints resolving outside the selection become unresolved with
+   a "among the selected devices" issue):
    1. exact `templates.find(t => t.id === specNode.templateId)`;
    2. else case-insensitive exact on `id` and `displayName`;
    3. else substring/alias match: lowercase `specNode.templateId` matched
@@ -261,7 +265,11 @@ image; the node will not power on until an image is bound."` — this mirrors
    `vcpu`/`ramMb`/`interfaceCount` clamped into `template.configSchema.*`
    min/max (values out of range or absent fall back to the template default);
    `nicModel` from `template.boot.nicModel`, `accelerationMode` from
-   `template.boot.acceleration`, container fields from `template.container`.
+   `input.accelerationMode` for qemu templates — the route passes
+   `detectAccelerationMode().mode` exactly like the Add Node flow
+   (`routes/labs.ts:349`) — and from `template.boot.acceleration` otherwise
+   (the static template string like "hardware" is NOT a valid qemu
+   `-accel` value), container fields from `template.container`.
 4. **Interface assignment.** Interfaces are generated per node as
    `Array.from({ length: interfaceCount }, (_, index) => ({ id:
 \`if-${nodeId}-${index}\`, name: template.interfaceNames?.[index] ??
@@ -391,7 +399,7 @@ after a repair round: <first errors>")`; the preview route maps any thrown
 `POST /ai/labs/preview`:
 
 ```
-parse body { prompt }                      → 400 if missing
+parse body { prompt, devices? }            → 400 if missing
 settings = loadAiProviderSettings()        → 400 "LLM provider is not configured
                                              yet" with the message the UI shows
 if !settings.hasApiKey && provider needs a key → 400 with a clear message
@@ -405,7 +413,7 @@ return { preview }
 `POST /ai/labs/commit`:
 
 ```
-parse body { name, spec: AiLabSpecSchema }
+parse body { name, spec, allowedTemplateIds? }
 templates/images as above
 preview = buildLabDocumentFromSpec(...)    → if preview.document is null, 400
 lab = await createLabFromDocument(preview.labName, preview.document)
@@ -438,13 +446,19 @@ State machine inside the dialog:
    the model list automatically on open (and via a **Detect Models** button
    after any base URL/provider change request) and offers the results as a
    datalist over the free-text model input — pick one or type your own.
-3. **Describe**: textarea for the natural-language spec + "Generate" button →
+3. **Devices**: an optional checkbox list of catalog devices (name +
+   image-bound/container status). Selections are sent to preview as
+   `devices`, which narrows the system prompt to a hard constraint and the
+   builder's resolution to that set; the commit sends the preview's resolved
+   template ids back as `allowedTemplateIds` so nothing outside the selection
+   can slip in. Changing the selection drops the current preview.
+4. **Describe**: textarea for the natural-language spec + "Generate" button →
    `onPreview(prompt)` → shows the preview: lab name, description, node table
    (name, resolved template display name, status, image bound or not) and
    link list, plus `issues` (fuzzy matches, missing images) in an
    `import-issues`-style list. If `document` is `null` (unresolved nodes),
    disable commit and show why.
-4. **Commit**: "Create Lab" → `onCommit({ name, spec })`.
+5. **Commit**: "Create Lab" → `onCommit({ name, spec })`.
 
 **File: `apps/web/src/api/client.ts`** — four methods, exactly the
 `previewTopologyImport` pattern:

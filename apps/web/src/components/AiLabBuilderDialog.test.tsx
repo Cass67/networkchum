@@ -98,6 +98,7 @@ function renderDialog(
     <AiLabBuilderDialog
       open
       onClose={vi.fn()}
+      devices={[]}
       onLoadProvider={vi.fn().mockResolvedValue({
         provider: "openai-compatible",
         baseUrl: "http://127.0.0.1:9999/v1",
@@ -140,7 +141,7 @@ describe("AiLabBuilderDialog", () => {
       "disabled",
       false,
     );
-    expect(onPreview).toHaveBeenCalledWith("two routers and a host");
+    expect(onPreview).toHaveBeenCalledWith("two routers and a host", []);
   });
 
   it("passes the preview name and spec on commit", async () => {
@@ -189,6 +190,48 @@ describe("AiLabBuilderDialog", () => {
     expect(screen.getByLabelText("LLM Model").getAttribute("list")).toBe(
       "ai-model-options",
     );
+  });
+
+  it("hands the selected devices to preview and commit", async () => {
+    const onPreview = vi.fn().mockResolvedValue(matchedPreview);
+    const onCommit = vi.fn().mockResolvedValue(undefined);
+    renderDialog({
+      devices: [
+        {
+          id: "cisco-xrv9k",
+          name: "Cisco IOS-XRv 9000",
+          runtime: "qemu",
+          imageId: "img-xrv",
+        },
+        {
+          id: "linux-ubuntu-container",
+          name: "Ubuntu Container",
+          runtime: "container",
+        },
+      ],
+      onPreview,
+      onCommit,
+    });
+
+    fireEvent.click(screen.getByLabelText("Cisco IOS-XRv 9000 (image bound)"));
+    expect(screen.queryByText("AI Triangle Lab")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Lab Spec"), {
+      target: { value: "two routers and a host" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Lab" }));
+
+    await screen.findByText("AI Triangle Lab");
+    expect(onPreview).toHaveBeenCalledWith("two routers and a host", [
+      "cisco-xrv9k",
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create Lab" }));
+    await waitFor(() => expect(onCommit).toHaveBeenCalled());
+    expect(onCommit.mock.calls[0][0].allowedTemplateIds).toEqual([
+      "cisco-xrv9k",
+      "linux-ubuntu-container",
+    ]);
   });
 
   it("renders provider errors", async () => {

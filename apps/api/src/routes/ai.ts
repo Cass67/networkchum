@@ -16,6 +16,7 @@ import {
   saveAiProviderSettings,
   toProviderSettingsView,
 } from "../ai/providerSettingsStore.js";
+import { detectAccelerationMode } from "../runtime/hostCapabilities.js";
 import { listImages } from "../images/imageStore.js";
 import { createLabFromDocument } from "../labs/labStore.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
@@ -101,7 +102,10 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
 
   app.post("/ai/labs/preview", async (request, reply) => {
     const body = parseBody(
-      z.object({ prompt: z.string().trim().min(1) }),
+      z.object({
+        prompt: z.string().trim().min(1),
+        devices: z.array(z.string().min(1)).optional(),
+      }),
       request.body,
     );
     if (!body.ok) {
@@ -124,12 +128,14 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
     const templates = registry.list();
     const images = await listImages();
 
+    const acceleration = await detectAccelerationMode();
     try {
       const { spec } = await generateLabSpec({
         prompt: body.data.prompt,
         settings,
         templates,
         images,
+        devices: body.data.devices,
         fetcher,
       });
       const preview = buildLabDocumentFromSpec({
@@ -137,6 +143,8 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
         spec,
         templates,
         images,
+        accelerationMode: acceleration.mode,
+        allowedTemplateIds: body.data.devices,
       });
       return { preview };
     } catch (error) {
@@ -157,6 +165,7 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
     const registry = new TemplateRegistry();
     const templates = registry.list();
     const images = await listImages();
+    const acceleration = await detectAccelerationMode();
 
     const labId = `lab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const preview = buildLabDocumentFromSpec({
@@ -164,6 +173,8 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
       spec: body.data.spec,
       templates,
       images,
+      accelerationMode: acceleration.mode,
+      allowedTemplateIds: body.data.allowedTemplateIds,
     });
     if (!preview.document) {
       const firstError = preview.issues.find(
