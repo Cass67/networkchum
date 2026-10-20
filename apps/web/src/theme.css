@@ -85,7 +85,6 @@ button, input, select, textarea {
   --canvas-node-stopped: #ef7f7f;
   --canvas-node-idle: #7891ad;
   --canvas-node-selected: #55aeff;
-  --canvas-node-glyph-bg: rgba(5, 10, 16, 0.82);
   --canvas-port: #6a7f95;
   --canvas-port-connected: #46d38d;
   --canvas-port-label: #8fa2b8;
@@ -145,7 +144,6 @@ button, input, select, textarea {
   --canvas-node-stopped: #d16464;
   --canvas-node-idle: #708ca4;
   --canvas-node-selected: #226bb2;
-  --canvas-node-glyph-bg: rgba(255, 255, 255, 0.86);
   --canvas-port: #6b869d;
   --canvas-port-connected: #1ea46b;
   --canvas-port-label: #6a8395;

@@ -2183,20 +2183,10 @@ export function TopologyCanvas({
                     data-outline-color={outlineColor}
                     transform={`translate(${center.x - NODE_GLYPH_SIZE / 2} ${center.y - NODE_GLYPH_SIZE / 2}) scale(${iconScale})`}
                     style={{
-                      color: outlineColor,
                       filter: "none",
                     }}
                     pointerEvents="none"
                   >
-                    <circle
-                      cx={NODE_ICON_BASE_SIZE / 2}
-                      cy={NODE_ICON_BASE_SIZE / 2}
-                      r={NODE_ICON_BASE_SIZE / 2 + 1.6}
-                      fill="var(--canvas-node-glyph-bg)"
-                      stroke={outlineColor}
-                      strokeWidth={0.85}
-                      data-testid={`node-glyph-backplate-${node.id}`}
-                    />
                     {node.deviceRoleIcon ? (
                       <DeviceRoleIconGlyph
                         kind={node.deviceRoleIcon}
@@ -2215,7 +2205,8 @@ export function TopologyCanvas({
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize={12}
-                    fill="var(--canvas-node-text)"
+                    fontWeight={isSelected ? 600 : 400}
+                    fill={isSelected ? outlineColor : "var(--canvas-node-text)"}
                   >
                     {node.name}
                   </text>

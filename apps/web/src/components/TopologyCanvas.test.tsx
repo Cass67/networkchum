@@ -276,12 +276,12 @@ describe("TopologyCanvas", () => {
     );
   });
 
-  it("renders a contrast backplate behind node glyphs", () => {
+  it("renders node glyphs without a backplate circle", () => {
     render(<TopologyCanvas labName="Lab" labId="lab-1" nodes={nodes} />);
 
-    const backplate = screen.getByTestId("node-glyph-backplate-n1");
-    expect(backplate).toHaveAttribute("fill", "var(--canvas-node-glyph-bg)");
-    expect(backplate).toHaveAttribute("stroke", "var(--canvas-node-stopped)");
+    expect(
+      screen.queryByTestId("node-glyph-backplate-n1"),
+    ).not.toBeInTheDocument();
   });
 
   it("calls onSelectNode when a node is clicked", () => {
