@@ -44,5 +44,19 @@ export async function getCatalog(): Promise<CatalogEntry[]> {
       source: "built-in" as const,
     }));
 
-  return [...boundVmEntries, ...containerEntries, ...cloudEntries];
+  const labBridgeEntries = templates
+    .filter((template) => template.runtime === "lab-bridge")
+    .map((template) => ({
+      id: template.id,
+      template,
+      image: null,
+      source: "built-in" as const,
+    }));
+
+  return [
+    ...boundVmEntries,
+    ...containerEntries,
+    ...cloudEntries,
+    ...labBridgeEntries,
+  ];
 }
