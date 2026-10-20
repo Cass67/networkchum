@@ -32,4 +32,34 @@ describe("createImageService", () => {
     expect(removed?.catalogState).toBe("removed");
     await expect(access(uploaded.path)).resolves.toBeUndefined();
   });
+
+  it("suggests a template from the uploaded file name", async () => {
+    dataDir = await mkdtemp(path.join(tmpdir(), "networkchum-image-service-"));
+    process.env.NETWORKCHUM_DATA_DIR = dataDir;
+
+    const service = createImageService();
+    const uploaded = await service.uploadImage({
+      fileName: "asr-1.qcow2",
+      content: Buffer.from("qcow2"),
+    });
+
+    expect(uploaded.suggestedTemplateId).toBe("cisco-asr");
+  });
+
+  it("restores a removed image to the active catalog when it is bound", async () => {
+    dataDir = await mkdtemp(path.join(tmpdir(), "networkchum-image-service-"));
+    process.env.NETWORKCHUM_DATA_DIR = dataDir;
+
+    const service = createImageService();
+    const uploaded = await service.uploadImage({
+      fileName: "csr1000v.qcow2",
+      content: Buffer.from("qcow2"),
+    });
+    await service.removeImageFromCatalog(uploaded.id);
+
+    const bound = await service.bindImageToTemplate(uploaded.id, "cisco-asr");
+
+    expect(bound?.catalogState).toBe("active");
+    expect(bound?.templateId).toBe("cisco-asr");
+  });
 });

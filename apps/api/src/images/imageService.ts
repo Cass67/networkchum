@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { ImageRecord } from "@networkchum/shared";
+import { suggestTemplateId } from "@networkchum/shared";
 
 import { getUploadedImagesDir } from "../storagePaths.js";
 import { listImages, saveImages } from "./imageStore.js";
@@ -45,7 +46,7 @@ export function createImageService() {
         sizeBytes: input.content.byteLength,
         updatedAt: new Date().toISOString(),
         templateId: null,
-        suggestedTemplateId: null,
+        suggestedTemplateId: suggestTemplateId(safeFileName),
         source: "upload",
         catalogState: "active",
       };
@@ -65,6 +66,10 @@ export function createImageService() {
       }
 
       image.templateId = templateId;
+      // Binding a previously removed image puts it back into the active catalog.
+      if (image.catalogState === "removed") {
+        image.catalogState = "active";
+      }
       await saveImages(images);
       return image;
     },

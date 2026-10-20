@@ -3283,9 +3283,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add Node" }));
 
     await screen.findByRole("dialog", { name: "Add Node" });
-    fireEvent.change(screen.getByTestId("template-select"), {
-      target: { value: "cloud" },
-    });
+    fireEvent.click(screen.getByTestId("device-option-cloud"));
     fireEvent.change(screen.getByLabelText("Cloud Role"), {
       target: { value: "isp-carrier" },
     });

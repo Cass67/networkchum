@@ -20,6 +20,7 @@ describe("AddNodeDialog", () => {
       id: "linux-alpine-container",
       name: "Alpine Container",
       source: "built-in",
+      runtime: "container",
       configSchema: {
         interfaceCount: { default: 1, min: 1, max: 1 },
       },
@@ -28,6 +29,8 @@ describe("AddNodeDialog", () => {
       id: "cisco-asr",
       name: "Cisco ASR",
       source: "image-bound",
+      runtime: "qemu",
+      vendor: "Cisco",
       configSchema: {
         interfaceCount: { default: 8, min: 4, max: 24 },
       },
@@ -43,7 +46,7 @@ describe("AddNodeDialog", () => {
     },
   ];
 
-  it("renders the dialog with template selector and name input", () => {
+  it("renders the dialog with a searchable device list and name input", () => {
     render(
       <AddNodeDialog
         templates={templates}
@@ -55,9 +58,64 @@ describe("AddNodeDialog", () => {
     );
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByTestId("template-select")).toBeInTheDocument();
+    expect(screen.getByTestId("device-search")).toBeInTheDocument();
+    expect(screen.getByTestId("device-option-cisco-asr")).toBeInTheDocument();
     expect(screen.getByTestId("node-name-input")).toBeInTheDocument();
     expect(screen.getByTestId("add-node-submit")).toBeInTheDocument();
+  });
+
+  it("groups devices by vendor", () => {
+    render(
+      <AddNodeDialog
+        templates={templates}
+        existingNodes={[]}
+        hostInterfaces={[]}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Cisco")).toBeInTheDocument();
+    expect(screen.getByText("Other")).toBeInTheDocument();
+  });
+
+  it("filters devices by search text", () => {
+    render(
+      <AddNodeDialog
+        templates={templates}
+        existingNodes={[]}
+        hostInterfaces={[]}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("device-search"), {
+      target: { value: "cisco" },
+    });
+
+    expect(screen.getByTestId("device-option-cisco-asr")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("device-option-linux-alpine-container"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a no-match row when search has no hits", () => {
+    render(
+      <AddNodeDialog
+        templates={templates}
+        existingNodes={[]}
+        hostInterfaces={[]}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("device-search"), {
+      target: { value: "nonexistent" },
+    });
+
+    expect(screen.getByText("No matching devices")).toBeInTheDocument();
   });
 
   it("calls onCancel when cancel is clicked", () => {
@@ -76,7 +134,7 @@ describe("AddNodeDialog", () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
-  it("calls onSubmit with correct data", async () => {
+  it("calls onSubmit with the initially selected template", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(
       <AddNodeDialog
@@ -135,7 +193,7 @@ describe("AddNodeDialog", () => {
     expect(screen.getByTestId("add-node-submit")).toBeDisabled();
   });
 
-  it("updates name when template changes", () => {
+  it("updates name when the device selection changes", () => {
     render(
       <AddNodeDialog
         templates={templates}
@@ -146,8 +204,7 @@ describe("AddNodeDialog", () => {
       />,
     );
 
-    const select = screen.getByTestId("template-select");
-    fireEvent.change(select, { target: { value: "cisco-asr" } });
+    fireEvent.click(screen.getByTestId("device-option-cisco-asr"));
 
     const nameInput = screen.getByTestId("node-name-input") as HTMLInputElement;
     expect(nameInput.value).toContain("Cisco");
@@ -165,9 +222,7 @@ describe("AddNodeDialog", () => {
       />,
     );
 
-    fireEvent.change(screen.getByTestId("template-select"), {
-      target: { value: "cloud" },
-    });
+    fireEvent.click(screen.getByTestId("device-option-cloud"));
     fireEvent.change(screen.getByTestId("interface-count-input"), {
       target: { value: "12" },
     });
@@ -195,9 +250,7 @@ describe("AddNodeDialog", () => {
       />,
     );
 
-    fireEvent.change(screen.getByTestId("template-select"), {
-      target: { value: "cloud" },
-    });
+    fireEvent.click(screen.getByTestId("device-option-cloud"));
 
     expect(screen.getByLabelText("Cloud Role")).toBeInTheDocument();
     expect(screen.getByLabelText("Bridge Group")).toBeInTheDocument();
@@ -236,12 +289,89 @@ describe("AddNodeDialog", () => {
       />,
     );
 
-    fireEvent.change(screen.getByTestId("template-select"), {
-      target: { value: "cloud" },
-    });
+    fireEvent.click(screen.getByTestId("device-option-cloud"));
 
     expect(screen.getByText(/172\.31\.255\.0\/24/)).toBeInTheDocument();
     expect(screen.getByText(/172\.31\.255\.1/)).toBeInTheDocument();
+  });
+
+  it("omits imageId for devices with a single bound image", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AddNodeDialog
+        templates={templates}
+        existingNodes={[]}
+        hostInterfaces={[]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("device-option-cisco-asr"));
+    fireEvent.click(screen.getByTestId("add-node-submit"));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledOnce();
+    });
+
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      templateId: "cisco-asr",
+    });
+    expect(onSubmit.mock.calls[0]?.[0].imageId).toBeUndefined();
+  });
+
+  it("lets the user pick an image when a device has several bound images", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const multiImage = [
+      {
+        id: "cisco-asr",
+        name: "Cisco ASR",
+        source: "image-bound",
+        runtime: "qemu",
+        vendor: "Cisco",
+        imageId: "img-1",
+        imageName: "asr-1.qcow2",
+        configSchema: {
+          interfaceCount: { default: 8, min: 4, max: 24 },
+        },
+      },
+      {
+        id: "cisco-asr",
+        name: "Cisco ASR",
+        source: "image-bound",
+        runtime: "qemu",
+        vendor: "Cisco",
+        imageId: "img-2",
+        imageName: "asr-2.qcow2",
+        configSchema: {
+          interfaceCount: { default: 8, min: 4, max: 24 },
+        },
+      },
+    ];
+
+    render(
+      <AddNodeDialog
+        templates={multiImage}
+        existingNodes={[]}
+        hostInterfaces={[]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("device-option-cisco-asr"));
+    const chooser = screen.getByLabelText("Image for Cisco ASR");
+    fireEvent.change(chooser, { target: { value: "img-2" } });
+    fireEvent.click(screen.getByTestId("add-node-submit"));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledOnce();
+    });
+
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      templateId: "cisco-asr",
+      imageId: "img-2",
+    });
   });
 });
 

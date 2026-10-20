@@ -1,5 +1,10 @@
 import { useRef, useState } from "react";
 
+import { suggestTemplateId } from "@networkchum/shared";
+
+import { ConfirmDialog } from "./ConfirmDialog.js";
+import { ContextMenu } from "./ContextMenu.js";
+
 type ImageSummary = {
   id: string;
   name: string;
@@ -30,6 +35,19 @@ type UploadDialogState =
       error: string | null;
     };
 
+type BindDialogState = {
+  imageId: string;
+  imageName: string;
+  templateId: string;
+  restore: boolean;
+  busy: boolean;
+  error: string | null;
+};
+
+type ConfirmState =
+  | { kind: "remove"; imageId: string; imageName: string }
+  | { kind: "delete"; imageId: string; imageName: string };
+
 export function ImageLibrary({
   images,
   templates = [],
@@ -42,10 +60,21 @@ export function ImageLibrary({
 }: ImageLibraryProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dialog, setDialog] = useState<UploadDialogState>({ open: false });
-  const [selectedTemplateIds, setSelectedTemplateIds] = useState<
-    Record<string, string>
-  >({});
-  const [dragOver, setDragOver] = useState(false);
+  const [bindDialog, setBindDialog] = useState<BindDialogState | null>(null);
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [menu, setMenu] = useState<{
+    imageId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  function defaultTemplateId(fileName: string): string {
+    const suggested = suggestTemplateId(fileName);
+    if (suggested && templates.some((t) => t.id === suggested)) {
+      return suggested;
+    }
+    return templates[0]?.id ?? "";
+  }
 
   function openDialog() {
     setDialog({
@@ -59,6 +88,38 @@ export function ImageLibrary({
 
   function closeDialog() {
     setDialog({ open: false });
+  }
+
+  function openBindDialog(image: ImageSummary, restore: boolean) {
+    setBindDialog({
+      imageId: image.id,
+      imageName: image.name,
+      templateId:
+        image.suggestedTemplateId &&
+        templates.some((t) => t.id === image.suggestedTemplateId)
+          ? image.suggestedTemplateId
+          : (templates[0]?.id ?? ""),
+      restore,
+      busy: false,
+      error: null,
+    });
+  }
+
+  async function handleBindConfirm() {
+    if (!bindDialog || bindDialog.busy) {
+      return;
+    }
+    setBindDialog({ ...bindDialog, busy: true, error: null });
+    try {
+      await onBind(bindDialog.imageId, bindDialog.templateId);
+      setBindDialog(null);
+    } catch (err) {
+      setBindDialog({
+        ...bindDialog,
+        busy: false,
+        error: err instanceof Error ? err.message : "Bind failed",
+      });
+    }
   }
 
   async function handleSubmit() {
@@ -76,6 +137,22 @@ export function ImageLibrary({
       });
     }
   }
+
+  function pickFile(file: File) {
+    if (dialog.open) {
+      setDialog({
+        ...dialog,
+        file,
+        templateId: defaultTemplateId(file.name),
+      });
+    }
+  }
+
+  const suggestedForWizard =
+    dialog.open && dialog.file ? suggestTemplateId(dialog.file.name) : null;
+  const suggestionMatchesTemplate =
+    suggestedForWizard !== null &&
+    templates.some((t) => t.id === suggestedForWizard);
 
   return (
     <section className="panel-section">
@@ -104,7 +181,7 @@ export function ImageLibrary({
         >
           <div className="dialog-card dialog-card--wide">
             <div className="dialog-header">
-              <p className="panel-eyebrow">Upload</p>
+              <p className="panel-eyebrow">Add device image</p>
               <h2>Upload Image</h2>
             </div>
 
@@ -117,16 +194,14 @@ export function ImageLibrary({
               }
               onDragOver={(e) => {
                 e.preventDefault();
-                setDragOver(true);
               }}
-              onDragLeave={() => setDragOver(false)}
+              onDragLeave={() => undefined}
               onDrop={(e) => {
                 e.preventDefault();
-                setDragOver(false);
                 const file = e.dataTransfer.files[0];
-                if (file) setDialog({ ...dialog, file });
+                if (file) pickFile(file);
               }}
-              className={`upload-dropzone${dragOver ? " is-dragover" : ""}`}
+              className="upload-dropzone"
             >
               {dialog.file ? (
                 <span>
@@ -134,7 +209,7 @@ export function ImageLibrary({
                   {(dialog.file.size / 1024 / 1024).toFixed(1)} MB)
                 </span>
               ) : (
-                <span>Click to browse or drag a .qcow2 file here</span>
+                <span>Click to browse or drop a .qcow2 file here</span>
               )}
             </div>
             <input
@@ -144,28 +219,42 @@ export function ImageLibrary({
               hidden
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file && dialog.open) setDialog({ ...dialog, file });
+                if (file) pickFile(file);
                 e.currentTarget.value = "";
               }}
             />
 
-            <label className="field">
-              <span className="field-label">Device type</span>
-              <select
-                value={dialog.templateId}
-                onChange={(e) => {
-                  if (dialog.open)
-                    setDialog({ ...dialog, templateId: e.target.value });
-                }}
-                className="field-input"
-              >
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {templates.length > 0 ? (
+              <div className="field">
+                {dialog.file ? (
+                  <span className="field-label">This looks like…</span>
+                ) : (
+                  <span className="field-label">Device type</span>
+                )}
+                <select
+                  value={dialog.templateId}
+                  onChange={(e) => {
+                    if (dialog.open)
+                      setDialog({ ...dialog, templateId: e.target.value });
+                  }}
+                  className="field-input"
+                  aria-label="Device type"
+                >
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="panel-description">
+                  {dialog.file
+                    ? suggestionMatchesTemplate
+                      ? "Matched from the file name — correct it if needed."
+                      : "Pick the device this image boots."
+                    : "Binding makes the device appear in the device catalog."}
+                </p>
+              </div>
+            ) : null}
 
             {dialog.error && <p className="form-error">{dialog.error}</p>}
 
@@ -186,12 +275,107 @@ export function ImageLibrary({
                   !dialog.file || !dialog.templateId || dialog.uploading
                 }
               >
-                {dialog.uploading ? "Uploading…" : "Upload"}
+                {dialog.uploading ? "Uploading…" : "Upload & bind"}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {bindDialog ? (
+        <div
+          role="dialog"
+          aria-label={bindDialog.restore ? "Restore Image" : "Bind Image"}
+          className="dialog-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setBindDialog(null);
+          }}
+        >
+          <div className="dialog-card dialog-card--compact">
+            <div className="dialog-header">
+              <p className="panel-eyebrow">Catalog</p>
+              <h2>{bindDialog.restore ? "Restore Image" : "Bind Image"}</h2>
+            </div>
+            <p>
+              Bind <strong>{bindDialog.imageName}</strong> to a device template.
+              {bindDialog.restore
+                ? " Binding also returns the image to the device catalog."
+                : ""}
+            </p>
+            <label className="field">
+              <span className="field-label">Device template</span>
+              <select
+                value={bindDialog.templateId}
+                onChange={(e) =>
+                  setBindDialog({ ...bindDialog, templateId: e.target.value })
+                }
+                className="field-input"
+                aria-label="Device template"
+              >
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {bindDialog.error && (
+              <p className="form-error">{bindDialog.error}</p>
+            )}
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setBindDialog(null)}
+                disabled={bindDialog.busy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void handleBindConfirm()}
+                disabled={!bindDialog.templateId || bindDialog.busy}
+              >
+                {bindDialog.restore ? "Restore" : "Bind"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <ConfirmDialog
+        open={confirmState?.kind === "remove"}
+        title="Remove from catalog"
+        body={
+          confirmState?.kind === "remove"
+            ? `${confirmState.imageName} will be hidden from the device catalog. The file stays on disk.`
+            : ""
+        }
+        onConfirm={() => {
+          if (confirmState?.kind === "remove") {
+            void onRemoveFromCatalog(confirmState.imageId);
+          }
+          setConfirmState(null);
+        }}
+        onCancel={() => setConfirmState(null)}
+      />
+      <ConfirmDialog
+        open={confirmState?.kind === "delete"}
+        title="Delete file from disk"
+        body={
+          confirmState?.kind === "delete"
+            ? `${confirmState.imageName} will be permanently deleted from disk. This cannot be undone.`
+            : ""
+        }
+        onConfirm={() => {
+          if (confirmState?.kind === "delete") {
+            void onDeleteImageFile(confirmState.imageId);
+          }
+          setConfirmState(null);
+        }}
+        onCancel={() => setConfirmState(null)}
+      />
 
       {images.length === 0 ? (
         <div className="panel-empty panel-empty--compact">
@@ -207,11 +391,8 @@ export function ImageLibrary({
         aria-label="Uploaded images"
       >
         {images.map((image) => {
-          const selectedTemplateId =
-            selectedTemplateIds[image.id] ??
-            image.suggestedTemplateId ??
-            templates[0]?.id ??
-            "";
+          const isActive = image.catalogState !== "removed";
+          const isBound = Boolean(image.templateId);
           return (
             <li key={image.id} className="entity-list-item">
               <div className="resource-card resource-card--stack">
@@ -225,9 +406,13 @@ export function ImageLibrary({
                       {image.name}
                     </button>
                     <span
-                      className={`list-item-badge${image.catalogState === "removed" ? "" : " is-accent"}`}
+                      className={`list-item-badge${isActive ? " is-accent" : ""}`}
                     >
-                      {image.catalogState}
+                      {image.catalogState === "removed"
+                        ? "removed"
+                        : isBound
+                          ? "in use"
+                          : "unbound"}
                     </span>
                   </div>
                   <p className="resource-card-meta">
@@ -236,59 +421,47 @@ export function ImageLibrary({
                   </p>
                 </div>
                 <div className="resource-card-controls">
-                  {templates.length ? (
-                    <select
-                      aria-label={`Bind template for ${image.name}`}
-                      className="field-input"
-                      value={selectedTemplateId}
-                      onChange={(e) =>
-                        setSelectedTemplateIds((cur) => ({
-                          ...cur,
-                          [image.id]: e.target.value,
-                        }))
-                      }
-                    >
-                      {templates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
-                  {image.catalogState !== "removed" ? (
+                  {isActive && isBound ? (
                     <button
                       type="button"
                       className="btn btn-sm"
-                      onClick={() => onBind(image.id, selectedTemplateId)}
-                      disabled={!selectedTemplateId}
-                    >
-                      Bind Template
-                    </button>
-                  ) : null}
-                  {image.templateId ? (
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() => onUnbind(image.id)}
+                      onClick={() => void onUnbind(image.id)}
                     >
                       Unbind
                     </button>
                   ) : null}
-                  {image.catalogState !== "removed" ? (
+                  {isActive && !isBound && templates.length ? (
                     <button
                       type="button"
-                      className="btn btn-sm btn-danger"
-                      onClick={() => onRemoveFromCatalog(image.id)}
+                      className="btn btn-sm btn-primary"
+                      onClick={() => openBindDialog(image, false)}
                     >
-                      Remove
+                      Bind…
+                    </button>
+                  ) : null}
+                  {!isActive && templates.length ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      onClick={() => openBindDialog(image, true)}
+                    >
+                      Restore…
                     </button>
                   ) : null}
                   <button
                     type="button"
-                    className="btn btn-sm btn-danger"
-                    onClick={() => onDeleteImageFile(image.id)}
+                    className="btn btn-sm btn-dots"
+                    aria-label={`More actions for ${image.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenu({
+                        imageId: image.id,
+                        x: e.clientX,
+                        y: e.clientY,
+                      });
+                    }}
                   >
-                    Delete File
+                    •••
                   </button>
                 </div>
               </div>
@@ -296,6 +469,65 @@ export function ImageLibrary({
           );
         })}
       </ul>
+
+      {menu ? (
+        <ContextMenu
+          open
+          x={menu.x}
+          y={menu.y}
+          items={[
+            ...(isActiveImage(images, menu.imageId)
+              ? [
+                  {
+                    label: "Bind to template…",
+                    onSelect: () => {
+                      const image = images.find((i) => i.id === menu.imageId);
+                      if (image) openBindDialog(image, false);
+                    },
+                  },
+                ]
+              : []),
+            ...(isActiveImage(images, menu.imageId)
+              ? [
+                  {
+                    label: "Remove from catalog…",
+                    danger: true,
+                    onSelect: () => {
+                      const image = images.find((i) => i.id === menu.imageId);
+                      if (image) {
+                        setConfirmState({
+                          kind: "remove",
+                          imageId: image.id,
+                          imageName: image.name,
+                        });
+                      }
+                    },
+                  },
+                ]
+              : []),
+            {
+              label: "Delete file from disk…",
+              danger: true,
+              onSelect: () => {
+                const image = images.find((i) => i.id === menu.imageId);
+                if (image) {
+                  setConfirmState({
+                    kind: "delete",
+                    imageId: image.id,
+                    imageName: image.name,
+                  });
+                }
+              },
+            },
+          ]}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
     </section>
   );
+}
+
+function isActiveImage(images: ImageSummary[], imageId: string): boolean {
+  const image = images.find((i) => i.id === imageId);
+  return image ? image.catalogState !== "removed" : false;
 }

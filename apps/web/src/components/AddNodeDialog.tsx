@@ -1,4 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+
+import { DeviceIcon, getDeviceIconKind } from "../icons/deviceIcons.js";
+import {
+  getDeviceRoleIcon,
+  type DeviceRoleIcon,
+} from "../icons/deviceRoleIcons.js";
 
 type CloudRole = "management" | "private-circuit" | "isp-carrier";
 
@@ -12,6 +18,10 @@ type TemplateEntry = {
   name: string;
   source: string;
   runtime?: string;
+  vendor?: string;
+  deviceRoleIcon?: DeviceRoleIcon;
+  imageId?: string | null;
+  imageName?: string | null;
   configSchema?: {
     interfaceCount: { default: number; min: number; max: number };
   };
@@ -31,6 +41,7 @@ type AddNodeDialogProps = {
     templateId: string;
     name: string;
     position: { x: number; y: number };
+    imageId?: string;
     interfaceCount?: number;
     cloudRole?: CloudRole;
     bridgeGroup?: string | null;
@@ -38,6 +49,42 @@ type AddNodeDialogProps = {
   hostInterfaces: string[];
   onCancel: () => void;
 };
+
+type DeviceGroup = {
+  vendor: string | null;
+  entries: TemplateEntry[];
+};
+
+function groupByVendor(templates: TemplateEntry[]): DeviceGroup[] {
+  const groups: DeviceGroup[] = [];
+  const byVendor = new Map<string, DeviceGroup>();
+
+  for (const template of templates) {
+    const key = template.vendor ?? null;
+    let group = byVendor.get(key ?? "");
+    if (!group) {
+      group = { vendor: key, entries: [] };
+      byVendor.set(key ?? "", group);
+      groups.push(group);
+    }
+    if (group.entries.some((entry) => entry.id === template.id)) {
+      continue;
+    }
+    group.entries.push(template);
+  }
+
+  return groups;
+}
+
+function runtimeLabel(template: TemplateEntry): string | null {
+  return template.runtime === "qemu"
+    ? "VM"
+    : template.runtime === "container"
+      ? "Container"
+      : template.runtime === "cloud"
+        ? "Cloud"
+        : null;
+}
 
 function computeNextPosition(existingNodes: ExistingNode[]): {
   x: number;
@@ -70,6 +117,19 @@ function computeNextPosition(existingNodes: ExistingNode[]): {
   return { x: padding + existingNodes.length * gridSize, y: padding };
 }
 
+function defaultNameFor(
+  template: TemplateEntry,
+  existingNodes: ExistingNode[],
+) {
+  const base =
+    template.name ||
+    template.id
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .replace(/ /g, "-");
+  return `${base}-${existingNodes.length + 1}`;
+}
+
 export function AddNodeDialog({
   templates,
   existingNodes,
@@ -78,20 +138,53 @@ export function AddNodeDialog({
   onSubmit,
   onCancel,
 }: AddNodeDialogProps) {
+  const [search, setSearch] = useState("");
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? "");
-  const [name, setName] = useState(() => {
-    const base =
-      templates[0]?.id
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase())
-        .replace(/ /g, "-") ?? "node";
-    return `${base}-${existingNodes.length + 1}`;
-  });
+  const [selectedImageId, setSelectedImageId] = useState<string | undefined>(
+    undefined,
+  );
+  const [name, setName] = useState(() =>
+    templates[0] ? defaultNameFor(templates[0], existingNodes) : "node",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const deviceGroups = useMemo(() => groupByVendor(templates), [templates]);
+  const hasVendorGroups = deviceGroups.some((group) => group.vendor !== null);
+
+  const filteredGroups = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) {
+      return deviceGroups;
+    }
+    return deviceGroups
+      .map((group) => ({
+        ...group,
+        entries: group.entries.filter((entry) =>
+          `${entry.name} ${entry.vendor ?? ""}`.toLowerCase().includes(query),
+        ),
+      }))
+      .filter((group) => group.entries.length > 0);
+  }, [deviceGroups, search]);
+
   const selectedTemplate = templates.find(
     (template) => template.id === templateId,
   );
+  const imageOptions = useMemo(
+    () =>
+      templates
+        .filter((template) => template.id === templateId && template.imageId)
+        .map((template) => ({
+          id: template.imageId!,
+          name: template.imageName ?? template.imageId!,
+        }))
+        .filter(
+          (option, index, options) =>
+            options.findIndex((other) => other.id === option.id) === index,
+        ),
+    [templates, templateId],
+  );
+
   const interfaceRange = selectedTemplate?.configSchema?.interfaceCount;
   const showInterfaceCount =
     interfaceRange !== undefined && interfaceRange.min !== interfaceRange.max;
@@ -106,6 +199,21 @@ export function AddNodeDialog({
     cloudRole === "management" &&
     cloudManagementCapabilities?.platform === "macos";
 
+  function handleTemplateChange(newTemplateId: string) {
+    setTemplateId(newTemplateId);
+    const template = templates.find((t) => t.id === newTemplateId);
+    if (template) {
+      setInterfaceCount(template.configSchema?.interfaceCount.default);
+      setCloudRole("management");
+      setBridgeGroup("management");
+      const firstImage = templates.find(
+        (t) => t.id === newTemplateId && t.imageId,
+      );
+      setSelectedImageId(firstImage?.imageId ?? undefined);
+      setName(defaultNameFor(template, existingNodes));
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -116,6 +224,10 @@ export function AddNodeDialog({
         templateId,
         name,
         position,
+        imageId:
+          imageOptions.length > 1
+            ? (selectedImageId ?? imageOptions[0]?.id)
+            : undefined,
         interfaceCount: showInterfaceCount ? interfaceCount : undefined,
         cloudRole: showCloudBridgeSettings ? cloudRole : undefined,
         bridgeGroup: showCloudBridgeSettings
@@ -131,21 +243,6 @@ export function AddNodeDialog({
     }
   }
 
-  function handleTemplateChange(newTemplateId: string) {
-    setTemplateId(newTemplateId);
-    const template = templates.find((t) => t.id === newTemplateId);
-    if (template) {
-      setInterfaceCount(template.configSchema?.interfaceCount.default);
-      setCloudRole("management");
-      setBridgeGroup("management");
-      const base = template.id
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase())
-        .replace(/ /g, "-");
-      setName(`${base}-${existingNodes.length + 1}`);
-    }
-  }
-
   return (
     <div className="dialog-overlay" data-testid="add-node-dialog-overlay">
       <div className="dialog-card" role="dialog" aria-label="Add Node">
@@ -155,21 +252,86 @@ export function AddNodeDialog({
         </div>
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label>
-              <span className="field-label">Template</span>
-              <select
-                value={templateId}
-                onChange={(e) => handleTemplateChange(e.target.value)}
-                className="field-input"
-                data-testid="template-select"
-              >
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <span className="field-label">Device</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search devices…"
+              className="field-input"
+              data-testid="device-search"
+              aria-label="Search devices"
+            />
+            <ul className="device-option-list" aria-label="Device templates">
+              {filteredGroups.map((group) => [
+                hasVendorGroups ? (
+                  <li
+                    key={`group-${group.vendor ?? "other"}`}
+                    className="device-group-label"
+                  >
+                    {group.vendor ?? "Other"}
+                  </li>
+                ) : null,
+                ...group.entries.map((entry) => {
+                  const runtimeKind = getDeviceIconKind(entry.runtime);
+                  const isSelected = entry.id === templateId;
+                  const chosenImageId =
+                    imageOptions.length > 1 && isSelected
+                      ? (selectedImageId ?? imageOptions[0]?.id)
+                      : undefined;
+                  return (
+                    <li
+                      key={`${entry.id}:${entry.imageId ?? "builtin"}`}
+                      className={`device-option${isSelected ? " is-selected" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        className="device-option-main"
+                        onClick={() => handleTemplateChange(entry.id)}
+                        data-testid={`device-option-${entry.id}`}
+                      >
+                        <span className="device-option-icon">
+                          {getDeviceRoleIcon(entry.deviceRoleIcon) ??
+                            (entry.runtime ? (
+                              <DeviceIcon
+                                kind={runtimeKind}
+                                testId={`device-icon-${runtimeKind}`}
+                              />
+                            ) : null)}
+                        </span>
+                        <span className="device-option-copy">
+                          <span className="device-option-name">
+                            {entry.name}
+                          </span>
+                          <span className="device-option-meta">
+                            {[entry.vendor, runtimeLabel(entry)]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        </span>
+                      </button>
+                      {imageOptions.length > 1 && isSelected ? (
+                        <select
+                          className="field-input device-option-images"
+                          aria-label={`Image for ${entry.name}`}
+                          value={chosenImageId ?? ""}
+                          onChange={(e) => setSelectedImageId(e.target.value)}
+                        >
+                          {imageOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                    </li>
+                  );
+                }),
+              ])}
+              {filteredGroups.length === 0 ? (
+                <li className="device-option-empty">No matching devices</li>
+              ) : null}
+            </ul>
           </div>
           <div className="field">
             <label>
@@ -268,6 +430,7 @@ export function AddNodeDialog({
               className="btn btn-primary"
               disabled={
                 submitting ||
+                !templateId ||
                 !name.trim() ||
                 (showCloudBridgeSettings &&
                   cloudRole !== "management" &&

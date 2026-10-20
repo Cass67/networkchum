@@ -36,6 +36,8 @@ describe("createApiClient", () => {
         source: "image-bound",
         vendor: "Cisco",
         runtime: "qemu",
+        imageId: null,
+        imageName: null,
         configSchema: {
           ramMb: { default: 8192, min: 4096, max: 16384 },
           vcpu: { default: 4, min: 2, max: 8 },

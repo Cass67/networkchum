@@ -51,6 +51,8 @@ type CatalogSummary = {
   vendor?: string;
   runtime?: string;
   deviceRoleIcon?: DeviceRoleIcon;
+  imageId?: string | null;
+  imageName?: string | null;
   container?: {
     imageRef: string;
     registry: string;
@@ -208,12 +210,15 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
           id: string;
           source: string;
           template: TemplatePayload;
+          image?: { id?: string; name?: string } | null;
         }>;
       }>(response as Response);
 
       return payload.entries.map((entry) => ({
         ...mapTemplateSummary(entry.template),
         source: entry.source,
+        imageId: entry.image?.id ?? null,
+        imageName: entry.image?.name ?? null,
       }));
     },
 
@@ -442,6 +447,7 @@ export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
         templateId: string;
         name: string;
         position: { x: number; y: number };
+        imageId?: string | null;
         interfaceCount?: number;
         cloudRole?: CloudRole;
         bridgeGroup?: string | null;

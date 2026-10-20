@@ -1665,6 +1665,7 @@ export function App({
     templateId: string;
     name: string;
     position: { x: number; y: number };
+    imageId?: string;
     interfaceCount?: number;
     cloudRole?: CloudRole;
     bridgeGroup?: string | null;

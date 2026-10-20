@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NetworkChum — Device &amp; Image Flow Mockups</title>
+<style>
+  /* Reuses NetworkChum's theme.css palette so the mockups read as the real app */
+  :root {
+    --radius-sm: 0.75rem; --radius-md: 1rem; --radius-lg: 1.5rem;
+    font-family: 'Avenir Next', 'Segoe UI', sans-serif;
+    font-size: 14px; line-height: 1.4;
+  }
+  :root[data-theme='dark'] {
+    --app-bg: #09101a; --shell-bg: #0d1622;
+    --panel-bg: rgba(12, 20, 31, 0.86); --panel-bg-strong: rgba(15, 24, 36, 0.96);
+    --panel-elevated: rgba(20, 32, 47, 0.9); --panel-hover: rgba(40, 64, 92, 0.42);
+    --panel-tint: rgba(56, 129, 201, 0.14);
+    --border: rgba(110, 150, 194, 0.18); --border-strong: rgba(116, 173, 231, 0.28);
+    --text: #d9e7f4; --text-muted: #8ba2bb;
+    --accent: #77bdff; --accent-strong: #4aa4ff;
+    --green: #5dd7a1; --red: #f07878; --orange: #f0b264;
+    --badge-bg: rgba(255, 255, 255, 0.05); --badge-text: #91a8bf;
+    --badge-bg-active: rgba(74, 164, 255, 0.18); --badge-text-active: #b9e1ff;
+    --field-bg: rgba(8, 14, 22, 0.72); --focus-ring: rgba(74, 164, 255, 0.24);
+    --button-bg: rgba(18, 28, 42, 0.92); --button-border: rgba(120, 156, 197, 0.22);
+    --button-hover: rgba(34, 52, 74, 0.96);
+    --button-primary-bg: linear-gradient(180deg, rgba(34, 88, 140, 0.98), rgba(20, 62, 104, 0.98));
+    --button-primary-border: rgba(104, 186, 255, 0.52); --button-primary-text: #ebf6ff;
+    --button-danger-bg: rgba(68, 24, 28, 0.96); --button-danger-border: rgba(240, 120, 120, 0.38);
+    --button-danger-text: #ffd8d8;
+    --glyph-bg: rgba(5, 10, 16, 0.82);
+  }
+  :root[data-theme='light'] {
+    --app-bg: #dce7f0; --shell-bg: #eaf2f8;
+    --panel-bg: rgba(247, 251, 255, 0.88); --panel-bg-strong: rgba(253, 254, 255, 0.95);
+    --panel-elevated: rgba(255, 255, 255, 0.96); --panel-hover: rgba(191, 220, 242, 0.42);
+    --panel-tint: rgba(34, 107, 178, 0.1);
+    --border: rgba(82, 122, 155, 0.18); --border-strong: rgba(56, 114, 168, 0.28);
+    --text: #19344b; --text-muted: #5f7b92;
+    --accent: #2b7dc4; --accent-strong: #226bb2;
+    --green: #1e9d67; --red: #cc5b5b; --orange: #b9782a;
+    --badge-bg: rgba(39, 92, 133, 0.08); --badge-text: #5b7891;
+    --badge-bg-active: rgba(34, 107, 178, 0.12); --badge-text-active: #1f5d97;
+    --field-bg: rgba(248, 251, 254, 0.92); --focus-ring: rgba(34, 107, 178, 0.16);
+    --button-bg: rgba(245, 249, 253, 0.96); --button-border: rgba(90, 133, 169, 0.24);
+    --button-hover: rgba(233, 242, 250, 0.98);
+    --button-primary-bg: linear-gradient(180deg, rgba(46, 121, 194, 0.98), rgba(33, 96, 162, 0.98));
+    --button-primary-border: rgba(34, 107, 178, 0.38); --button-primary-text: #f7fbff;
+    --button-danger-bg: rgba(253, 237, 237, 0.98); --button-danger-border: rgba(204, 91, 91, 0.24);
+    --button-danger-text: #913838;
+    --glyph-bg: rgba(255, 255, 255, 0.86);
+  }
+  body { background: var(--app-bg); color: var(--text); margin: 0; padding: 2rem; }
+  h1 { font-size: 1.35rem; margin: 0 0 .25rem; }
+  .sub { color: var(--text-muted); margin: 0 0 1.5rem; }
+  .toolbar { display: flex; gap: .75rem; align-items: center; margin-bottom: 1.75rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(28rem, 1fr)); gap: 1.75rem; }
+  .mock { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 1.25rem; background: var(--shell-bg); }
+  .mock > .mock-label { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-strong); margin: 0 0 .15rem; }
+  .mock > .mock-note { color: var(--text-muted); font-size: .85rem; margin: 0 0 1rem; }
+  .panel { background: var(--panel-bg-strong); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem; box-shadow: 0 6px 14px rgba(4,10,18,.1); }
+  .panel-header { margin-bottom: .9rem; }
+  .panel-eyebrow { font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); margin: 0; }
+  .panel-section-header h2 { font-size: 1.05rem; margin: 0; }
+  .panel-description { color: var(--text-muted); font-size: .85rem; margin: .3rem 0 0; }
+  .panel-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-bottom: .9rem; }
+  .btn { font: inherit; cursor: pointer; color: var(--text); background: var(--button-bg); border: 1px solid var(--button-border); border-radius: .7rem; padding: .38rem .9rem; }
+  .btn:hover { background: var(--button-hover); }
+  .btn-primary { color: var(--button-primary-text); background: var(--button-primary-bg); border-color: var(--button-primary-border); }
+  .btn-danger { color: var(--button-danger-text); background: var(--button-danger-bg); border-color: var(--button-danger-border); }
+  .btn-sm { padding: .25rem .6rem; font-size: .85rem; border-radius: .6rem; }
+  .field-input { font: inherit; color: var(--text); background: var(--field-bg); border: 1px solid var(--border-strong); border-radius: .7rem; padding: .4rem .6rem; width: 100%; }
+  .search-row { display: flex; gap: .5rem; margin-bottom: .9rem; }
+  .search-row .field-input { flex: 1; }
+  .chip { font-size: .78rem; color: var(--badge-text-active); background: var(--badge-bg-active); border: 1px solid var(--border-strong); border-radius: 2rem; padding: .2rem .7rem; cursor: pointer; }
+  .chip.is-active { background: var(--badge-bg-active); }
+  .group-label { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); margin: 1rem 0 .45rem; }
+  .group-label:first-child { margin-top: 0; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+  .device-card { display: flex; align-items: center; gap: .7rem; background: var(--panel-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .6rem .75rem; }
+  .device-card:hover { border-color: var(--border-strong); }
+  .device-card.is-unbound { background: var(--panel-bg); opacity: .78; border-style: dashed; }
+  .glyph { width: 2.1rem; height: 2.1rem; border-radius: .6rem; background: var(--glyph-bg); border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .glyph svg { width: 1.3rem; height: 1.3rem; }
+  .dev-copy { flex: 1; min-width: 0; }
+  .dev-title { font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dev-meta { font-size: .8rem; color: var(--text-muted); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dev-meta .warn { color: var(--orange); }
+  .dev-cta { flex: none; }
+  .pill { font-size: .68rem; border-radius: 1rem; padding: .15rem .55rem; }
+  .pill.ok { color: var(--green); background: rgba(93, 215, 161, 0.14); border: 1px solid rgba(93, 215, 161, 0.38); }
+  .pill.warn { color: var(--orange); background: rgba(240, 178, 100, 0.12); border: 1px solid rgba(240, 178, 100, 0.35); }
+  .pill.count { color: var(--badge-text-active); background: var(--badge-bg-active); border: 1px solid var(--border-strong); }
+  /* dialog mock */
+  .dialog-overlay { position: relative; background: var(--app-bg); border-radius: var(--radius-md); padding: 2rem 1rem; border: 1px solid var(--border); }
+  .dialog-card { width: 30rem; margin: 0 auto; background: var(--panel-bg-strong); border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 1.1rem 1.2rem; box-shadow: 0 14px 32px rgba(4,10,18,.28); }
+  .dialog-header { margin-bottom: .9rem; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
+  .stepper { display: flex; gap: .4rem; align-items: center; margin-bottom: 1rem; }
+  .step { font-size: .78rem; color: var(--text-muted); border: 1px solid var(--border); border-radius: 1rem; padding: .2rem .7rem; }
+  .step.is-current { color: var(--accent-strong); background: var(--panel-tint); border-color: var(--border-strong); }
+  .step-dot { width: .45rem; height: .45rem; border-radius: 50%; background: var(--text-muted); opacity: .5; }
+  .dropzone { border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md); padding: 1.6rem 1rem; text-align: center; color: var(--text-muted); background: var(--panel-tint); margin-bottom: .9rem; }
+  .suggest-row { display: flex; align-items: center; gap: .7rem; background: var(--panel-elevated); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: .6rem .75rem; }
+  .suggest-row .why { font-size: .78rem; color: var(--text-muted); }
+  select.field-input { width: auto; flex: 1; }
+  .hintline { color: var(--text-muted); font-size: .8rem; margin: .5rem 0 0; }
+  .hintline code { font-size: .78rem; color: var(--accent-strong); }
+  /* menu mock */
+  .menu { background: var(--panel-bg-strong); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); box-shadow: 0 14px 32px rgba(4,10,18,.28); padding: .3rem; min-width: 11rem; }
+  .menu-item { display: flex; justify-content: space-between; gap: 1rem; padding: .4rem .7rem; border-radius: .5rem; }
+  .menu-item:hover { background: var(--panel-hover); }
+  .menu-item.danger { color: var(--red); }
+  .menu-sep { border-top: 1px solid var(--border); margin: .3rem 0; }
+  .imgrow { display: flex; align-items: center; gap: .75rem; background: var(--panel-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .55rem .75rem; margin-bottom: .5rem; }
+  .imgrow .grow { flex: 1; min-width: 0; }
+  .img-name { font-weight: 600; }
+  .img-meta { font-size: .78rem; color: var(--text-muted); }
+  .dots { letter-spacing: .1em; color: var(--text-muted); padding: 0 .4rem; cursor: pointer; }
+  .flow-note { color: var(--text-muted); font-size: .8rem; margin-top: 1rem; }
+  .toggle { margin-left: auto; }
+</style>
+</head>
+<body>
+  <h1>NetworkChum — Device &amp; Image Flow Mockups</h1>
+  <p class="sub">Four proposed screens, using the existing <code>theme.css</code> palette. Not wired to the API — pure visual mockups.</p>
+
+  <div class="toolbar">
+    <button class="btn btn-sm" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">Toggle day / night theme</button>
+  </div>
+
+  <div class="grid">
+
+    <!-- 1. CATALOG AS HUB -->
+    <section class="mock">
+      <p class="mock-label">Mockup 1 of 4 — Devices tab</p>
+      <p class="mock-note">The catalog becomes the hub: grouped by vendor, search + filter chips, and <em>unbound templates shown in a "needs image" state</em> whose CTA opens the upload dialog pre-targeted at that template. No more "source: image-bound" jargon.</p>
+      <div class="panel">
+        <div class="panel-section-header">
+          <p class="panel-eyebrow">Catalog</p>
+          <h2>Devices</h2>
+          <p class="panel-description">Pick a device to add to the lab, or finish setting one up.</p>
+        </div>
+        <div class="panel-actions">
+          <button class="btn">+ Container image</button>
+          <button class="btn btn-primary">Upload disk image</button>
+        </div>
+        <div class="search-row">
+          <input class="field-input" placeholder="Search devices…" />
+          <span class="chip is-active">All</span><span class="chip">VM</span><span class="chip">Container</span><span class="chip">Cloud</span><span class="chip warn-pill">Needs image</span>
+        </div>
+
+        <p class="group-label">Cisco</p>
+        <div class="cards">
+          <div class="device-card">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#77bdff" stroke-width="1.8"><rect x="3" y="9" width="18" height="7" rx="1.5"/><path d="M7 16v3M12 16v3M17 16v3M6 5h12" /></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Cisco ASR <span class="pill count">2 images</span></p>
+              <p class="dev-meta">qemu · 4 vCPU · 4 GB RAM</p>
+            </div>
+            <span class="dev-cta"><button class="btn btn-sm btn-primary">Add</button></span>
+          </div>
+          <div class="device-card is-unbound">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#8ba2bb" stroke-width="1.8"><rect x="3" y="9" width="18" height="7" rx="1.5"/><path d="M7 16v3M12 16v3M17 16v3M6 5h12" /></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Cisco NX-OSv</p>
+              <p class="dev-meta"><span class="warn">Needs an image to boot</span></p>
+            </div>
+            <span class="dev-cta"><button class="btn btn-sm">Bind image</button></span>
+          </div>
+          <div class="device-card">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#77bdff" stroke-width="1.8"><path d="M4 12h16M4 8h16M4 16h16" opacity=".4"/><circle cx="7" cy="8" r="1.6" fill="#77bdff"/><circle cx="12" cy="12" r="1.6" fill="#77bdff"/><circle cx="17" cy="16" r="1.6" fill="#77bdff"/></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Cisco IOSv <span class="pill count">1 image</span></p>
+              <p class="dev-meta">qemu · 1 vCPU · 512 MB RAM</p>
+            </div>
+            <span class="dev-cta"><button class="btn btn-sm btn-primary">Add</button></span>
+          </div>
+        </div>
+
+        <p class="group-label">Juniper</p>
+        <div class="cards">
+          <div class="device-card is-unbound">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#8ba2bb" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Juniper vSRX</p>
+              <p class="dev-meta"><span class="warn">Needs an image to boot</span></p>
+            </div>
+            <span class="dev-cta"><button class="btn btn-sm">Bind image</button></span>
+          </div>
+          <div class="device-card">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#77bdff" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Juniper vMX <span class="pill count">1 image</span></p>
+              <p class="dev-meta">qemu · 2 vCPU · 2 GB RAM</p>
+            </div>
+            <span class="dev-cta"><button class="btn btn-sm btn-primary">Add</button></span>
+          </div>
+        </div>
+
+        <p class="group-label">Linux</p>
+        <div class="cards">
+          <div class="device-card">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#5dd7a1" stroke-width="1.8"><rect x="3" y="5" width="18" height="12" rx="1.5"/><path d="M8 20h8"/></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Linux Generic VM <span class="pill count">1 image</span></p>
+              <p class="dev-meta">qemu · 2 vCPU · 1 GB RAM</p>
+            </div>
+            <span class="dev-cta"><button class="btn btn-sm btn-primary">Add</button></span>
+          </div>
+          <div class="device-card">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#77bdff" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Ubuntu Container</p>
+              <p class="dev-meta">container · ready to run</p>
+            </div>
+            <span class="dev-cta"><button class="btn btn-sm btn-primary">Add</button></span>
+          </div>
+        </div>
+      </div>
+      <p class="flow-note">"Add" keeps today's behavior; the card badge replaces the <code>${templateId}:${imageId}</code> duplicate entries — one card, chooser on click if it has several images.</p>
+    </section>
+
+    <!-- 2. ADD NODE DIALOG -->
+    <section class="mock">
+      <p class="mock-label">Mockup 2 of 4 — Add Node dialog</p>
+      <p class="mock-note">Same dialog, but the flat <code>&lt;select&gt;</code> becomes a searchable, iconized list mirroring the catalog. Devices with multiple bound images collapse to one row with an inline image picker.</p>
+      <div class="dialog-overlay">
+        <div class="dialog-card">
+          <div class="dialog-header">
+            <p class="panel-eyebrow">Topology</p>
+            <h2>Add Node</h2>
+          </div>
+          <div class="search-row">
+            <input class="field-input" placeholder="Search devices…" value="cisco" />
+          </div>
+          <div class="device-card" style="border-color: var(--accent-strong); background: var(--panel-tint);">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#77bdff" stroke-width="1.8"><rect x="3" y="9" width="18" height="7" rx="1.5"/><path d="M7 16v3M12 16v3M17 16v3M6 5h12" /></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Cisco ASR</p>
+              <p class="dev-meta">qemu · 4 vCPU · 4 GB RAM</p>
+            </div>
+            <select class="field-input" style="flex: none; width: 11rem;">
+              <option>asr-1.qcow2</option>
+              <option>asr-2.qcow2</option>
+            </select>
+          </div>
+          <div class="device-card">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#77bdff" stroke-width="1.8"><path d="M4 12h16M4 8h16M4 16h16" opacity=".4"/><circle cx="7" cy="8" r="1.6" fill="#77bdff"/><circle cx="12" cy="12" r="1.6" fill="#77bdff"/><circle cx="17" cy="16" r="1.6" fill="#77bdff"/></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Cisco IOSv</p>
+              <p class="dev-meta">qemu · 1 vCPU · 512 MB RAM</p>
+            </div>
+          </div>
+          <div style="margin-top:.9rem" class="field">
+            <span class="panel-description">Name</span>
+            <input class="field-input" style="margin-top:.3rem" value="Cisco-ASR-3" />
+          </div>
+          <div class="dialog-actions">
+            <button class="btn">Cancel</button>
+            <button class="btn btn-primary">Add Node</button>
+          </div>
+        </div>
+      </div>
+      <p class="flow-note">Unbound templates can also appear at the bottom of the list in the dimmed state, so a new user meets the "needs image" concept without leaving the dialog.</p>
+    </section>
+
+    <!-- 3. UPLOAD WIZARD -->
+    <section class="mock">
+      <p class="mock-label">Mockup 3 of 4 — Image-first upload wizard</p>
+      <p class="mock-note">Replaces today's panel-button + separate dialog. Drop the file first; the wizard <em>guesses the device</em> from the filename (it already computes <code>suggestedTemplateId</code>) and binds on confirm — the flow is image-first instead of template-first.</p>
+      <div class="dialog-overlay">
+        <div class="dialog-card dialog-card--wide" style="width: 34rem;">
+          <div class="dialog-header">
+            <p class="panel-eyebrow">Add device image</p>
+            <h2>Upload disk image</h2>
+          </div>
+          <div class="stepper">
+            <span class="step is-current">1 · Choose file</span><span class="step-dot"></span>
+            <span class="step">2 · Device</span><span class="step-dot"></span>
+            <span class="step">3 · Bind &amp; done</span>
+          </div>
+          <div class="dropzone" style="border-style: solid;">
+            <strong>asr-1.qcow2</strong> · 512.4 MB<br />
+            <span style="font-size:.8rem">Drop another file to replace</span>
+          </div>
+          <p class="panel-eyebrow" style="margin-bottom:.4rem">This looks like…</p>
+          <div class="suggest-row">
+            <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="#77bdff" stroke-width="1.8"><rect x="3" y="9" width="18" height="7" rx="1.5"/><path d="M7 16v3M12 16v3M17 16v3M6 5h12" /></svg></span>
+            <div class="dev-copy">
+              <p class="dev-title">Cisco ASR</p>
+              <p class="why">matched from filename <code>asr</code></p>
+            </div>
+            <select class="field-input" style="flex:none; width: 11rem;">
+              <option>Cisco ASR</option>
+              <option>Cisco IOSv</option>
+              <option>Linux Generic VM</option>
+              <option>Other…</option>
+            </select>
+          </div>
+          <p class="hintline">Binding now means <b>Cisco ASR</b> appears as an addable device. You can change this later in Image Library.</p>
+          <div class="dialog-actions">
+            <button class="btn">Cancel</button>
+            <button class="btn btn-primary">Upload &amp; bind</button>
+          </div>
+        </div>
+      </div>
+      <p class="flow-note">Step 3 shows a one-line confirmation ("<code>asr-1.qcow2</code> bound to Cisco ASR") with a jump link to the catalog. Files dropped into the data dir land here as "scan results" with the same suggest-and-confirm row.</p>
+    </section>
+
+    <!-- 4. IMAGE LIBRARY ROWS -->
+    <section class="mock">
+      <p class="mock-label">Mockup 4 of 4 — Image Library rows</p>
+      <p class="mock-note">Five stacked buttons per row collapse into one primary action plus a "…" menu with confirm dialogs for the destructive ones.</p>
+      <div class="panel">
+        <div class="panel-section-header">
+          <p class="panel-eyebrow">Catalog</p>
+          <h2>Image Library</h2>
+          <p class="panel-description">Manage disk images. Files on disk stay untouched unless you delete them explicitly.</p>
+        </div>
+        <div class="imgrow">
+          <div class="grow">
+            <div class="img-name">asr-1.qcow2 <span class="pill ok">in use</span></div>
+            <div class="img-meta">uploaded · bound to Cisco ASR</div>
+          </div>
+          <button class="btn btn-sm">Unbind</button>
+          <span class="dots">•••</span>
+        </div>
+        <div class="imgrow">
+          <div class="grow">
+            <div class="img-name">vios-2.qcow2 <span class="pill warn">unbound</span></div>
+            <div class="img-meta">upload · not bound</div>
+          </div>
+          <button class="btn btn-sm btn-primary">Bind…</button>
+          <span class="dots">•••</span>
+        </div>
+        <div class="imgrow">
+          <div class="grow">
+            <div class="img-name">old-lab.iso <span class="pill">removed</span></div>
+            <div class="img-meta">scan · hidden from catalog</div>
+          </div>
+          <button class="btn btn-sm">Restore</button>
+          <span class="dots">•••</span>
+        </div>
+        <div style="margin-top:.9rem" class="menu">
+          <div class="menu-item">Bind to template… <span>›</span></div>
+          <div class="menu-item">Rename</div>
+          <div class="menu-item">Show in catalog</div>
+          <div class="menu-sep"></div>
+          <div class="menu-item danger">Remove from catalog…</div>
+          <div class="menu-item danger">Delete file from disk…</div>
+        </div>
+      </div>
+      <p class="flow-note">"Remove" and "Delete file" get explicit confirm dialogs describing the difference — today both are red buttons side by side.</p>
+    </section>
+
+  </div>
+</body>
+</html>

@@ -4,7 +4,7 @@ type ContextMenuProps = {
   open: boolean;
   x: number;
   y: number;
-  items: Array<{ label: string; onSelect: () => void }>;
+  items: Array<{ label: string; onSelect: () => void; danger?: boolean }>;
   onClose: () => void;
 };
 
@@ -46,7 +46,7 @@ export function ContextMenu({ open, x, y, items, onClose }: ContextMenuProps) {
           key={item.label}
           type="button"
           role="menuitem"
-          className="context-menu-item"
+          className={`context-menu-item${item.danger ? " is-danger" : ""}`}
           onClick={() => {
             item.onSelect();
             onClose();
