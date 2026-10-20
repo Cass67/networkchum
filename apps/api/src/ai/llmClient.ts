@@ -1,4 +1,4 @@
-import type { AiProviderSettings } from "@networkchum/shared";
+import type { AiProviderKind, AiProviderSettings } from "@networkchum/shared";
 
 export type LlmMessage = {
   role: "system" | "user" | "assistant";
@@ -7,6 +7,18 @@ export type LlmMessage = {
 
 function joinUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/${path}`;
+}
+
+export function authHeadersFor(
+  provider: AiProviderKind,
+  apiKey: string | null,
+): Record<string, string> {
+  if (!apiKey) {
+    return {};
+  }
+  return provider === "anthropic"
+    ? { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
+    : { authorization: `Bearer ${apiKey}` };
 }
 
 function truncate(text: string, maxLength = 300): string {
@@ -61,8 +73,7 @@ export async function callLlm(input: {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "anthropic-version": "2023-06-01",
-        ...(settings.apiKey ? { "x-api-key": settings.apiKey } : {}),
+        ...authHeadersFor(settings.provider, settings.apiKey),
       },
       body: JSON.stringify({
         model: settings.model,
@@ -82,9 +93,7 @@ export async function callLlm(input: {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        ...(settings.apiKey
-          ? { authorization: `Bearer ${settings.apiKey}` }
-          : {}),
+        ...authHeadersFor(settings.provider, settings.apiKey),
       },
       body: JSON.stringify({
         model: settings.model,
@@ -126,4 +135,65 @@ export async function callLlm(input: {
     throw new Error("LLM response did not contain any message content");
   }
   return text;
+}
+
+type ModelsListResponse = {
+  data?: Array<{ id?: string; display_name?: string }>;
+  models?: Array<{ id?: string; name?: string }>;
+};
+
+function extractModelIds(payload: unknown): Array<string> {
+  const models = payload as ModelsListResponse;
+  const fromOpenAiShape = (models.data ?? [])
+    .map((entry) => entry.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const fromAltShape = (models.models ?? [])
+    .map((entry) => entry.id ?? entry.name)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  return [...new Set([...fromOpenAiShape, ...fromAltShape])].sort((a, b) =>
+    a.toLowerCase().localeCompare(b.toLowerCase()),
+  );
+}
+
+/**
+ * Detect the models an endpoint serves. OpenAI-compatible servers list them
+ * at `{baseUrl}/models` (some deployments only at `/v1/models`, so try both);
+ * Anthropic lists them at `{baseUrl}/v1/models`. Throws with the reason when
+ * the endpoint cannot be probed.
+ */
+export async function probeModels(input: {
+  provider: AiProviderKind;
+  baseUrl: string;
+  apiKey: string | null;
+  fetcher: typeof fetch;
+}): Promise<Array<string>> {
+  const paths =
+    input.provider === "anthropic" ? ["v1/models"] : ["models", "v1/models"];
+  let emptyList = false;
+
+  for (const path of paths) {
+    const response = await input.fetcher(joinUrl(input.baseUrl, path), {
+      headers: authHeadersFor(input.provider, input.apiKey),
+    });
+    if (response.status === 404 || response.status === 405) {
+      continue;
+    }
+    if (!response.ok) {
+      throw new Error(
+        `Model detection failed: the endpoint responded ${response.status}`,
+      );
+    }
+    const payload = await readResponseJson(response);
+    const ids = extractModelIds(payload);
+    if (ids.length > 0) {
+      return ids;
+    }
+    emptyList = true;
+  }
+
+  throw new Error(
+    emptyList
+      ? "The endpoint returned an empty model list"
+      : "Model detection failed: the endpoint did not expose a model list",
+  );
 }

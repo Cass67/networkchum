@@ -12,6 +12,11 @@ type AiLabBuilderDialogProps = {
   onSaveProvider: (
     settings: AiProviderSettings,
   ) => Promise<AiProviderSettingsView>;
+  onProbeModels: (input: {
+    provider: AiProviderSettings["provider"];
+    baseUrl: string;
+    apiKey?: string | null;
+  }) => Promise<{ models: Array<string> }>;
   onPreview: (prompt: string) => Promise<AiLabPreview>;
   onCommit: (input: {
     name: string;
@@ -32,6 +37,7 @@ export function AiLabBuilderDialog({
   onClose,
   onLoadProvider,
   onSaveProvider,
+  onProbeModels,
   onPreview,
   onCommit,
 }: AiLabBuilderDialogProps) {
@@ -41,6 +47,9 @@ export function AiLabBuilderDialog({
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [hasStoredKey, setHasStoredKey] = useState(false);
+  const [modelOptions, setModelOptions] = useState<Array<string>>([]);
+  const [detecting, setDetecting] = useState(false);
+  const [detectError, setDetectError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [preview, setPreview] = useState<AiLabPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,6 +59,8 @@ export function AiLabBuilderDialog({
   // though App re-creates the callback on every render.
   const loadProviderRef = useRef(onLoadProvider);
   loadProviderRef.current = onLoadProvider;
+  const probeModelsRef = useRef(onProbeModels);
+  probeModelsRef.current = onProbeModels;
 
   useEffect(() => {
     if (!open) {
@@ -58,6 +69,8 @@ export function AiLabBuilderDialog({
     setPreview(null);
     setError(null);
     setSavedNotice(false);
+    setModelOptions([]);
+    setDetectError(null);
     loadProviderRef
       .current()
       .then((settings) => {
@@ -69,6 +82,14 @@ export function AiLabBuilderDialog({
         setBaseUrl(settings.baseUrl);
         setModel(settings.model);
         setHasStoredKey(settings.hasApiKey);
+        // Saved endpoint: detect the model list automatically; the key stays
+        // server-side, so probe with the stored key.
+        if (settings.baseUrl) {
+          void detectModels(
+            { provider: settings.provider, baseUrl: settings.baseUrl },
+            true,
+          );
+        }
       })
       .catch(() => {
         setHasStoredKey(false);
@@ -86,6 +107,38 @@ export function AiLabBuilderDialog({
       model: model.trim(),
       apiKey: apiKey.trim() || null,
     };
+  }
+
+  async function detectModels(
+    input: { provider: AiProviderSettings["provider"]; baseUrl: string },
+    silent = false,
+  ) {
+    setDetecting(true);
+    if (!silent) {
+      setDetectError(null);
+    }
+    try {
+      const { models } = await probeModelsRef.current({
+        provider: input.provider,
+        baseUrl: input.baseUrl,
+        // A typed draft key wins; null tells the API to use the stored key.
+        apiKey: apiKey.trim() || null,
+      });
+      setModelOptions(models);
+      if (!silent) {
+        setDetectError(null);
+      }
+    } catch (nextError) {
+      if (!silent) {
+        setDetectError(
+          nextError instanceof Error
+            ? nextError.message
+            : "Model detection failed",
+        );
+      }
+    } finally {
+      setDetecting(false);
+    }
   }
 
   async function handleSaveProvider() {
@@ -190,11 +243,41 @@ export function AiLabBuilderDialog({
             <input
               className="field-input"
               aria-label="LLM Model"
-              placeholder="e.g. gpt-4o, claude-sonnet-4-5, llama3"
+              list="ai-model-options"
+              placeholder={
+                modelOptions.length > 0
+                  ? `${modelOptions.length} models detected — pick or type one`
+                  : "e.g. gpt-4o, claude-sonnet-4-5, llama3"
+              }
               value={model}
               onChange={(event) => setModel(event.target.value)}
             />
+            <datalist id="ai-model-options">
+              {modelOptions.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
           </label>
+          <div className="dialog-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={detecting || !baseUrl.trim()}
+              onClick={() =>
+                void detectModels({ provider, baseUrl: baseUrl.trim() })
+              }
+            >
+              {detecting ? "Detecting…" : "Detect Models"}
+            </button>
+            {modelOptions.length > 0 ? (
+              <span className="field-hint" role="status">
+                {modelOptions.length} models detected
+              </span>
+            ) : null}
+            {detectError ? (
+              <span className="form-error">{detectError}</span>
+            ) : null}
+          </div>
           <label className="field">
             <span className="field-label">API Key</span>
             <input

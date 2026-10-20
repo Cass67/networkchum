@@ -1,6 +1,7 @@
 import type {
   AiLabCommitRequest,
   AiLabPreview,
+  AiProviderKind,
   AiProviderSettings,
   AiProviderSettingsView,
   CanvasDrawing,
@@ -492,6 +493,22 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
         provider: AiProviderSettingsView;
       }>(response as Response);
       return payload.provider;
+    },
+
+    async probeAiModels(input: {
+      provider: AiProviderKind;
+      baseUrl: string;
+      apiKey?: string | null;
+    }): Promise<{ models: Array<string> }> {
+      const response = await fetcher(`${baseUrl}/ai/provider/probe`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const payload = await parseResponse<{ models: Array<string> }>(
+        response as Response,
+      );
+      return payload;
     },
 
     async previewAiLab(prompt: string): Promise<AiLabPreview> {

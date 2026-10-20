@@ -556,6 +556,92 @@ describe("ai routes", () => {
     expect(response.json().message).toContain("No template for");
   });
 
+  it("detects models from an openai-compatible endpoint", async () => {
+    calls.length = 0;
+    llmResponses = [
+      {
+        body: {
+          data: [
+            { id: "zephyr-7b" },
+            { id: "llama3:70b" },
+            { id: "gpt-4o", display_name: "GPT-4o" },
+          ],
+        },
+      },
+    ];
+    const response = await app.inject({
+      method: "POST",
+      url: "/ai/provider/probe",
+      payload: {
+        provider: "openai-compatible",
+        baseUrl: "http://127.0.0.1:9999/v1",
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().models).toEqual([
+      "gpt-4o",
+      "llama3:70b",
+      "zephyr-7b",
+    ]);
+    // Probe without a key in the payload used the stored key.
+    const headers = new Headers(calls[0]?.init?.headers);
+    expect(headers.get("authorization")).toBe("Bearer sk-test-key-123");
+  });
+
+  it("falls back to /v1/models when /models 404s", async () => {
+    calls.length = 0;
+    llmResponses = [
+      { status: 404, body: { error: "not found" } },
+      { body: { data: [{ id: "llama3" }] } },
+    ];
+    const response = await app.inject({
+      method: "POST",
+      url: "/ai/provider/probe",
+      payload: {
+        provider: "openai-compatible",
+        baseUrl: "http://127.0.0.1:9999",
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().models).toEqual(["llama3"]);
+    expect(calls[0]?.url).toContain("/models");
+    expect(calls[1]?.url).toContain("/v1/models");
+  });
+
+  it("probes the anthropic endpoint with its native path and headers", async () => {
+    calls.length = 0;
+    llmResponses = [{ body: { data: [{ id: "claude-sonnet-4-5" }] } }];
+    const response = await app.inject({
+      method: "POST",
+      url: "/ai/provider/probe",
+      payload: {
+        provider: "anthropic",
+        baseUrl: "https://api.anthropic.test",
+        apiKey: "sk-anthropic-test",
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().models).toEqual(["claude-sonnet-4-5"]);
+    expect(calls[0]?.url).toContain("/v1/models");
+    const headers = new Headers(calls[0]?.init?.headers);
+    expect(headers.get("x-api-key")).toBe("sk-anthropic-test");
+  });
+
+  it("surfaces probe failures as 502", async () => {
+    calls.length = 0;
+    llmResponses = [{ status: 403, body: { error: "forbidden" } }];
+    const response = await app.inject({
+      method: "POST",
+      url: "/ai/provider/probe",
+      payload: {
+        provider: "openai-compatible",
+        baseUrl: "http://127.0.0.1:9999/v1",
+      },
+    });
+    expect(response.statusCode).toBe(502);
+    expect(response.json().message).toContain("responded 403");
+  });
+
   it("talks to the anthropic provider with native headers", async () => {
     const saved = await app.inject({
       method: "PUT",

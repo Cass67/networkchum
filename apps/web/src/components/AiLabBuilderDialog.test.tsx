@@ -105,6 +105,9 @@ function renderDialog(
         hasApiKey: true,
       })}
       onSaveProvider={vi.fn().mockResolvedValue({ hasApiKey: true })}
+      onProbeModels={vi
+        .fn()
+        .mockResolvedValue({ models: ["gpt-4o", "llama3"] })}
       onPreview={vi.fn().mockResolvedValue(matchedPreview)}
       onCommit={vi.fn().mockResolvedValue(undefined)}
       {...props}
@@ -168,6 +171,23 @@ describe("AiLabBuilderDialog", () => {
     expect(screen.getByRole("button", { name: "Create Lab" })).toHaveProperty(
       "disabled",
       true,
+    );
+  });
+
+  it("auto-detects models for the saved endpoint and offers them", async () => {
+    const onProbeModels = vi
+      .fn()
+      .mockResolvedValue({ models: ["gpt-4o", "llama3"] });
+    renderDialog({ onProbeModels });
+
+    await waitFor(() => expect(onProbeModels).toHaveBeenCalled());
+    expect(onProbeModels.mock.calls[0][0]).toMatchObject({
+      provider: "openai-compatible",
+      baseUrl: "http://127.0.0.1:9999/v1",
+    });
+    expect(await screen.findByText("2 models detected")).toBeTruthy();
+    expect(screen.getByLabelText("LLM Model").getAttribute("list")).toBe(
+      "ai-model-options",
     );
   });
 

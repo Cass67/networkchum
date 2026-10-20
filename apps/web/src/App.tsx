@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AiLabCommitRequest,
   AiLabPreview,
+  AiProviderKind,
   AiProviderSettings,
   AiProviderSettingsView,
   CanvasDrawing,
@@ -251,6 +252,11 @@ type ApiClient = {
     settings: AiProviderSettings,
   ) => Promise<AiProviderSettingsView>;
   previewAiLab?: (prompt: string) => Promise<AiLabPreview>;
+  probeAiModels?: (input: {
+    provider: AiProviderKind;
+    baseUrl: string;
+    apiKey?: string | null;
+  }) => Promise<{ models: Array<string> }>;
   commitAiLab?: (input: AiLabCommitRequest) => Promise<{
     id: string;
     name: string;
@@ -3342,6 +3348,12 @@ export function App({
             throw new Error("AI provider settings are unavailable");
           }
           return api.saveAiProvider(settings);
+        }}
+        onProbeModels={async (input) => {
+          if (!api.probeAiModels) {
+            throw new Error("Model detection is unavailable");
+          }
+          return api.probeAiModels(input);
         }}
         onPreview={async (prompt) => {
           if (!api.previewAiLab) {

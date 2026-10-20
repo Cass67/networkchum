@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
 import {
+  AiProviderKindSchema,
   AiLabCommitRequestSchema,
   AiProviderSettingsSchema,
 } from "@networkchum/shared";
@@ -9,6 +10,7 @@ import {
 import type { AppDependencies } from "../app.js";
 import { buildLabDocumentFromSpec } from "../ai/buildLabDocumentFromSpec.js";
 import { generateLabSpec } from "../ai/generateLabSpec.js";
+import { probeModels } from "../ai/llmClient.js";
 import {
   loadAiProviderSettings,
   saveAiProviderSettings,
@@ -63,6 +65,38 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
     }
     saveAiProviderSettings(settings);
     return { provider: toProviderSettingsView(settings) };
+  });
+
+  app.post("/ai/provider/probe", async (request, reply) => {
+    const body = parseBody(
+      z.object({
+        provider: AiProviderKindSchema,
+        baseUrl: z.string().trim().min(1),
+        // Omitted = use the stored key, so the dialog can detect models
+        // without re-entering the secret.
+        apiKey: z.string().min(1).optional(),
+      }),
+      request.body,
+    );
+    if (!body.ok) {
+      return reply.code(400).send({ message: body.message });
+    }
+    const apiKey = body.data.apiKey ?? loadAiProviderSettings()?.apiKey ?? null;
+
+    try {
+      const models = await probeModels({
+        provider: body.data.provider,
+        baseUrl: body.data.baseUrl,
+        apiKey,
+        fetcher,
+      });
+      return { models };
+    } catch (error) {
+      return reply.code(502).send({
+        message:
+          error instanceof Error ? error.message : "Model detection failed",
+      });
+    }
   });
 
   app.post("/ai/labs/preview", async (request, reply) => {

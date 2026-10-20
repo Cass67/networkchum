@@ -10,6 +10,7 @@ import { LabDocumentSchema } from "./topology.js";
  */
 
 export const AiProviderKindSchema = z.enum(["openai-compatible", "anthropic"]);
+export type AiProviderKind = z.infer<typeof AiProviderKindSchema>;
 
 export const AiProviderSettingsSchema = z.object({
   provider: AiProviderKindSchema,

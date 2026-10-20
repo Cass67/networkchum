@@ -167,12 +167,13 @@ export function saveAiProviderSettings(settings: AiProviderSettings): void { ...
 
 **File: `apps/api/src/routes/ai.ts`** (new plugin) — four routes:
 
-| Route                   | Behavior                                                                                                                                                                                                                                                                                                                                                              |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /ai/provider`      | 200 `{ provider: AiProviderSettingsView \| null }` — settings with `apiKey` omitted and `hasApiKey` added.                                                                                                                                                                                                                                                            |
-| `PUT /ai/provider`      | Body parsed with `AiProviderSettingsSchema` (via `z.object({ provider: ... }).passthrough()` on `request.body`, same style as imports). An `apiKey` of `""` or `null` **preserves** the previously stored key (so the UI can edit other fields without re-entering the key); a non-empty string replaces it. Saves via the store, returns the same view shape as GET. |
-| `POST /ai/labs/preview` | Body `{ prompt: string }` (min length 1). Runs the full generation pipeline (§6) and returns 200 `{ preview }`.                                                                                                                                                                                                                                                       |
-| `POST /ai/labs/commit`  | Body `{ name: string, spec: AiLabSpec }` validated with `z.object({ name: z.string().min(1), spec: AiLabSpecSchema })`. Runs the **pure** builder (§5) — no LLM call — and returns 201 `{ lab }`, mirroring the import commit.                                                                                                                                        |
+| Route                     | Behavior                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /ai/provider`        | 200 `{ provider: AiProviderSettingsView \| null }` — settings with `apiKey` omitted and `hasApiKey` added.                                                                                                                                                                                                                                                              |
+| `PUT /ai/provider`        | Body parsed with `AiProviderSettingsSchema` (via `z.object({ provider: ... }).passthrough()` on `request.body`, same style as imports). An `apiKey` of `""` or `null` **preserves** the previously stored key (so the UI can edit other fields without re-entering the key); a non-empty string replaces it. Saves via the store, returns the same view shape as GET.   |
+| `POST /ai/provider/probe` | Body `{ provider, baseUrl, apiKey? }` (omitted key falls back to the stored one). Probes the endpoint's model list — `{baseUrl}/models` with fallback to `/v1/models` for OpenAI-compatible servers, `{baseUrl}/v1/models` for Anthropic — and returns `{ models: string[] }` sorted; failures (404 on every path, auth rejection, empty list) are 502 with the reason. |
+| `POST /ai/labs/preview`   | Body `{ prompt: string }` (min length 1). Runs the full generation pipeline (§6) and returns 200 `{ preview }`.                                                                                                                                                                                                                                                         |
+| `POST /ai/labs/commit`    | Body `{ name: string, spec: AiLabSpec }` validated with `z.object({ name: z.string().min(1), spec: AiLabSpecSchema })`. Runs the **pure** builder (§5) — no LLM call — and returns 201 `{ lab }`, mirroring the import commit.                                                                                                                                          |
 
 Registration in `app.ts`:
 
@@ -325,6 +326,8 @@ system, messages, max_tokens (default 4096), temperature? }` where `system`
 - Non-2xx → throw `Error` with status + truncated body text; the route turns
   it into a 502 with that message. Timeouts: rely on Node's default fetch
   behavior; do not add a timeout library.
+- Also exported: `probeModels({ provider, baseUrl, apiKey, fetcher })` —
+  detects the served model list for the dialog's model picker (§8).
 
 **File: `apps/api/src/ai/systemPrompt.ts`** (new)
 
@@ -431,13 +434,17 @@ State machine inside the dialog:
    key (password input, placeholder `•••• (saved)` when `hasApiKey`), Save
    button → `onSaveProvider(settings)`. Shows the current settings on open via
    `onLoadProvider()`.
-2. **Describe**: textarea for the natural-language spec + "Generate" button →
+2. **Model detection**: when a saved endpoint exists, the dialog probes
+   the model list automatically on open (and via a **Detect Models** button
+   after any base URL/provider change request) and offers the results as a
+   datalist over the free-text model input — pick one or type your own.
+3. **Describe**: textarea for the natural-language spec + "Generate" button →
    `onPreview(prompt)` → shows the preview: lab name, description, node table
    (name, resolved template display name, status, image bound or not) and
    link list, plus `issues` (fuzzy matches, missing images) in an
    `import-issues`-style list. If `document` is `null` (unresolved nodes),
    disable commit and show why.
-3. **Commit**: "Create Lab" → `onCommit({ name, spec })`.
+4. **Commit**: "Create Lab" → `onCommit({ name, spec })`.
 
 **File: `apps/web/src/api/client.ts`** — four methods, exactly the
 `previewTopologyImport` pattern:
@@ -518,9 +525,10 @@ npm test             # vitest across packages, api (forks), web, scripts
 Manual smoke on the real API:
 
 1. `GET /ai/provider` → `{"provider":null}`.
-2. In the UI: Labs panel → "Build with AI" → configure provider (e.g. LM
-   Studio `http://127.0.0.1:1234/v1`, model from `/v1/models`), Save, reload
-   the dialog → settings persisted, key masked.
+2. In the UI: Labs panel → "Build with AI" → paste a base URL (e.g. LM
+   Studio `http://127.0.0.1:1234/v1`) → the model list is detected
+   automatically (`POST /ai/provider/probe`); pick a model, save, reload the
+   dialog → settings persisted, key masked.
 3. Generate from "three routers in a triangle, one ubuntu host attached to
    router 1's second interface, plus a management network with all routers and
    the host" → preview shows 4 nodes, 3 links, all matched; commit → lab opens
