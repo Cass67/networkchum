@@ -36,6 +36,7 @@ type ExistingNode = {
 type AddNodeDialogProps = {
   templates: TemplateEntry[];
   existingNodes: ExistingNode[];
+  peerLabs: Array<{ id: string; name: string }>;
   cloudManagementCapabilities?: CloudManagementCapabilities | null;
   onSubmit: (input: {
     templateId: string;
@@ -45,6 +46,7 @@ type AddNodeDialogProps = {
     interfaceCount?: number;
     cloudRole?: CloudRole;
     bridgeGroup?: string | null;
+    peerLabId?: string;
   }) => Promise<void>;
   hostInterfaces: string[];
   onCancel: () => void;
@@ -133,6 +135,7 @@ function defaultNameFor(
 export function AddNodeDialog({
   templates,
   existingNodes,
+  peerLabs,
   hostInterfaces: _hostInterfaces,
   cloudManagementCapabilities,
   onSubmit,
@@ -192,6 +195,8 @@ export function AddNodeDialog({
     templates[0]?.configSchema?.interfaceCount.default,
   );
   const showCloudBridgeSettings = selectedTemplate?.runtime === "cloud";
+  const showPeerLabSettings = selectedTemplate?.runtime === "lab-bridge";
+  const [peerLabId, setPeerLabId] = useState("");
   const [cloudRole, setCloudRole] = useState<CloudRole>("management");
   const [bridgeGroup, setBridgeGroup] = useState("management");
   const showMacOsManagementSubnetGuidance =
@@ -235,6 +240,7 @@ export function AddNodeDialog({
             ? bridgeGroup.trim() || "management"
             : bridgeGroup.trim() || null
           : undefined,
+        peerLabId: showPeerLabSettings ? peerLabId || undefined : undefined,
       });
     } catch {
       setError("Failed to add node");
@@ -415,6 +421,34 @@ export function AddNodeDialog({
               ) : null}
             </div>
           ) : null}
+          {showPeerLabSettings ? (
+            <div className="field">
+              <label>
+                <span className="field-label">Peer Lab</span>
+                <select
+                  value={peerLabId}
+                  onChange={(e) => setPeerLabId(e.target.value)}
+                  className="field-input"
+                  aria-label="Peer Lab"
+                  data-testid="peer-lab-select"
+                >
+                  <option value="">Select the lab to bridge to…</option>
+                  {peerLabs.map((peer) => (
+                    <option key={peer.id} value={peer.id}>
+                      {peer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="panel-description">
+                Attach a cable from this bridge to the network that should reach
+                the peer lab. In the peer lab, add another Lab Bridge, point it
+                back at this lab, and cable it to the network there. Both sides
+                must reference each other; management (cloud uplink) networks
+                are never merged.
+              </p>
+            </div>
+          ) : null}
           {error ? <p className="form-error">{error}</p> : null}
           <div className="dialog-actions">
             <button
@@ -432,6 +466,7 @@ export function AddNodeDialog({
                 submitting ||
                 !templateId ||
                 !name.trim() ||
+                (showPeerLabSettings && !peerLabId) ||
                 (showCloudBridgeSettings &&
                   cloudRole !== "management" &&
                   !bridgeGroup.trim())

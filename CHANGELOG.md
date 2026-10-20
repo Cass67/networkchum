@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Lab interconnect**: a Lab Bridge node in each lab merges the cabled
+  networks into one broadcast domain across labs (mutual peer references;
+  management uplink networks excluded; qemu VMs over the socket virtual
+  switch)
 - MIT license; `package.json` declares license, version, and Node engine range
 - CI workflow: lockfile sync check, full test suite, and build on push/PR
 - API token authentication: `serve`/`install-service` generate a 256-bit token

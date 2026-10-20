@@ -9,7 +9,7 @@ export type RuntimeState = {
   labId: string;
   nodeId: string;
   status: "running" | "stopped" | "failed";
-  runtime: "qemu" | "container" | "cloud";
+  runtime: "qemu" | "container" | "cloud" | "lab-bridge";
   accelerationMode: string | null;
   externalId?: string | null;
   // For cloud nodes, disambiguate non-container backends (linux TAP, macOS host-only management)

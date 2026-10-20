@@ -213,7 +213,8 @@ export function SelectionPanel(props: SelectionPanelProps) {
             </>
           ) : null}
           <div className="action-grid">
-            {selected.status === "running" ? (
+            {selected.node.runtime === "lab-bridge" ? null : selected.status ===
+              "running" ? (
               <button
                 type="button"
                 className="btn btn-warning"
@@ -230,7 +231,8 @@ export function SelectionPanel(props: SelectionPanelProps) {
                 Power On
               </button>
             )}
-            {selected.node.runtime !== "cloud" ? (
+            {selected.node.runtime !== "cloud" &&
+            selected.node.runtime !== "lab-bridge" ? (
               <button
                 type="button"
                 className="btn"

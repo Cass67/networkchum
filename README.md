@@ -185,6 +185,31 @@ Labs are independent and stay running on their own:
 - Containers run via rootless `podman` as detached daemons and were never
   affected by restarts.
 
+## Lab Bridges (Interconnect)
+
+Two labs can share one broadcast domain: put a **Lab Bridge** node in each lab,
+cable it to the network that should reach across, and point each bridge at the
+other lab. Frames are merged at the virtual switch — a VM in `lab1-NY` talks to
+a VM in `lab2-LA` as if both were on the same switch.
+
+Setup (both sides are required):
+
+1. In lab `NY`: add a **Lab Bridge (Interconnect)** device, pick `LA` as the
+   peer lab, and cable the bridge into the NY network that should reach LA.
+2. In lab `LA`: add a Lab Bridge, pick `NY` as the peer lab, cable it into the
+   LA network.
+
+Notes and limits:
+
+- Bridges are virtual patch panels — no power lifecycle, no console, nothing to
+  boot; the canvas shows them as `bridged`.
+- Management (cloud uplink) networks are never merged — only plain lab
+  networks interconnect.
+- VM NICs interconnect over the socket virtual switch. Container nodes stay on
+  their per-lab podman bridges and do not participate yet.
+- Interconnects apply instantly on topology changes (no VM restart), and they
+  survive lab switching and deploys like every other running device.
+
 ## Management Clouds
 
 Management clouds now depend on host platform and cloud role, not on a per-node host-bridge picker.

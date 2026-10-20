@@ -2118,3 +2118,41 @@ describe("api token auth CORS", () => {
     }
   });
 });
+
+describe("lab bridge nodes", () => {
+  it("creates a lab-bridge node with the peer lab reference", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Bridge Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes`,
+      payload: {
+        templateId: "lab-bridge",
+        name: "NY-Bridge",
+        position: { x: 60, y: 60 },
+        peerLabId: "lab-1792526674794-b51xfk",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const payload = response.json() as {
+      lab: { document: { nodes: Array<{ config: { peerLabId?: string } }> } };
+    };
+    const node = payload.lab.document.nodes.find((n) => n.name === "NY-Bridge");
+    expect(node?.config.peerLabId).toBe("lab-1792526674794-b51xfk");
+    const bridgeNodeId = node!.id;
+
+    // Bridge nodes have no power lifecycle.
+    const powerResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/nodes/${bridgeNodeId}/power-on`,
+      payload: {},
+    });
+    expect(powerResponse.statusCode).toBe(404);
+  });
+});

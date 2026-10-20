@@ -504,6 +504,7 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
         interfaceCount?: number;
         cloudRole?: CloudRole;
         bridgeGroup?: string | null;
+        peerLabId?: string;
       },
     ): Promise<LabDetails> {
       const response = await fetcher(`${baseUrl}/labs/${labId}/nodes`, {

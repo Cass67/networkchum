@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-export const RuntimeKindSchema = z.enum(["qemu", "container", "cloud"]);
+export const RuntimeKindSchema = z.enum([
+  "qemu",
+  "container",
+  "cloud",
+  "lab-bridge",
+]);
 export const DesiredPowerSchema = z.enum(["on", "off"]);
 export const ContainerEngineSchema = z.enum(["docker", "podman"]);
 export const CloudRoleSchema = z.enum([
@@ -94,6 +99,9 @@ export const NodeConfigSchema = z.object({
   containerRegistry: z.string().min(1).optional(),
   containerEngine: ContainerEngineSchema.optional(),
   containerShell: z.string().min(1).optional(),
+  // lab-bridge nodes only: the other lab this bridge pairs with (both sides
+  // must reference each other for the segment merge to apply).
+  peerLabId: z.string().min(1).optional(),
 });
 
 export const LabNodeSchema = z

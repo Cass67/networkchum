@@ -266,6 +266,7 @@ type ApiClient = {
       interfaceCount?: number;
       cloudRole?: CloudRole;
       bridgeGroup?: string | null;
+      peerLabId?: string;
     },
   ) => Promise<{
     id: string;
@@ -3254,6 +3255,9 @@ export function App({
               : catalog
           }
           existingNodes={selectedLab?.document.nodes ?? []}
+          peerLabs={labs
+            .filter((lab) => lab.id !== selectedLabId)
+            .map((lab) => ({ id: lab.id, name: lab.name }))}
           hostInterfaces={hostInterfaces}
           cloudManagementCapabilities={cloudManagementCapabilities}
           onSubmit={handleAddNode}

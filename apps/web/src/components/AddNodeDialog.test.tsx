@@ -51,6 +51,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
@@ -69,6 +70,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
@@ -84,6 +86,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
@@ -105,6 +108,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
@@ -124,6 +128,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={onCancel}
@@ -140,6 +145,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
@@ -164,6 +170,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
@@ -182,6 +189,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
@@ -198,6 +206,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
@@ -216,6 +225,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
@@ -244,6 +254,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
@@ -279,6 +290,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
@@ -301,6 +313,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={templates}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
@@ -353,6 +366,7 @@ describe("AddNodeDialog", () => {
       <AddNodeDialog
         templates={multiImage}
         existingNodes={[]}
+        peerLabs={[]}
         hostInterfaces={[]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
@@ -398,5 +412,68 @@ describe("computeNextPosition", () => {
     const pos = computeNextPosition(nodes);
     expect(pos.x).toBe(40);
     expect(pos.y).toBe(160);
+  });
+});
+
+describe("lab bridge interconnect", () => {
+  const labBridgeTemplates = [
+    {
+      id: "lab-bridge",
+      name: "Lab Bridge (Interconnect)",
+      source: "built-in",
+      runtime: "lab-bridge",
+      vendor: "NetworkChum",
+      deviceRoleIcon: "cloud" as const,
+      configSchema: { interfaceCount: { default: 1, min: 1, max: 1 } },
+    },
+  ];
+
+  it("submits peerLabId for lab-bridge nodes", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AddNodeDialog
+        templates={labBridgeTemplates}
+        existingNodes={[]}
+        peerLabs={[{ id: "lab-2", name: "LA" }]}
+        hostInterfaces={[]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("device-option-lab-bridge"));
+    fireEvent.change(await screen.findByTestId("peer-lab-select"), {
+      target: { value: "lab-2" },
+    });
+    fireEvent.change(screen.getByTestId("node-name-input"), {
+      target: { value: "NY-Bridge" },
+    });
+    fireEvent.click(screen.getByTestId("add-node-submit"));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ peerLabId: "lab-2" }),
+      );
+    });
+  });
+
+  it("requires a peer lab before submit", () => {
+    render(
+      <AddNodeDialog
+        templates={labBridgeTemplates}
+        existingNodes={[]}
+        peerLabs={[{ id: "lab-2", name: "LA" }]}
+        hostInterfaces={[]}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("device-option-lab-bridge"));
+    fireEvent.change(screen.getByTestId("node-name-input"), {
+      target: { value: "NY-Bridge" },
+    });
+
+    expect(screen.getByTestId("add-node-submit")).toBeDisabled();
   });
 });

@@ -1831,9 +1831,19 @@ export function TopologyCanvas({
               },
             },
             { label: "Rename", onSelect: () => onRenameNode?.(nodeId) },
-            status === "running"
-              ? { label: "Power Off", onSelect: () => onPowerOffNode?.(nodeId) }
-              : { label: "Power On", onSelect: () => onPowerOnNode?.(nodeId) },
+            ...(node?.runtime === "lab-bridge"
+              ? []
+              : [
+                  status === "running"
+                    ? {
+                        label: "Power Off",
+                        onSelect: () => onPowerOffNode?.(nodeId),
+                      }
+                    : {
+                        label: "Power On",
+                        onSelect: () => onPowerOnNode?.(nodeId),
+                      },
+                ]),
             { label: "Delete Node", onSelect: () => onDeleteNode?.(nodeId) },
           ],
         });
@@ -2225,8 +2235,12 @@ export function TopologyCanvas({
               const y = node.position?.y ?? 32;
               const center = getNodeCenter(node);
               const status =
-                nodeStatuses[node.id] ??
-                (node.state?.desiredPower === "on" ? "running" : "stopped");
+                node.runtime === "lab-bridge"
+                  ? "bridged"
+                  : (nodeStatuses[node.id] ??
+                    (node.state?.desiredPower === "on"
+                      ? "running"
+                      : "stopped"));
               const isSelected =
                 selectedNodeIds.includes(node.id) || selectedNodeId === node.id;
               const borderColor =

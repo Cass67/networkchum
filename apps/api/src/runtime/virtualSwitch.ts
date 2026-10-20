@@ -25,12 +25,16 @@ export type VirtualSwitchAdapter = {
   syncAttachments: (
     attachments: Array<{ interfaceId: string; networkId: string }>,
   ) => void;
+  setFabricGroups: (groups: string[][]) => void;
 };
 
 class VirtualSwitch implements VirtualSwitchAdapter {
   private nics = new Map<string, NicEntry>(); // interfaceId → entry
   private routing = new Map<string, string>(); // interfaceId → networkId
   private segments = new Map<string, Set<string>>(); // networkId  → Set<interfaceId>
+  // Inter-lab bridges: networkId → canonical segment root. Peers whose
+  // networks resolve to the same root share one broadcast domain.
+  private fabricAlias = new Map<string, string>();
 
   reset(): void {
     for (const entry of this.nics.values()) {
@@ -41,6 +45,35 @@ class VirtualSwitch implements VirtualSwitchAdapter {
     this.nics.clear();
     this.routing.clear();
     this.segments.clear();
+    this.fabricAlias.clear();
+  }
+
+  /**
+   * Merge lab networks into shared broadcast domains. Each group lists
+   * network ids that must become one segment (e.g. two labs' bridge
+   * networks). Idempotent: call on every topology sync with the full set.
+   */
+  setFabricGroups(groups: string[][]): void {
+    this.fabricAlias.clear();
+    for (const group of groups) {
+      const distinct = [...new Set(group)];
+      if (distinct.length < 2) continue;
+      const root = distinct[0]!;
+      for (const id of distinct.slice(1)) {
+        const resolved = this.resolveSegment(id);
+        if (resolved !== root) {
+          this.fabricAlias.set(resolved, root);
+        }
+      }
+    }
+  }
+
+  private resolveSegment(networkId: string): string {
+    let id = networkId;
+    while (this.fabricAlias.has(id)) {
+      id = this.fabricAlias.get(id)!;
+    }
+    return id;
   }
 
   /** Register a NIC when its VM powers on. */
@@ -135,13 +168,15 @@ class VirtualSwitch implements VirtualSwitchAdapter {
   private forward(fromId: string, frame: Buffer): void {
     const networkId = this.routing.get(fromId);
     if (!networkId) return;
-    const peers = this.segments.get(networkId);
-    if (!peers) return;
+    const root = this.resolveSegment(networkId);
     const pkt = Buffer.allocUnsafe(HEADER + frame.length);
     pkt.writeUInt32BE(frame.length, 0);
     frame.copy(pkt, HEADER);
-    for (const peer of peers) {
-      if (peer !== fromId) this.nics.get(peer)?.socket?.write(pkt);
+    for (const [segment, peers] of this.segments) {
+      if (this.resolveSegment(segment) !== root) continue;
+      for (const peer of peers) {
+        if (peer !== fromId) this.nics.get(peer)?.socket?.write(pkt);
+      }
     }
   }
 }

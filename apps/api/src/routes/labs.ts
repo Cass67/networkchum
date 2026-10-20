@@ -80,6 +80,7 @@ const addNodeSchema = z.object({
   interfaceCount: z.number().int().min(1).optional(),
   cloudRole: CloudRoleSchema.optional(),
   bridgeGroup: z.string().trim().min(1).nullable().optional(),
+  peerLabId: z.string().min(1).optional(),
 });
 
 const createContainerNodeSchema = z.object({
@@ -363,6 +364,7 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       interfaceCount: body.interfaceCount,
       cloudRole: cloudSettings?.ok ? cloudSettings.cloudRole : undefined,
       bridgeGroup: cloudSettings?.ok ? cloudSettings.bridgeGroup : undefined,
+      peerLabId: body.peerLabId,
       accelerationMode:
         template.runtime === "qemu"
           ? acceleration.mode

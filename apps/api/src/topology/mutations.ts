@@ -19,6 +19,7 @@ type AddNodeInput = {
   bridgeInterface?: string | null;
   cloudRole?: CloudRole;
   bridgeGroup?: string;
+  peerLabId?: string;
   containerImageRef?: string;
   containerRegistry?: string;
   containerEngine?: "docker" | "podman";
@@ -56,6 +57,7 @@ export function addNode(
       bridgeInterface: input.bridgeInterface ?? null,
       cloudRole: input.cloudRole,
       bridgeGroup: input.bridgeGroup,
+      peerLabId: input.peerLabId,
       containerImageRef:
         input.containerImageRef ?? input.template.container?.imageRef,
       containerRegistry:

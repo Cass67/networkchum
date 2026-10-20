@@ -674,4 +674,20 @@ export const defaultTemplates: Template[] = [
       interfaceCount: { default: 10, min: 1, max: 24 },
     },
   },
+  {
+    id: "lab-bridge",
+    runtime: "lab-bridge",
+    displayName: "Lab Bridge (Interconnect)",
+    vendor: "NetworkChum",
+    deviceRoleIcon: "cloud",
+    boot: {
+      console: "none",
+      acceleration: "n/a",
+    },
+    configSchema: {
+      ramMb: { default: 0, min: 0, max: 0 },
+      vcpu: { default: 0, min: 0, max: 0 },
+      interfaceCount: { default: 1, min: 1, max: 1 },
+    },
+  },
 ];

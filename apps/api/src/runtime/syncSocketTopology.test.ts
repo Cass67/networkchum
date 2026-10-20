@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { LabNode } from "@networkchum/shared";
+
 import { syncSocketTopology } from "./syncSocketTopology.js";
 
 describe("syncSocketTopology", () => {
@@ -8,6 +10,7 @@ describe("syncSocketTopology", () => {
     const addNic = vi.fn();
     const removeNic = vi.fn();
     const syncAttachments = vi.fn();
+    const setFabricGroups = vi.fn();
 
     const result = await syncSocketTopology({
       getNetworkBackend: () => "socket",
@@ -120,6 +123,7 @@ describe("syncSocketTopology", () => {
         addNic,
         removeNic,
         syncAttachments,
+        setFabricGroups,
       },
     });
 
@@ -141,6 +145,7 @@ describe("syncSocketTopology", () => {
     const addNic = vi.fn();
     const removeNic = vi.fn();
     const syncAttachments = vi.fn();
+    const setFabricGroups = vi.fn();
 
     const result = await syncSocketTopology({
       getNetworkBackend: () => "socket",
@@ -199,6 +204,7 @@ describe("syncSocketTopology", () => {
         addNic,
         removeNic,
         syncAttachments,
+        setFabricGroups,
       },
     });
 
@@ -216,6 +222,7 @@ describe("syncSocketTopology", () => {
     const addNic = vi.fn();
     const removeNic = vi.fn();
     const syncAttachments = vi.fn();
+    const setFabricGroups = vi.fn();
 
     const result = await syncSocketTopology({
       getNetworkBackend: () => "socket",
@@ -304,6 +311,7 @@ describe("syncSocketTopology", () => {
         addNic,
         removeNic,
         syncAttachments,
+        setFabricGroups,
       },
     });
 
@@ -323,6 +331,7 @@ describe("syncSocketTopology", () => {
     const addNic = vi.fn();
     const removeNic = vi.fn();
     const syncAttachments = vi.fn();
+    const setFabricGroups = vi.fn();
 
     const result = await syncSocketTopology({
       getNetworkBackend: () => "socket",
@@ -410,6 +419,7 @@ describe("syncSocketTopology", () => {
         addNic,
         removeNic,
         syncAttachments,
+        setFabricGroups,
       },
     });
 
@@ -430,6 +440,7 @@ describe("syncSocketTopology", () => {
     const addNic = vi.fn();
     const removeNic = vi.fn();
     const syncAttachments = vi.fn();
+    const setFabricGroups = vi.fn();
 
     const result = await syncSocketTopology({
       getNetworkBackend: () => "tap",
@@ -446,6 +457,7 @@ describe("syncSocketTopology", () => {
         addNic,
         removeNic,
         syncAttachments,
+        setFabricGroups,
       },
     });
 
@@ -454,4 +466,123 @@ describe("syncSocketTopology", () => {
     expect(syncAttachments).not.toHaveBeenCalled();
     expect(result).toEqual({ labs: 0, qemuNodes: 0, nics: 0, attachments: 0 });
   });
+});
+
+it("merges lab networks when two labs bridge to each other", async () => {
+  const reset = vi.fn();
+  const addNic = vi.fn();
+  const removeNic = vi.fn();
+  const syncAttachments = vi.fn();
+  const setFabricGroups = vi.fn();
+
+  const bridgeNode = (
+    id: string,
+    peerLabId: string,
+    interfaces: Array<{ id: string; name: string; slot: number }>,
+  ): LabNode => ({
+    id,
+    name: id,
+    runtime: "lab-bridge",
+    templateId: "lab-bridge",
+    imageId: null,
+    position: { x: 0, y: 0 },
+    config: { vcpu: 0, ramMb: 0, interfaceCount: interfaces.length, peerLabId },
+    state: { desiredPower: "off" },
+    interfaces,
+  });
+  const mgmtNode: LabNode = {
+    id: "cloud-mgmt",
+    name: "Cloud",
+    runtime: "cloud",
+    templateId: "cloud",
+    imageId: null,
+    position: { x: 0, y: 0 },
+    config: {
+      vcpu: 0,
+      ramMb: 0,
+      interfaceCount: 1,
+      cloudRole: "management",
+    },
+    state: { desiredPower: "off" },
+    interfaces: [{ id: "if-mgmt", name: "eth0", slot: 0 }],
+  };
+
+  const result = await syncSocketTopology({
+    getNetworkBackend: () => "socket",
+    listLabs: async () => [
+      {
+        id: "lab-1",
+        name: "NY",
+        updatedAt: "2026-04-11T00:00:00.000Z",
+        autoBackup: false,
+        document: {
+          id: "lab-1",
+          name: "NY",
+          version: 1,
+          canvas: { zoom: 1, backgroundImage: null, drawings: [] },
+          annotations: [],
+          startupConfigSets: [],
+          nodeBootActions: [],
+          activeConfigSetId: null,
+          nodes: [
+            bridgeNode("bridge-a", "lab-2", [
+              { id: "if-br-a0", name: "eth0", slot: 0 },
+              { id: "if-br-a1", name: "eth1", slot: 1 },
+            ]),
+            mgmtNode,
+          ],
+          networks: [
+            { id: "netA", kind: "ethernet", name: "NY LAN", visible: true },
+            { id: "netMgmt", kind: "ethernet", name: "mgmt", visible: true },
+          ],
+          attachments: [
+            { interfaceId: "if-br-a0", networkId: "netA" },
+            { interfaceId: "if-br-a1", networkId: "netMgmt" },
+            { interfaceId: "if-mgmt", networkId: "netMgmt" },
+          ],
+        },
+      },
+      {
+        id: "lab-2",
+        name: "LA",
+        updatedAt: "2026-04-11T00:00:00.000Z",
+        autoBackup: false,
+        document: {
+          id: "lab-2",
+          name: "LA",
+          version: 1,
+          canvas: { zoom: 1, backgroundImage: null, drawings: [] },
+          annotations: [],
+          startupConfigSets: [],
+          nodeBootActions: [],
+          activeConfigSetId: null,
+          nodes: [
+            bridgeNode("bridge-b", "lab-1", [
+              { id: "if-br-b0", name: "eth0", slot: 0 },
+            ]),
+          ],
+          networks: [
+            { id: "netB", kind: "ethernet", name: "LA LAN", visible: true },
+          ],
+          attachments: [{ interfaceId: "if-br-b0", networkId: "netB" }],
+        },
+      },
+    ],
+    listRuntimeStates: async () => [],
+    switchAdapter: {
+      reset,
+      addNic,
+      removeNic,
+      syncAttachments,
+      setFabricGroups,
+    },
+  });
+
+  expect(result).toEqual({
+    labs: 2,
+    qemuNodes: 0,
+    nics: 0,
+    attachments: 4,
+  });
+  expect(setFabricGroups).toHaveBeenCalledWith([["netA", "netB"]]);
 });

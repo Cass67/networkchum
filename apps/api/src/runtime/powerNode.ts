@@ -460,6 +460,11 @@ export async function powerOnNode(
     return null;
   }
 
+  // Lab bridges are virtual patch panels: always "on", no process to launch.
+  if (node.runtime === "lab-bridge") {
+    return null;
+  }
+
   const runCommand = dependencies.runCommand ?? defaultRunCommand;
   const hasBinary = dependencies.hasBinary ?? defaultHasBinary;
   const resolveBinary =
@@ -1194,6 +1199,15 @@ export async function powerOffNode(
   nodeId: string,
   dependencies: RuntimeDependencies = {},
 ) {
+  const lab = await getLab(labId);
+  const bridgeNode = lab?.document.nodes.find(
+    (entry) => entry.id === nodeId && entry.runtime === "lab-bridge",
+  );
+  if (bridgeNode) {
+    // Virtual patch panels have no process to stop.
+    return null;
+  }
+
   const runCommand = dependencies.runCommand ?? defaultRunCommand;
   const states = await listRuntimeStates(labId);
   const previous = states.find((state) => state.nodeId === nodeId);
