@@ -30,6 +30,14 @@ it("neon theme leaves glyph bodies unfilled so no dark box renders", () => {
   expect(rule).not.toMatch(/fill:\s*rgba?\(/);
 });
 
+it("neon glyph svg must not clip its glow (square artifact)", () => {
+  // The drop-shadow glow gets clipped at the glyph's square viewport edge and
+  // renders as a box behind the icon; overflow: visible lets it fade out.
+  expect(css).toMatch(
+    /:root\[data-icon-theme='neon'\] \.device-role-glyph \{[^}]*overflow:\s*visible/,
+  );
+});
+
 it("neon theme keeps the colored stroke and glow on glyph outlines", () => {
   const rule = neonRule(
     ":root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='router'] :is(.glyph-body, .glyph-detail)",
