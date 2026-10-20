@@ -164,6 +164,17 @@ function printImages(index, diskImages) {
   return bound.length;
 }
 
+function describeWritable(dir) {
+  const probe = path.join(dir, ".doctor-write-test");
+  try {
+    fs.writeFileSync(probe, "x");
+    fs.unlinkSync(probe);
+    return "writable";
+  } catch (error) {
+    return `NOT WRITABLE (${error.code ?? error.message ?? error})`;
+  }
+}
+
 console.log("NetworkChum doctor");
 console.log("==================");
 console.log();
@@ -171,6 +182,9 @@ console.log("environment");
 console.log(`  bind mode    ${bindMode}`);
 console.log(`  repo         ${repoRoot}`);
 console.log(`  data dir     ${dataDir}  ${describeDir(dataDir)}`);
+if (fs.existsSync(dataDir)) {
+  console.log(`  data dir access ${describeWritable(dataDir)}`);
+}
 console.log(`  images dir   ${imagesDir}  ${describeDir(imagesDir)}`);
 console.log();
 console.log("images");
@@ -221,6 +235,22 @@ if (!engineName) {
   );
   console.log(
     "               remove exited NetworkChum containers: ./start.sh clean",
+  );
+}
+console.log();
+
+console.log("api token");
+const tokenFile = path.join(dataDir, "api-token");
+const storedToken = fs.existsSync(tokenFile)
+  ? fs.readFileSync(tokenFile, "utf8").trim()
+  : "";
+if (storedToken) {
+  console.log(`  file         ${tokenFile}`);
+  console.log(`  token        ${storedToken}`);
+} else {
+  console.log(`  none         ${tokenFile} does not exist or is empty`);
+  console.log(
+    "  hint         the API accepts requests without a token; run ./start.sh serve to generate one",
   );
 }
 console.log();

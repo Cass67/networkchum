@@ -371,6 +371,44 @@ if [ "$SCRIPT_NAME" = "doctor" ]; then
 fi
 
 if [ "$SCRIPT_NAME" = "serve" ]; then
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '[dry-run] %s %s exec concurrently -- -k -n api,web "%s" "%s"\n' \
+      "$ENV_PREFIX" "$NPM_PATH" \
+      "$NODE_PATH $ROOT_DIR/apps/api/dist/server.js" \
+      "$NODE_PATH $ROOT_DIR/scripts/serve-web.mjs"
+    exit 0
+  fi
+
+  # Generate the API token once and keep it in the data dir (mode 600). The API
+  # refuses unauthenticated requests whenever the token is present, so the web
+  # UI asks for it on first load. Failures degrade to an open API with a warning.
+  if [ -n "$DATA_DIR" ]; then
+    TOKEN_DIR=$DATA_DIR
+  else
+    TOKEN_DIR=$ROOT_DIR/apps/api/data
+  fi
+  TOKEN_FILE=$TOKEN_DIR/api-token
+  if [ -z "${NETWORKCHUM_API_TOKEN:-}" ] && [ -f "$TOKEN_FILE" ]; then
+    NETWORKCHUM_API_TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null || printf '')
+  fi
+  if [ -z "${NETWORKCHUM_API_TOKEN:-}" ]; then
+    if ! mkdir -p "$TOKEN_DIR" 2>/dev/null; then
+      printf 'warning: cannot create data dir %s; starting the API without a token\n' "$TOKEN_DIR" >&2
+    elif NETWORKCHUM_API_TOKEN=$(od -An -N32 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n') &&
+      [ -n "$NETWORKCHUM_API_TOKEN" ] &&
+      printf '%s' "$NETWORKCHUM_API_TOKEN" >"$TOKEN_FILE" 2>/dev/null &&
+      chmod 600 "$TOKEN_FILE" 2>/dev/null; then
+      printf 'Generated API token at %s\n' "$TOKEN_FILE"
+      printf 'The web UI will ask for it once; retrieve it with: ./start.sh doctor\n'
+    else
+      printf 'warning: could not write API token file %s; starting the API without a token\n' "$TOKEN_FILE" >&2
+      NETWORKCHUM_API_TOKEN=""
+    fi
+  fi
+  if [ -n "$NETWORKCHUM_API_TOKEN" ]; then
+    export NETWORKCHUM_API_TOKEN
+  fi
+
   API_CMD="$ENV_PREFIX $NODE_PATH $ROOT_DIR/apps/api/dist/server.js"
   WEB_CMD="$ENV_PREFIX $NODE_PATH $ROOT_DIR/scripts/serve-web.mjs"
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -477,6 +515,21 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
     fi
 
     mkdir -p "$ROOT_DIR/.networkchum"
+
+    # Pre-create the data dir and hand it to the service user, so first boot
+    # never hits EACCES from stale root-owned files.
+    if [ -n "$DATA_DIR" ]; then
+      if ! mkdir -p "$DATA_DIR" 2>/dev/null; then
+        printf 'warning: cannot create data dir %s\n' "$DATA_DIR" >&2
+      fi
+      if [ "$(id -un)" != "$UNIT_USER" ] && command -v sudo >/dev/null 2>&1; then
+        if sudo chown -R "$UNIT_USER" "$DATA_DIR" 2>/dev/null; then
+          printf 'Data dir %s owned by %s\n' "$DATA_DIR" "$UNIT_USER"
+        else
+          printf 'warning: could not set ownership of %s; the service may hit EACCES writing data\n' "$DATA_DIR" >&2
+        fi
+      fi
+    fi
 
     # Always rebuild: the guard on dist/server.js alone let a stale build survive
     # an upgrade (e.g. new modules that were never emitted).

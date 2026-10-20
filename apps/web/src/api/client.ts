@@ -146,6 +146,42 @@ type RuntimeState = {
 
 type Fetcher = typeof fetch;
 
+export const API_TOKEN_STORAGE_KEY = "networkchum-api-token";
+export const API_TOKEN_HEADER = "x-networkchum-token";
+
+let onTokenRequired: (() => void) | null = null;
+
+// Register a handler invoked whenever an API call comes back 401 (token
+// missing or wrong). Returns a disposer.
+export function setOnTokenRequired(handler: () => void): () => void {
+  onTokenRequired = handler;
+  return () => {
+    if (onTokenRequired === handler) {
+      onTokenRequired = null;
+    }
+  };
+}
+
+export function getStoredApiToken(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    return window.localStorage?.getItem(API_TOKEN_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function setStoredApiToken(token: string): void {
+  try {
+    window.localStorage?.setItem(API_TOKEN_STORAGE_KEY, token.trim());
+  } catch {
+    // Storage failures leave the token in memory only; the next call fails.
+  }
+}
+
 type DeviceRoleIcon =
   | "router"
   | "switch"
@@ -193,7 +229,24 @@ function mapTemplateSummary(template: TemplatePayload) {
   };
 }
 
-export function createApiClient(fetcher: Fetcher, baseUrl = "/api") {
+export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
+  const fetcher: Fetcher = async (input, init) => {
+    let callInit: RequestInit | undefined = init;
+    if (getStoredApiToken()) {
+      const headers = new Headers(init?.headers);
+      headers.set(API_TOKEN_HEADER, getStoredApiToken());
+      callInit = { ...init, headers };
+    }
+
+    const response =
+      callInit === undefined
+        ? await rawFetcher(input)
+        : await rawFetcher(input, callInit);
+    if (response.status === 401) {
+      onTokenRequired?.();
+    }
+    return response;
+  };
   return {
     async listLabs(): Promise<LabSummary[]> {
       const response = await fetcher(`${baseUrl}/labs`);

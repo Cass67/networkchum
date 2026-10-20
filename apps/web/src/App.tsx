@@ -10,7 +10,11 @@ import type {
 
 import "./theme.css";
 
-import { createApiClient } from "./api/client.js";
+import {
+  createApiClient,
+  setOnTokenRequired,
+  setStoredApiToken,
+} from "./api/client.js";
 import type {
   ContainerEngine,
   RunningConfigBackupRecord,
@@ -1251,6 +1255,12 @@ export function App({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [showAddNodeDialog, setShowAddNodeDialog] = useState(false);
+  const [showApiTokenDialog, setShowApiTokenDialog] = useState(false);
+  const [apiTokenDraft, setApiTokenDraft] = useState("");
+  useEffect(() => {
+    const dispose = setOnTokenRequired(() => setShowApiTokenDialog(true));
+    return dispose;
+  }, []);
   const [showImportTopologyDialog, setShowImportTopologyDialog] =
     useState(false);
   const [dialogTemplateId, setDialogTemplateId] = useState<string | null>(null);
@@ -3161,6 +3171,54 @@ export function App({
             onClose={() => setConsoleNode(null)}
           />
         </Suspense>
+      ) : null}
+      {showApiTokenDialog ? (
+        <div className="dialog-overlay" data-testid="api-token-dialog-overlay">
+          <div className="dialog-card" role="dialog" aria-label="API Token">
+            <div className="dialog-header">
+              <p className="panel-eyebrow">Access</p>
+              <h2>API Token</h2>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                setStoredApiToken(apiTokenDraft);
+                window.location.reload();
+              }}
+            >
+              <div className="field">
+                <label className="field-label" htmlFor="api-token-input">
+                  API token
+                </label>
+                <input
+                  id="api-token-input"
+                  className="field-input"
+                  type="password"
+                  value={apiTokenDraft}
+                  onChange={(event) => setApiTokenDraft(event.target.value)}
+                  placeholder="Paste the API token"
+                  data-testid="api-token-input"
+                />
+                <p className="field-hint">
+                  Find it on the server with <code>./start.sh doctor</code> (it
+                  is stored as <code>api-token</code> in the data directory).
+                </p>
+              </div>
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setShowApiTokenDialog(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-sm btn-primary">
+                  Save and Reload
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       ) : null}
       {showAddNodeDialog ? (
         <AddNodeDialog

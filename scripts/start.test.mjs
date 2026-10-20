@@ -309,3 +309,49 @@ test("start.sh clean reports when there is nothing to remove", () => {
   assert.match(result.stdout, /No exited NetworkChum containers to remove/);
   assert.doesNotMatch(log, /^rm /m);
 });
+
+test("serve generates an API token file once and reuses it", () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "networkchum-token-"));
+  try {
+    const first = runStartWithFakeNpm(
+      ["serve", "--data-dir", dataDir],
+      trivialNpm,
+    );
+    assert.equal(first.status, 0, first.stderr);
+    const tokenFile = path.join(dataDir, "api-token");
+    assert.ok(fs.existsSync(tokenFile), "token file created");
+    const stat = fs.statSync(tokenFile);
+    assert.equal(stat.mode & 0o777, 0o600, "token file is mode 600");
+    const token = fs.readFileSync(tokenFile, "utf8");
+    assert.ok(token.length >= 32, "token is a 32-char hex string");
+
+    const second = runStartWithFakeNpm(
+      ["serve", "--data-dir", dataDir],
+      trivialNpm,
+    );
+    assert.equal(second.status, 0, second.stderr);
+    assert.equal(fs.readFileSync(tokenFile, "utf8"), token, "token reused");
+  } finally {
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("serve respects a pre-set NETWORKCHUM_API_TOKEN", () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "networkchum-token2-"));
+  try {
+    const result = runStartWithFakeNpm(
+      ["serve", "--data-dir", dataDir],
+      trivialNpm,
+      {
+        NETWORKCHUM_API_TOKEN: "preset-token",
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(
+      !fs.existsSync(path.join(dataDir, "api-token")),
+      "no token file written when env token is preset",
+    );
+  } finally {
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

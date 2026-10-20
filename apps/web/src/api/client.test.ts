@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createApiClient } from "./client.js";
+import {
+  API_TOKEN_HEADER,
+  createApiClient,
+  setOnTokenRequired,
+  setStoredApiToken,
+} from "./client.js";
 
 describe("createApiClient", () => {
   it("maps catalog entries using template ids", async () => {
@@ -461,5 +466,43 @@ describe("createApiClient", () => {
       }),
     );
     expect(lab.document.nodes[0]?.name).toBe("edge-1");
+  });
+
+  it("attaches the stored API token to requests", async () => {
+    setStoredApiToken("secret-token");
+    const fetcher = vi.fn(
+      async (_input: unknown, init?: { headers?: HeadersInit }) => ({
+        ok: true,
+        json: async () => ({}),
+      }),
+    );
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+
+    await client.listLabs();
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/labs",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    const init = fetcher.mock.calls[0]?.[1];
+    expect(new Headers(init?.headers).get(API_TOKEN_HEADER)).toBe(
+      "secret-token",
+    );
+    setStoredApiToken("");
+  });
+
+  it("notifies the token-required handler on 401 responses", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ message: "Unauthorized: API token required" }),
+    }));
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+    const onTokenRequired = vi.fn();
+    const dispose = setOnTokenRequired(onTokenRequired);
+
+    await expect(client.listLabs()).rejects.toThrow();
+    expect(onTokenRequired).toHaveBeenCalledTimes(1);
+    dispose();
   });
 });

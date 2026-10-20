@@ -2049,3 +2049,51 @@ describe("api", () => {
     await expect(access(imagePath)).rejects.toThrow();
   });
 });
+
+describe("api token auth", () => {
+  it("requires the token on every route except health when configured", async () => {
+    process.env.NETWORKCHUM_API_TOKEN = "test-token-1234";
+    const guarded = buildApp();
+    try {
+      const health = await guarded.inject({ method: "GET", url: "/health" });
+      expect(health.statusCode).toBe(200);
+
+      const denied = await guarded.inject({ method: "GET", url: "/labs" });
+      expect(denied.statusCode).toBe(401);
+      expect(denied.json()).toEqual({
+        message: "Unauthorized: API token required",
+      });
+
+      const deniedPost = await guarded.inject({
+        method: "POST",
+        url: "/labs",
+        payload: { name: "x" },
+      });
+      expect(deniedPost.statusCode).toBe(401);
+
+      const wrongToken = await guarded.inject({
+        method: "GET",
+        url: "/labs",
+        headers: { "x-networkchum-token": "nope" },
+      });
+      expect(wrongToken.statusCode).toBe(401);
+
+      const headerToken = await guarded.inject({
+        method: "GET",
+        url: "/labs",
+        headers: { "x-networkchum-token": "test-token-1234" },
+      });
+      expect(headerToken.statusCode).toBe(200);
+
+      const bearerToken = await guarded.inject({
+        method: "GET",
+        url: "/labs",
+        headers: { authorization: "Bearer test-token-1234" },
+      });
+      expect(bearerToken.statusCode).toBe(200);
+    } finally {
+      delete process.env.NETWORKCHUM_API_TOKEN;
+      await guarded.close();
+    }
+  });
+});

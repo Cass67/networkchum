@@ -1,7 +1,8 @@
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 
 import { catalogRoutes } from "./routes/catalog.js";
 import { consoleRoutes } from "./routes/console.js";
@@ -25,12 +26,46 @@ export type AppDependencies = {
   };
 };
 
+export const API_TOKEN_HEADER = "x-networkchum-token";
+
+// Endpoints reachable without the API token. Keep this list minimal: it exists
+// so liveness probes and browser CORS preflights work, nothing else.
+const OPEN_ROUTES = new Set(["/health"]);
+
+function requestProvidesToken(request: FastifyRequest, token: string) {
+  const header = request.headers[API_TOKEN_HEADER];
+  const authorization = request.headers.authorization;
+  const provided = Array.isArray(header)
+    ? header[0]
+    : (header ??
+      (authorization ? authorization.replace(/^Bearer\s+/i, "") : ""));
+  if (typeof provided !== "string" || provided.length !== token.length) {
+    return false;
+  }
+  return timingSafeEqual(Buffer.from(provided), Buffer.from(token));
+}
+
 export function buildApp(dependencies: AppDependencies = {}) {
   const app = Fastify({ bodyLimit: 10 * 1024 * 1024 * 1024 }); // 10 GB
+
+  const apiToken = (process.env.NETWORKCHUM_API_TOKEN ?? "").trim();
+  if (apiToken) {
+    app.addHook("onRequest", async (request, reply) => {
+      const url = request.url.split("?")[0]!;
+      if (OPEN_ROUTES.has(url) || request.method === "OPTIONS") {
+        return;
+      }
+      if (!requestProvidesToken(request, apiToken)) {
+        reply.code(401).send({ message: "Unauthorized: API token required" });
+        return reply;
+      }
+    });
+  }
 
   void app.register(cors, {
     origin: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "X-Requested-With", API_TOKEN_HEADER],
   });
   void app.register(multipart, {
     limits: { fileSize: 10 * 1024 * 1024 * 1024 },
