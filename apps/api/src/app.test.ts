@@ -1,5 +1,6 @@
 import {
   access,
+  chmod,
   mkdir,
   mkdtemp,
   readdir,
@@ -1218,6 +1219,41 @@ describe("api", () => {
     const backupDir = path.join(tempDataDir, "lab-backups", labId);
     const backups = await readdir(backupDir);
     expect(backups.length).toBeGreaterThan(0);
+  });
+
+  it("still applies lab mutations when the backup snapshot fails", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Readonly Backup Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    const toggleResponse = await app.inject({
+      method: "PATCH",
+      url: `/labs/${labId}/auto-backup`,
+      payload: { autoBackup: true },
+    });
+    expect(toggleResponse.statusCode).toBe(200);
+
+    const backupDir = path.join(tempDataDir, "lab-backups", labId);
+    await mkdir(backupDir, { recursive: true });
+    await chmod(backupDir, 0o555);
+
+    try {
+      const addNodeResponse = await app.inject({
+        method: "POST",
+        url: `/labs/${labId}/nodes`,
+        payload: {
+          templateId: "cisco-iosv",
+          name: "host-readonly",
+          position: { x: 120, y: 80 },
+        },
+      });
+      expect(addNodeResponse.statusCode).toBe(201);
+    } finally {
+      await chmod(backupDir, 0o755);
+    }
   });
 
   it("keeps labs.json valid across overlapping lab updates", async () => {

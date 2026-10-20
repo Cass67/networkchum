@@ -18,15 +18,25 @@ export async function writeLabBackup(lab: LabRecord): Promise<void> {
   }
 
   const dir = backupLabDir(lab.id);
-  await mkdir(dir, { recursive: true });
-  const fileName = `${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
-  await writeFile(path.join(dir, fileName), JSON.stringify(lab, null, 2));
+  try {
+    await mkdir(dir, { recursive: true });
+    const fileName = `${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    await writeFile(path.join(dir, fileName), JSON.stringify(lab, null, 2));
 
-  const backups = (await readdir(dir)).sort().reverse();
-  const stale = backups.slice(10);
-  await Promise.all(
-    stale.map((name) => rm(path.join(dir, name), { force: true })),
-  );
+    const backups = (await readdir(dir)).sort().reverse();
+    const stale = backups.slice(10);
+    await Promise.all(
+      stale.map((name) => rm(path.join(dir, name), { force: true })),
+    );
+  } catch (error) {
+    // A failed backup snapshot must not fail the lab mutation it accompanies;
+    // surface it in the service log so the underlying cause gets fixed.
+    console.error(
+      `[lab-backup] snapshot failed for ${lab.id}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 }
 
 export async function listLabBackups(
