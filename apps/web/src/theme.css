@@ -1609,7 +1609,7 @@ body {
 :root[data-icon-theme='neon'] .device-role-glyph .glyph-top,
 :root[data-icon-theme='neon'] .device-role-glyph .glyph-front,
 :root[data-icon-theme='neon'] .device-role-glyph .glyph-side {
-  fill: rgba(13, 5, 36, 0.92);
+  fill: none;
   stroke-width: 1.6;
 }
 
