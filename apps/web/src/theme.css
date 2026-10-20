@@ -1630,32 +1630,32 @@ body {
 
 :root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='router'] :is(.glyph-body, .glyph-detail) {
   stroke: var(--glyph-neon-router);
-  filter: drop-shadow(0 0 2px var(--glyph-neon-router))
-    drop-shadow(0 0 5px var(--glyph-neon-router));
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--glyph-neon-router) 65%, transparent))
+    drop-shadow(0 0 4px color-mix(in srgb, var(--glyph-neon-router) 30%, transparent));
 }
 
 :root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='switch'] :is(.glyph-top, .glyph-front, .glyph-side, .glyph-detail) {
   stroke: var(--glyph-neon-switch);
-  filter: drop-shadow(0 0 2px var(--glyph-neon-switch))
-    drop-shadow(0 0 5px var(--glyph-neon-switch));
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--glyph-neon-switch) 65%, transparent))
+    drop-shadow(0 0 4px color-mix(in srgb, var(--glyph-neon-switch) 30%, transparent));
 }
 
 :root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='firewall'] :is(.glyph-body, .glyph-detail) {
   stroke: var(--glyph-neon-firewall);
-  filter: drop-shadow(0 0 2px var(--glyph-neon-firewall))
-    drop-shadow(0 0 5px var(--glyph-neon-firewall));
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--glyph-neon-firewall) 65%, transparent))
+    drop-shadow(0 0 4px color-mix(in srgb, var(--glyph-neon-firewall) 30%, transparent));
 }
 
 :root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='cloud'] :is(.glyph-body, .glyph-detail) {
   stroke: var(--glyph-neon-cloud);
-  filter: drop-shadow(0 0 2px var(--glyph-neon-cloud))
-    drop-shadow(0 0 5px var(--glyph-neon-cloud));
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--glyph-neon-cloud) 65%, transparent))
+    drop-shadow(0 0 4px color-mix(in srgb, var(--glyph-neon-cloud) 30%, transparent));
 }
 
 :root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='host'] :is(.glyph-body, .glyph-detail) {
   stroke: var(--glyph-neon-host);
-  filter: drop-shadow(0 0 2px var(--glyph-neon-host))
-    drop-shadow(0 0 5px var(--glyph-neon-host));
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--glyph-neon-host) 65%, transparent))
+    drop-shadow(0 0 4px color-mix(in srgb, var(--glyph-neon-host) 30%, transparent));
 }
 
 :root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='host'] .glyph-led {
@@ -1664,18 +1664,18 @@ body {
 
 :root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='client'] :is(.glyph-body, .glyph-detail, .glyph-screen) {
   stroke: var(--glyph-neon-client);
-  filter: drop-shadow(0 0 2px var(--glyph-neon-client))
-    drop-shadow(0 0 5px var(--glyph-neon-client));
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--glyph-neon-client) 65%, transparent))
+    drop-shadow(0 0 4px color-mix(in srgb, var(--glyph-neon-client) 30%, transparent));
 }
 
 :root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='container'] :is(.glyph-top, .glyph-front, .glyph-side, .glyph-detail) {
   stroke: var(--glyph-neon-container);
-  filter: drop-shadow(0 0 2px var(--glyph-neon-container))
-    drop-shadow(0 0 5px var(--glyph-neon-container));
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--glyph-neon-container) 65%, transparent))
+    drop-shadow(0 0 4px color-mix(in srgb, var(--glyph-neon-container) 30%, transparent));
 }
 
 :root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='vm'] :is(.glyph-body, .glyph-detail, .glyph-screen) {
   stroke: var(--glyph-neon-vm);
-  filter: drop-shadow(0 0 2px var(--glyph-neon-vm))
-    drop-shadow(0 0 5px var(--glyph-neon-vm));
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--glyph-neon-vm) 65%, transparent))
+    drop-shadow(0 0 4px color-mix(in srgb, var(--glyph-neon-vm) 30%, transparent));
 }
