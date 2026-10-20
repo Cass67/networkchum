@@ -30,6 +30,7 @@ import { StartupConfigDialog } from "./components/StartupConfigDialog.js";
 import { TemplateEditorDialog } from "./components/TemplateEditorDialog.js";
 import { TemplatesTab } from "./components/TemplatesTab.js";
 import { TopologyCanvas } from "./components/TopologyCanvas.js";
+import { DeviceGlyphGradientDefs } from "./icons/deviceRoleIcons.js";
 import {
   isLocalPageHost,
   resolveApiBaseUrl,
@@ -614,12 +615,14 @@ const demoCatalog: CatalogSummary[] = [
 ];
 
 const THEME_STORAGE_KEY = "networkchum-theme";
+const ICON_THEME_STORAGE_KEY = "networkchum-icon-theme";
 const NATIVE_CONSOLE_STORAGE_KEY = "networkchum-native-console";
 const MACOS_TERMINAL_STORAGE_KEY = "networkchum-macos-terminal";
 const MACOS_TERMINAL_REGISTRY_STORAGE_KEY = "networkchum-macos-terminals";
 const REMOTE_SSH_USER_STORAGE_KEY = "networkchum-remote-ssh-user";
 
 type ThemeMode = "dark" | "light";
+type IconTheme = "visio" | "neon";
 type NativeConsolePreference = "web-console" | "copy-command" | "iterm-helper";
 type MacOsTerminalPreference = string;
 type MacOsTerminalEntry = { id: string; label: string; template?: string };
@@ -655,6 +658,20 @@ function readStoredTheme(): ThemeMode {
       : "dark";
   } catch {
     return "dark";
+  }
+}
+
+function readStoredIconTheme(): IconTheme {
+  if (typeof window === "undefined") {
+    return "visio";
+  }
+
+  try {
+    return window.localStorage?.getItem(ICON_THEME_STORAGE_KEY) === "neon"
+      ? "neon"
+      : "visio";
+  } catch {
+    return "visio";
   }
 }
 
@@ -1168,6 +1185,18 @@ export function App({
 
     return initialTheme;
   });
+  const [iconTheme, setIconTheme] = useState<IconTheme>(() => {
+    const initialIconTheme = readStoredIconTheme();
+
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute(
+        "data-icon-theme",
+        initialIconTheme,
+      );
+    }
+
+    return initialIconTheme;
+  });
   const [nativeConsolePreference, setNativeConsolePreference] =
     useState<NativeConsolePreference>(() =>
       readStoredNativeConsolePreference(),
@@ -1295,6 +1324,16 @@ export function App({
       // Ignore storage failures and keep the in-memory theme.
     }
   }, [themeMode]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-icon-theme", iconTheme);
+
+    try {
+      window.localStorage?.setItem(ICON_THEME_STORAGE_KEY, iconTheme);
+    } catch {
+      // Ignore storage failures and keep the in-memory icon theme.
+    }
+  }, [iconTheme]);
 
   useEffect(() => {
     try {
@@ -2394,6 +2433,7 @@ export function App({
       className="app-shell"
       style={{ position: "relative", overflow: "hidden" }}
     >
+      <DeviceGlyphGradientDefs />
       <div className="floating-brandbar" style={{ position: "absolute" }}>
         <strong className="floating-brand">NetworkChum</strong>
         <span className="floating-document-title">
@@ -2485,6 +2525,18 @@ export function App({
         className="floating-console-controls"
         style={{ position: "absolute" }}
       >
+        <label className="compact-field">
+          <span className="sr-only">Icon Theme</span>
+          <select
+            className="field-input"
+            aria-label="Icon Theme"
+            value={iconTheme}
+            onChange={(event) => setIconTheme(event.target.value as IconTheme)}
+          >
+            <option value="visio">Visio Icons</option>
+            <option value="neon">Neon Icons</option>
+          </select>
+        </label>
         <label className="compact-field">
           <span className="sr-only">Native Console Preference</span>
           <select

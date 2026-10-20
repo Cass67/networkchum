@@ -43,6 +43,7 @@ beforeEach(() => {
     },
   });
   document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-icon-theme");
 });
 
 function openLabsDrawer() {
@@ -2541,6 +2542,63 @@ describe("App", () => {
       expect(
         screen.getByRole("button", { name: "Switch to night mode" }),
       ).toBeInTheDocument();
+    });
+  });
+
+  it("defaults the icon theme to visio and remembers overrides across remounts", async () => {
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    const { unmount } = render(<App api={api} />);
+
+    expect(document.documentElement).toHaveAttribute(
+      "data-icon-theme",
+      "visio",
+    );
+
+    fireEvent.change(screen.getByLabelText("Icon Theme"), {
+      target: { value: "neon" },
+    });
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute(
+        "data-icon-theme",
+        "neon",
+      );
+      expect(window.localStorage.getItem("networkchum-icon-theme")).toBe(
+        "neon",
+      );
+    });
+
+    unmount();
+    render(<App api={api} />);
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute(
+        "data-icon-theme",
+        "neon",
+      );
+      expect(screen.getByLabelText("Icon Theme")).toHaveValue("neon");
     });
   });
 

@@ -2,6 +2,14 @@
 
 Treat all credentials and private material as inaccessible by default.
 
+## Deployment Target (192.168.2.57)
+
+- Production host: `192.168.2.57` (Linux, user `cass`, repo at `~/networkchum`, same `origin` as this checkout).
+- The host runs the app as a systemd **user** unit `networkchum.service` with `ExecStart=./start.sh serve`, `NETWORKCHUM_BIND_MODE=lan`, data dir `~/networkchum-data`.
+- `start.sh serve` does NOT rebuild; it requires `npm run build` to have been run first.
+- Deploy routine: commit and push to `origin` (GitHub), then on the host run `git -C ~/networkchum pull --ff-only && npm run build && systemctl --user restart networkchum`. Verify with `systemctl --user is-active networkchum`, `curl http://192.168.2.57:4000/health`, and the UI on `:5173`.
+- The host keeps a local `package-lock.json` drift from npm runs — avoid committing lockfile churn so pulls stay clean.
+
 ## Secret Handling
 
 - Never print, quote, summarize, transform, or copy the contents of secrets, keys, tokens, cookies, session files, SSH material, `.env` files, `*env*` files, or credential stores.

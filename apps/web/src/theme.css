@@ -1451,3 +1451,217 @@ body {
   }
 
 }
+
+/* Device role glyphs: Visio stencil style is the default; the 80's neon set is
+   opt-in via `:root[data-icon-theme='neon']`. Gradient fills reference the
+   shared defs rendered once by DeviceGlyphGradientDefs in App. */
+.device-role-glyph .glyph-body,
+.device-role-glyph .glyph-top,
+.device-role-glyph .glyph-front,
+.device-role-glyph .glyph-side {
+  stroke-width: 1.2;
+}
+
+.device-role-glyph .glyph-detail {
+  fill: none;
+  stroke-width: 1.3;
+}
+
+.device-role-glyph .glyph-led {
+  fill: none;
+  stroke-width: 1.4;
+}
+
+.device-role-glyph .glyph-screen {
+  stroke-width: 0.8;
+}
+
+.device-role-glyph[data-icon-kind='router'] .glyph-body {
+  fill: url(#nc-glyph-router);
+  stroke: #0f3f66;
+}
+
+.device-role-glyph[data-icon-kind='router'] .glyph-detail {
+  stroke: #ffffff;
+}
+
+.device-role-glyph[data-icon-kind='switch'] .glyph-top {
+  fill: url(#nc-glyph-switch-top);
+  stroke: #0f3f66;
+}
+
+.device-role-glyph[data-icon-kind='switch'] .glyph-front {
+  fill: url(#nc-glyph-switch-front);
+  stroke: #0f3f66;
+}
+
+.device-role-glyph[data-icon-kind='switch'] .glyph-side {
+  fill: url(#nc-glyph-switch-side);
+  stroke: #0f3f66;
+}
+
+.device-role-glyph[data-icon-kind='switch'] .glyph-detail {
+  stroke: #ffffff;
+}
+
+.device-role-glyph[data-icon-kind='firewall'] .glyph-body {
+  fill: url(#nc-glyph-firewall);
+  stroke: #7a2e1f;
+}
+
+.device-role-glyph[data-icon-kind='firewall'] .glyph-detail {
+  stroke: #f2e8dc;
+}
+
+.device-role-glyph[data-icon-kind='cloud'] .glyph-body {
+  fill: url(#nc-glyph-cloud);
+  stroke: #4a7fb5;
+}
+
+.device-role-glyph[data-icon-kind='cloud'] .glyph-detail {
+  stroke: #a9cdf0;
+  stroke-width: 1;
+}
+
+.device-role-glyph[data-icon-kind='host'] .glyph-body {
+  fill: url(#nc-glyph-host);
+  stroke: #5a6a7a;
+}
+
+.device-role-glyph[data-icon-kind='host'] .glyph-detail {
+  stroke: #5a6a7a;
+}
+
+.device-role-glyph[data-icon-kind='host'] .glyph-led {
+  stroke: #2e8b3a;
+}
+
+.device-role-glyph[data-icon-kind='client'] .glyph-body {
+  fill: url(#nc-glyph-client);
+  stroke: #33506b;
+}
+
+.device-role-glyph[data-icon-kind='client'] .glyph-screen {
+  fill: #1c5f9c;
+  stroke: #33506b;
+}
+
+.device-role-glyph[data-icon-kind='client'] .glyph-detail {
+  stroke: #33506b;
+}
+
+.device-role-glyph[data-icon-kind='container'] .glyph-top {
+  fill: url(#nc-glyph-container-top);
+  stroke: #0f3f66;
+}
+
+.device-role-glyph[data-icon-kind='container'] .glyph-front {
+  fill: url(#nc-glyph-container-front);
+  stroke: #0f3f66;
+}
+
+.device-role-glyph[data-icon-kind='container'] .glyph-side {
+  fill: url(#nc-glyph-container-side);
+  stroke: #0f3f66;
+}
+
+.device-role-glyph[data-icon-kind='container'] .glyph-detail {
+  stroke: #ffffff;
+}
+
+.device-role-glyph[data-icon-kind='vm'] .glyph-body {
+  fill: url(#nc-glyph-client);
+  stroke: #33506b;
+  stroke-dasharray: 2 1.4;
+}
+
+.device-role-glyph[data-icon-kind='vm'] .glyph-screen {
+  fill: #265a86;
+  stroke: #33506b;
+}
+
+.device-role-glyph[data-icon-kind='vm'] .glyph-detail {
+  stroke: #33506b;
+}
+
+:root[data-icon-theme='neon'] {
+  --glyph-neon-router: #00e5ff;
+  --glyph-neon-switch: #ff2fd6;
+  --glyph-neon-firewall: #ffb347;
+  --glyph-neon-cloud: #b46bff;
+  --glyph-neon-host: #3fff9c;
+  --glyph-neon-client: #ff5e5e;
+  --glyph-neon-container: #ffe45e;
+  --glyph-neon-vm: #ff7edb;
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph .glyph-body,
+:root[data-icon-theme='neon'] .device-role-glyph .glyph-top,
+:root[data-icon-theme='neon'] .device-role-glyph .glyph-front,
+:root[data-icon-theme='neon'] .device-role-glyph .glyph-side {
+  fill: rgba(13, 5, 36, 0.92);
+  stroke-width: 1.6;
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph .glyph-detail,
+:root[data-icon-theme='neon'] .device-role-glyph .glyph-led {
+  fill: none;
+  stroke-width: 1.6;
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph .glyph-screen {
+  fill: none;
+  stroke-width: 1.2;
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='router'] :is(.glyph-body, .glyph-detail) {
+  stroke: var(--glyph-neon-router);
+  filter: drop-shadow(0 0 2px var(--glyph-neon-router))
+    drop-shadow(0 0 5px var(--glyph-neon-router));
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='switch'] :is(.glyph-top, .glyph-front, .glyph-side, .glyph-detail) {
+  stroke: var(--glyph-neon-switch);
+  filter: drop-shadow(0 0 2px var(--glyph-neon-switch))
+    drop-shadow(0 0 5px var(--glyph-neon-switch));
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='firewall'] :is(.glyph-body, .glyph-detail) {
+  stroke: var(--glyph-neon-firewall);
+  filter: drop-shadow(0 0 2px var(--glyph-neon-firewall))
+    drop-shadow(0 0 5px var(--glyph-neon-firewall));
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='cloud'] :is(.glyph-body, .glyph-detail) {
+  stroke: var(--glyph-neon-cloud);
+  filter: drop-shadow(0 0 2px var(--glyph-neon-cloud))
+    drop-shadow(0 0 5px var(--glyph-neon-cloud));
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='host'] :is(.glyph-body, .glyph-detail) {
+  stroke: var(--glyph-neon-host);
+  filter: drop-shadow(0 0 2px var(--glyph-neon-host))
+    drop-shadow(0 0 5px var(--glyph-neon-host));
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='host'] .glyph-led {
+  stroke: var(--glyph-neon-host);
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='client'] :is(.glyph-body, .glyph-detail, .glyph-screen) {
+  stroke: var(--glyph-neon-client);
+  filter: drop-shadow(0 0 2px var(--glyph-neon-client))
+    drop-shadow(0 0 5px var(--glyph-neon-client));
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='container'] :is(.glyph-top, .glyph-front, .glyph-side, .glyph-detail) {
+  stroke: var(--glyph-neon-container);
+  filter: drop-shadow(0 0 2px var(--glyph-neon-container))
+    drop-shadow(0 0 5px var(--glyph-neon-container));
+}
+
+:root[data-icon-theme='neon'] .device-role-glyph[data-icon-kind='vm'] :is(.glyph-body, .glyph-detail, .glyph-screen) {
+  stroke: var(--glyph-neon-vm);
+  filter: drop-shadow(0 0 2px var(--glyph-neon-vm))
+    drop-shadow(0 0 5px var(--glyph-neon-vm));
+}
