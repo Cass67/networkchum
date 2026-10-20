@@ -250,7 +250,7 @@ if (storedToken) {
 } else {
   console.log(`  none         ${tokenFile} does not exist or is empty`);
   console.log(
-    "  hint         the API accepts requests without a token; run ./start.sh serve to generate one",
+    "  hint         run ./start.sh serve to generate one, or pass --data-dir if the token lives elsewhere",
   );
 }
 console.log();

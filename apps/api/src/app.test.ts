@@ -2097,3 +2097,24 @@ describe("api token auth", () => {
     }
   });
 });
+
+describe("api token auth CORS", () => {
+  it("exposes 401 responses to cross-origin browsers", async () => {
+    process.env.NETWORKCHUM_API_TOKEN = "test-token-1234";
+    const guarded = buildApp();
+    try {
+      const denied = await guarded.inject({
+        method: "GET",
+        url: "/labs",
+        headers: { origin: "http://192.168.2.57:5173" },
+      });
+      expect(denied.statusCode).toBe(401);
+      expect(denied.headers["access-control-allow-origin"]).toBe(
+        "http://192.168.2.57:5173",
+      );
+    } finally {
+      delete process.env.NETWORKCHUM_API_TOKEN;
+      await guarded.close();
+    }
+  });
+});

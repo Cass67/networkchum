@@ -529,6 +529,8 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
           printf 'warning: could not set ownership of %s; the service may hit EACCES writing data\n' "$DATA_DIR" >&2
         fi
       fi
+      # Persist mode + data dir so doctor and future runs resolve the same dir.
+      save_config
     fi
 
     # Always rebuild: the guard on dist/server.js alone let a stale build survive

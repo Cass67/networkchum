@@ -56,7 +56,13 @@ export function buildApp(dependencies: AppDependencies = {}) {
         return;
       }
       if (!requestProvidesToken(request, apiToken)) {
-        reply.code(401).send({ message: "Unauthorized: API token required" });
+        // Echo the CORS origin so the browser exposes the 401 to fetch; the
+        // short-circuited reply would otherwise miss the @fastify/cors headers
+        // and the client would never see the auth failure.
+        reply
+          .code(401)
+          .header("access-control-allow-origin", request.headers.origin ?? "*")
+          .send({ message: "Unauthorized: API token required" });
         return reply;
       }
     });
