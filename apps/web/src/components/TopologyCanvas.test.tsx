@@ -1015,6 +1015,110 @@ describe("TopologyCanvas", () => {
       ]);
     });
 
+    it("resizes square shapes freeform instead of locking aspect", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[
+            {
+              ...shape,
+              id: "shape-sq",
+              shape: "square" as const,
+              width: 160,
+              height: 160,
+            },
+          ]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-sq"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseUp(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-resize-shape-sq"), {
+        clientX: 190,
+        clientY: 200,
+      });
+      fireEvent.mouseMove(svg, { clientX: 240, clientY: 220 });
+      fireEvent.mouseUp(svg);
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-sq", width: 210, height: 180 }),
+      ]);
+    });
+
+    it("copies and pastes the selected drawing with cmd/ctrl+c and v", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[shape]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.mouseDown(screen.getByTestId("drawing-shape-1"), {
+        clientX: 30,
+        clientY: 40,
+      });
+      fireEvent.mouseUp(svg);
+
+      fireEvent.keyDown(window, { key: "c", ctrlKey: true });
+      fireEvent.keyDown(window, { key: "v", ctrlKey: true });
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledTimes(1);
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-1", x: 20, y: 30 }),
+        expect.objectContaining({ x: 44, y: 54, zIndex: 2 }),
+      ]);
+    });
+
+    it("copies and pastes drawings from the context menu", () => {
+      const onUpdateCanvasDrawings = vi.fn();
+      render(
+        <TopologyCanvas
+          labName="Lab"
+          labId="lab-1"
+          nodes={nodes}
+          drawings={[shape]}
+          onUpdateCanvasDrawings={onUpdateCanvasDrawings}
+        />,
+      );
+
+      const svg = screen.getByTestId("topology-svg");
+      mockSvgPoint(svg);
+
+      fireEvent.contextMenu(screen.getByTestId("drawing-shape-1"), {
+        clientX: 40,
+        clientY: 50,
+      });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Copy" }));
+      fireEvent.contextMenu(screen.getByTestId("drawing-shape-1"), {
+        clientX: 40,
+        clientY: 50,
+      });
+      fireEvent.click(screen.getByRole("menuitem", { name: "Paste" }));
+
+      expect(onUpdateCanvasDrawings).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "shape-1" }),
+        expect.objectContaining({ x: 44, y: 54, zIndex: 2 }),
+      ]);
+    });
+
     it("can lock and reorder drawings from the context menu", () => {
       const onUpdateCanvasDrawings = vi.fn();
       render(

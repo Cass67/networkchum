@@ -381,13 +381,6 @@ function sortDrawings(drawings: CanvasDrawing[]) {
   return [...drawings].sort((a, b) => a.zIndex - b.zIndex);
 }
 
-function drawingHasLockedAspect(drawing: CanvasDrawing) {
-  return (
-    drawing.kind === "shape" &&
-    (drawing.shape === "square" || drawing.shape === "circle")
-  );
-}
-
 function resizeDrawing(
   drawing: CanvasDrawing,
   deltaX: number,
@@ -411,24 +404,13 @@ function resizeDrawing(
     bottom = Math.max(top + MIN_DRAWING_SIZE, bottom + deltaY);
   }
 
-  let x = left;
-  let y = top;
-  let width = right - left;
-  let height = bottom - top;
-
-  if (drawingHasLockedAspect(drawing)) {
-    const size = Math.max(width, height);
-    if (handle.includes("w")) {
-      x = right - size;
-    }
-    if (handle.includes("n")) {
-      y = bottom - size;
-    }
-    width = size;
-    height = size;
-  }
-
-  return { ...drawing, x, y, width, height };
+  return {
+    ...drawing,
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  };
 }
 
 function nodeCenterIsInsideDrawing(node: CanvasNode, drawing: CanvasDrawing) {
@@ -805,6 +787,63 @@ export function TopologyCanvas({
     },
     [commitDrawings, drawings],
   );
+
+  const clipboardDrawingRef = useRef<CanvasDrawing | null>(null);
+  const pasteCountRef = useRef(0);
+
+  const pasteDrawing = useCallback(
+    (source: CanvasDrawing) => {
+      const maxZIndex =
+        drawings.reduce((max, drawing) => Math.max(max, drawing.zIndex), 0) + 1;
+      const offset = 24 * (pasteCountRef.current + 1);
+      const copy: CanvasDrawing = {
+        ...source,
+        id: createDrawingId(),
+        x: source.x + offset,
+        y: source.y + offset,
+        zIndex: maxZIndex,
+      };
+      pasteCountRef.current += 1;
+      setSelectedDrawingId(copy.id);
+      commitDrawings([...drawings, copy]);
+    },
+    [commitDrawings, drawings],
+  );
+
+  // Copy/paste for the selected drawing via Cmd/Ctrl+C / Cmd/Ctrl+V. Document
+  // level because the svg has no tabindex, so keystrokes never reach it.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+      if (key !== "c" && key !== "v") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (key === "c") {
+        const selected = drawings.find(
+          (drawing) => drawing.id === selectedDrawingId,
+        );
+        if (selected) {
+          clipboardDrawingRef.current = selected;
+          pasteCountRef.current = 0;
+        }
+        return;
+      }
+      const source = clipboardDrawingRef.current;
+      if (!source || !onUpdateCanvasDrawings) return;
+      event.preventDefault();
+      pasteDrawing(source);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [drawings, onUpdateCanvasDrawings, pasteDrawing, selectedDrawingId]);
 
   const handleAddShape = useCallback(
     (shape: "rectangle" | "square" | "ellipse" | "circle") => {
@@ -1700,6 +1739,24 @@ export function TopologyCanvas({
               onSelect: () => handleSendDrawingBackward(drawingId),
             },
             {
+              label: "Copy",
+              onSelect: () => {
+                clipboardDrawingRef.current = drawing ?? null;
+                pasteCountRef.current = 0;
+              },
+            },
+            ...(clipboardDrawingRef.current
+              ? [
+                  {
+                    label: "Paste",
+                    onSelect: () => {
+                      const source = clipboardDrawingRef.current;
+                      if (source) pasteDrawing(source);
+                    },
+                  },
+                ]
+              : []),
+            {
               label: "Delete Drawing",
               onSelect: () => {
                 commitDrawings(
@@ -1801,6 +1858,7 @@ export function TopologyCanvas({
       onPowerOnNode,
       onRenameNode,
       onSelectCable,
+      pasteDrawing,
       replaceDrawing,
       resolvedDrawings,
       resolvedNodes,
