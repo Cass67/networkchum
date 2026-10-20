@@ -90,6 +90,11 @@ service.push(
   `ExecStart=${root}/start.sh serve`,
   "Restart=on-failure",
   "RestartSec=3",
+  // VM processes are children of the API server; without this, every service
+  // restart (deploy) tears down the cgroup and kills running qemu VMs. The
+  // runtime-state store tracks those VMs and consoles/links re-attach on
+  // demand, so leaving them running across restarts is safe.
+  "KillMode=none",
   "",
   "[Install]",
   scope === "user" ? "WantedBy=default.target" : "WantedBy=multi-user.target",

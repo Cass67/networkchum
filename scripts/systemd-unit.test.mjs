@@ -178,3 +178,11 @@ test("systemd unit requires a user and a root", () => {
   assert.equal(missingRoot.status, 1);
   assert.match(missingRoot.stderr, /NETWORKCHUM_ROOT/);
 });
+
+test("unit keeps running VMs alive across service restarts", () => {
+  const result = runUnit({
+    NETWORKCHUM_UNIT_USER: "cass",
+    NETWORKCHUM_ROOT: "/home/cass/networkchum",
+  });
+  assert.match(result.stdout, /^KillMode=none$/m);
+});

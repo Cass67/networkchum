@@ -458,6 +458,12 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
       user_systemctl daemon-reload || true
     fi
     printf 'Removed %s\n' "$UNIT_NAME"
+    # With KillMode=none, VMs escape the service cgroup and would survive the
+    # stop; an uninstall tears running labs down for real.
+    if pgrep -x qemu-kvm >/dev/null 2>&1; then
+      printf 'Stopping escaped NetworkChum VMs (qemu-kvm)...\n'
+      pkill -x qemu-kvm || true
+    fi
     exit 0
   fi
 
