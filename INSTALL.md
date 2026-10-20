@@ -700,6 +700,44 @@ Check `/dev/kvm`, your user permissions, and whether virtualization is enabled i
 
 You likely still need to provide and bind real `qcow2` images. The built-in VM templates are not enough on their own.
 
+## Service, Deploys, And Running Labs
+
+- **Labs run concurrently.** Devices in one lab keep running while you open
+  another lab in the UI; switching labs only changes what you are looking at.
+  Closing a console never stops a device — reconnect any time.
+- **Deploys do not stop running VMs.** The installed service uses
+  `KillMode=none`, so `systemctl restart` (the deploy routine:
+  `git pull && npm run build && systemctl --user restart`) leaves qemu VMs
+  running; an `ExecStop` hook stops only the API/web processes. Consoles and
+  network links re-attach on demand. `uninstall-service` is the exception — it
+  tears running VMs down for real.
+- **Containers** run via rootless `podman` as detached daemons and survive
+  service restarts regardless.
+- The service logs to `.networkchum/service.log`; `./start.sh logs` tails it.
+
+## API Token
+
+The API is token-gated: every route except `GET /health` requires the
+`x-networkchum-token` header, and `serve`/`install-service` always configure
+one.
+
+- **Where it lives**: `<data-dir>/api-token` (mode `600`), generated on first
+  serve. Delete the file and restart the service to rotate it — every browser
+  must then re-authenticate.
+- **Retrieve it**: `./start.sh doctor` prints it (plus a data-dir writability
+  check). On a remote host:
+  `ssh <host> 'cd ~/networkchum && ./start.sh doctor'`.
+- **In the browser**: the first rejected request pops the **API Token** dialog —
+  paste the token once; it is stored in that browser's `localStorage`. To
+  replace it later, use the **API Token** button in the canvas controls bar, or
+  `localStorage.removeItem("networkchum-api-token"); location.reload()` and the
+  dialog re-appears.
+- **Loopback dev**: `./start.sh dev` on localhost runs without a token.
+
+See [SECURITY.md](SECURITY.md) for the full model.
+
 ## Optional Advanced Tooling
 
-If you also want to contribute to the repo rather than only operate the app, see [LOCAL_TOOLING.md](/Users/cass/git/networkchum/LOCAL_TOOLING.md) for pre-commit and local validation tooling.
+If you also want to contribute to the repo rather than only operate the app,
+the pre-commit and local validation tooling is declared in
+`.pre-commit-config.yaml`; run `pre-commit install` once after cloning.

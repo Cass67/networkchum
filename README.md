@@ -143,6 +143,48 @@ For Linux TAP labs without repeated password prompts, use:
 ./start.sh lan --sudo-api --data-dir ~/networkchum-data
 ```
 
+## Authentication
+
+The API is token-gated. Every route except `GET /health` requires the
+`x-networkchum-token` header (a `Authorization: Bearer …` header also works);
+requests without it get `401`.
+
+- **Where the token lives**: `<data-dir>/api-token` (mode `600`), generated the
+  first time `./start.sh serve` runs (or via `install-service`, which starts
+  `serve` under the hood). Delete the file and restart the service to rotate it.
+- **First login**: the web UI pops an "API Token" dialog the moment a request is
+  rejected; paste the token once and it is stored in that browser
+  (`localStorage`), so you only re-enter it after a server-side rotation.
+- **Retrieving the token**: `./start.sh doctor` prints it along with the data
+  dir writability check. On the server: `ssh <host> 'cd ~/networkchum &&
+./start.sh doctor'`.
+- **Replacing it in the browser**: the floating controls bar has an
+  **API Token** button next to the Icon Theme selector. It opens the same dialog
+  pre-filled with the token this browser currently uses — paste a new one and
+  hit _Save and Reload_.
+- **Localhost dev is token-free**: the API only enforces the token when
+  `NETWORKCHUM_API_TOKEN` is set, which `serve`/`install-service` always do.
+  `./start.sh dev` on loopback runs without a token.
+
+## Labs At Runtime
+
+Labs are independent and stay running on their own:
+
+- **Multiple labs can run at the same time.** Devices keep running while you
+  browse other labs — switching labs only changes what the UI shows. Verified
+  end to end: qemu VMs keep their process across lab switches, with consoles
+  open.
+- **Closing a console never stops a device.** The console is a websocket↔serial
+  proxy; the VM keeps running and you can reconnect at any time.
+- **Deploys and service restarts do not stop running VMs.** The systemd unit
+  uses `KillMode=none`, so qemu VMs survive `systemctl restart` (and therefore
+  the `git pull && npm run build && restart` deploy routine), and an
+  `ExecStop` hook stops only the API/web processes. The runtime-state store
+  tracks each VM, and consoles and network links re-attach on demand.
+  `uninstall-service` tears running VMs down for real.
+- Containers run via rootless `podman` as detached daemons and were never
+  affected by restarts.
+
 ## Management Clouds
 
 Management clouds now depend on host platform and cloud role, not on a per-node host-bridge picker.
@@ -315,15 +357,21 @@ npm install
 `install-service` handles the rest:
 
 - installs dependencies and builds the production assets if they are missing
-- stops an existing NetworkChum service on re-run, and refuses if ports 4000/5173
+- stops an existing NetworkChum service on re-run, stopping its own orphaned
+  API/web processes if the ports are still held (running VMs survive this and
+  every later restart — see _Labs At Runtime_), and refuses if ports 4000/5173
   are held by something else
+- pre-creates the data directory and hands it to the service user, so first
+  boot never fails on stale root-owned files
 - picks the service scope: on SELinux hosts where the checkout lives under your
   home directory it installs a **per-user** service with lingering (SELinux won't
   let a system unit exec a `user_home_t` script); otherwise a system service
 - grants TAP/bridge capability automatically: ambient `CAP_NET_ADMIN` on a system
   service (falling back to a file capability on `ip`), or a narrowly scoped
   passwordless `sudo` rule for `ip` on SELinux hosts that don't apply file
-  capabilities to the user domain
+  capabilities to the user domain — and verifies before granting, so
+  non-interactive reinstalls keep the installed unit's networking mode instead
+  of degrading it
 - enables it at boot, starts it, and confirms it stayed active (including a live
   TAP creation check)
 
@@ -349,10 +397,14 @@ does not run the native console bridge (a per-user, localhost-only sidecar).
 
 ## API Surface
 
+All endpoints except `GET /health` require the `x-networkchum-token` header —
+see [Authentication](#authentication) and [SECURITY.md](SECURITY.md).
+
 Key endpoints:
 
 - `GET /health`
 - `GET /templates`
+- `PATCH /templates/:templateId`
 - `GET /catalog`
 - `GET /containers/runtime`
 - `GET /containers/images`
@@ -411,12 +463,11 @@ npm run build --workspace @networkchum/web
 
 ## Current Rough Edges
 
-- single-host only
-- no auth or multi-user model
+- single-host only; the API is token-gated but there is no multi-user model (one token for everyone)
 - file-backed persistence instead of a database
 - runtime behavior is much more Linux-friendly than macOS-friendly
 - VM usability depends on supplying compatible `qcow2` images and having the required host binaries installed
 
 ## License
 
-No license file is present in this repository yet.
+MIT — see [LICENSE](LICENSE).
