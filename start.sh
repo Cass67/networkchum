@@ -555,7 +555,15 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
     }
     for port in 4000 5173; do
       if port_in_use "$port"; then
-        die "port $port is already in use. Stop the running stack first (e.g. Ctrl-C the dev stack, then: sudo pkill -f 'tsx watch src/server.ts'; pkill -f 'vite --port 5173'), then re-run."
+        # With KillMode=none the previous API survives `systemctl stop` and
+        # keeps holding the ports; stop our own server processes here. A
+        # foreign process is still a hard blocker.
+        pkill -f "$ROOT_DIR/apps/api/dist/server.js" 2>/dev/null || true
+        pkill -f "$ROOT_DIR/scripts/serve-web.mjs" 2>/dev/null || true
+        sleep 1
+        if port_in_use "$port"; then
+          die "port $port is still in use by another process. Stop the running stack first, then re-run."
+        fi
       fi
     done
 

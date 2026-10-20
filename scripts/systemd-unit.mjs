@@ -95,6 +95,10 @@ service.push(
   // runtime-state store tracks those VMs and consoles/links re-attach on
   // demand, so leaving them running across restarts is safe.
   "KillMode=none",
+  // With KillMode=none the API survives `systemctl stop` (and thus keeps the
+  // ports), so an explicit ExecStop tears down just the API/web processes on
+  // stop — qemu children are reparented and keep running.
+  `ExecStop=/bin/sh -c "pkill -f ${root}/apps/api/dist/server.js || true; pkill -f ${root}/scripts/serve-web.mjs || true"`,
   "",
   "[Install]",
   scope === "user" ? "WantedBy=default.target" : "WantedBy=multi-user.target",
