@@ -74,7 +74,9 @@ type TopologyCanvasProps = {
 
 const NODE_WIDTH = 100;
 const NODE_HEIGHT = 48;
-const NODE_GLYPH_SIZE = 40;
+const NODE_GLYPH_SIZE = 48;
+const NODE_GLYPH_MIN_SIZE = 32;
+const NODE_GLYPH_MAX_SIZE = 80;
 const NODE_LABEL_GAP = 16;
 const NODE_STATUS_GAP = 14;
 const NODE_ICON_BASE_SIZE = 16;
@@ -99,15 +101,19 @@ function getNodeCenter(node: CanvasNode): { x: number; y: number } {
   };
 }
 
-function getNodeStatusY(node: CanvasNode): number {
+function getNodeStatusY(
+  node: CanvasNode,
+  glyphSize: number = NODE_GLYPH_SIZE,
+): number {
   const center = getNodeCenter(node);
-  const labelY = center.y + NODE_GLYPH_SIZE / 2 + NODE_LABEL_GAP;
+  const labelY = center.y + glyphSize / 2 + NODE_LABEL_GAP;
   return labelY + NODE_STATUS_GAP;
 }
 
 function getNodeCableAnchor(
   node: CanvasNode,
   target: { x: number; y: number },
+  glyphSize: number = NODE_GLYPH_SIZE,
 ): { x: number; y: number } {
   const center = getNodeCenter(node);
   const dx = target.x - center.x;
@@ -118,8 +124,8 @@ function getNodeCableAnchor(
       x:
         center.x +
         (dx >= 0
-          ? NODE_GLYPH_SIZE / 2 + NODE_CABLE_ANCHOR_GAP
-          : -(NODE_GLYPH_SIZE / 2 + NODE_CABLE_ANCHOR_GAP)),
+          ? glyphSize / 2 + NODE_CABLE_ANCHOR_GAP
+          : -(glyphSize / 2 + NODE_CABLE_ANCHOR_GAP)),
       y: center.y,
     };
   }
@@ -127,20 +133,20 @@ function getNodeCableAnchor(
   if (dy > 0) {
     return {
       x: center.x,
-      y: getNodeStatusY(node) + NODE_CABLE_ANCHOR_GAP,
+      y: getNodeStatusY(node, glyphSize) + NODE_CABLE_ANCHOR_GAP,
     };
   }
 
   if (dy < 0) {
     return {
       x: center.x,
-      y: center.y - NODE_GLYPH_SIZE / 2 - NODE_CABLE_ANCHOR_GAP,
+      y: center.y - glyphSize / 2 - NODE_CABLE_ANCHOR_GAP,
     };
   }
 
   return {
     x: center.x,
-    y: center.y - NODE_GLYPH_SIZE / 2 - NODE_CABLE_ANCHOR_GAP,
+    y: center.y - glyphSize / 2 - NODE_CABLE_ANCHOR_GAP,
   };
 }
 
@@ -194,6 +200,7 @@ function buildLinks(
   nodes: CanvasNode[],
   networks: CanvasNetwork[],
   attachments: CanvasAttachment[],
+  glyphSize: number = NODE_GLYPH_SIZE,
 ): LinkInfo[] {
   const links: LinkInfo[] = [];
 
@@ -231,8 +238,8 @@ function buildLinks(
     if (uniqueNodeIds.length === 2) {
       const n1 = nodeMap.get(uniqueNodeIds[0]!)!;
       const n2 = nodeMap.get(uniqueNodeIds[1]!)!;
-      const c1 = getNodeCableAnchor(n1, getNodeCenter(n2));
-      const c2 = getNodeCableAnchor(n2, getNodeCenter(n1));
+      const c1 = getNodeCableAnchor(n1, getNodeCenter(n2), glyphSize);
+      const c2 = getNodeCableAnchor(n2, getNodeCenter(n1), glyphSize);
       const source = attachedIfaces.find((entry) => entry.node?.id === n1.id);
       const target = attachedIfaces.find((entry) => entry.node?.id === n2.id);
       links.push({
@@ -249,7 +256,7 @@ function buildLinks(
     } else {
       for (const nodeId of uniqueNodeIds) {
         const n = nodeMap.get(nodeId)!;
-        const c = getNodeCableAnchor(n, { x: midX, y: midY });
+        const c = getNodeCableAnchor(n, { x: midX, y: midY }, glyphSize);
         const iface = attachedIfaces.find(
           (entry) => entry.node?.id === nodeId,
         )?.iface;
@@ -718,6 +725,7 @@ export function TopologyCanvas({
   );
   const [viewportOffset, setViewportOffset] = useState({ x: 0, y: 0 });
   const [viewportScale, setViewportScale] = useState(1);
+  const [nodeGlyphSize, setNodeGlyphSize] = useState(NODE_GLYPH_SIZE);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [panState, setPanState] = useState<PanState | null>(null);
   const [cableState, setCableState] = useState<CableState>({
@@ -778,7 +786,7 @@ export function TopologyCanvas({
   );
   const networkMap = new Map(networks.map((n) => [n.id, n]));
 
-  const links = buildLinks(resolvedNodes, networks, attachments);
+  const links = buildLinks(resolvedNodes, networks, attachments, nodeGlyphSize);
 
   const commitDrawings = useCallback(
     (nextDrawings: CanvasDrawing[]) => {
@@ -1811,6 +1819,7 @@ export function TopologyCanvas({
     return getNodeCableAnchor(
       resolvedSourceNode,
       cableState.mousePos ?? getNodeCenter(resolvedSourceNode),
+      nodeGlyphSize,
     );
   })();
 
@@ -1867,6 +1876,19 @@ export function TopologyCanvas({
               aria-label="Drawing Color"
               value={selectedShapeFill}
               onChange={handleDrawingColorChange}
+            />
+          </label>
+          <label className="canvas-icon-size-field">
+            <span className="sr-only">Icon Size</span>
+            <input
+              type="range"
+              aria-label="Icon Size"
+              min={NODE_GLYPH_MIN_SIZE}
+              max={NODE_GLYPH_MAX_SIZE}
+              step={4}
+              value={nodeGlyphSize}
+              onChange={(event) => setNodeGlyphSize(Number(event.target.value))}
+              data-testid="icon-size-slider"
             />
           </label>
           <ToolButton
@@ -2158,10 +2180,10 @@ export function TopologyCanvas({
               const outlineColor = isSelected
                 ? "var(--canvas-node-selected)"
                 : borderColor;
-              const labelY = center.y + NODE_GLYPH_SIZE / 2 + NODE_LABEL_GAP;
-              const statusY = getNodeStatusY(node);
+              const labelY = center.y + nodeGlyphSize / 2 + NODE_LABEL_GAP;
+              const statusY = getNodeStatusY(node, nodeGlyphSize);
               const hitboxHeight = statusY - y + 10;
-              const iconScale = NODE_GLYPH_SIZE / NODE_ICON_BASE_SIZE;
+              const iconScale = nodeGlyphSize / NODE_ICON_BASE_SIZE;
 
               return (
                 <g
@@ -2181,7 +2203,7 @@ export function TopologyCanvas({
                   <g
                     data-testid={`node-body-${node.id}`}
                     data-outline-color={outlineColor}
-                    transform={`translate(${center.x - NODE_GLYPH_SIZE / 2} ${center.y - NODE_GLYPH_SIZE / 2}) scale(${iconScale})`}
+                    transform={`translate(${center.x - nodeGlyphSize / 2} ${center.y - nodeGlyphSize / 2}) scale(${iconScale})`}
                     style={{
                       filter: "none",
                     }}

@@ -146,8 +146,8 @@ describe("TopologyCanvas", () => {
     );
 
     const link = screen.getByTestId("link-net-1");
-    expect(link).toHaveAttribute("y1", "136");
-    expect(link).toHaveAttribute("y2", "242");
+    expect(link).toHaveAttribute("y1", "140");
+    expect(link).toHaveAttribute("y2", "238");
   });
 
   it("anchors horizontally dominant diagonal cables to the sides of nodes", () => {
@@ -184,9 +184,9 @@ describe("TopologyCanvas", () => {
     );
 
     const link = screen.getByTestId("link-net-1");
-    expect(link).toHaveAttribute("x1", "132");
+    expect(link).toHaveAttribute("x1", "136");
     expect(link).toHaveAttribute("y1", "74");
-    expect(link).toHaveAttribute("x2", "268");
+    expect(link).toHaveAttribute("x2", "264");
     expect(link).toHaveAttribute("y2", "104");
   });
 
@@ -202,7 +202,7 @@ describe("TopologyCanvas", () => {
 
     expect(screen.getByTestId("status-n1")).toHaveTextContent("running");
     expect(screen.getByTestId("status-n2")).toHaveTextContent("stopped");
-    expect(Number(screen.getByTestId("status-n1").getAttribute("y"))).toBe(124);
+    expect(Number(screen.getByTestId("status-n1").getAttribute("y"))).toBe(128);
   });
 
   it("shows default stopped status when no nodeStatuses", () => {
@@ -282,6 +282,19 @@ describe("TopologyCanvas", () => {
     expect(
       screen.queryByTestId("node-glyph-backplate-n1"),
     ).not.toBeInTheDocument();
+  });
+
+  it("scales node glyphs with the icon size slider", () => {
+    render(<TopologyCanvas labName="Lab" labId="lab-1" nodes={nodes} />);
+
+    const body = screen.getByTestId("node-body-n1");
+    expect(body.getAttribute("transform")).toContain("scale(3)");
+
+    fireEvent.change(screen.getByTestId("icon-size-slider"), {
+      target: { value: "64" },
+    });
+
+    expect(body.getAttribute("transform")).toContain("scale(4)");
   });
 
   it("calls onSelectNode when a node is clicked", () => {
@@ -381,11 +394,11 @@ describe("TopologyCanvas", () => {
     expect(screen.getByTestId("link-net-1-n1")).toBeInTheDocument();
     expect(screen.getByTestId("link-net-1-n2")).toBeInTheDocument();
     expect(screen.getByTestId("link-net-1-n3")).toBeInTheDocument();
-    expect(screen.getByTestId("link-net-1-n1")).toHaveAttribute("x1", "132");
+    expect(screen.getByTestId("link-net-1-n1")).toHaveAttribute("x1", "136");
     expect(screen.getByTestId("link-net-1-n1")).toHaveAttribute("y1", "74");
-    expect(screen.getByTestId("link-net-1-n2")).toHaveAttribute("x1", "268");
+    expect(screen.getByTestId("link-net-1-n2")).toHaveAttribute("x1", "264");
     expect(screen.getByTestId("link-net-1-n2")).toHaveAttribute("y1", "74");
-    expect(screen.getByTestId("link-net-1-n3")).toHaveAttribute("y1", "192");
+    expect(screen.getByTestId("link-net-1-n3")).toHaveAttribute("y1", "188");
   });
 
   it("highlights selected node", () => {

@@ -1014,6 +1014,18 @@ body {
   cursor: pointer;
 }
 
+.canvas-icon-size-field {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.45rem;
+}
+
+.canvas-icon-size-field input[type='range'] {
+  width: 6rem;
+  accent-color: var(--canvas-node-selected);
+  cursor: pointer;
+}
+
 .canvas-svg {
   position: relative;
   z-index: 1;

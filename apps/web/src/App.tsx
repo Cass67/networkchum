@@ -2533,7 +2533,7 @@ export function App({
             value={iconTheme}
             onChange={(event) => setIconTheme(event.target.value as IconTheme)}
           >
-            <option value="visio">Visio Icons</option>
+            <option value="visio">Default Icons</option>
             <option value="neon">Neon Icons</option>
           </select>
         </label>
