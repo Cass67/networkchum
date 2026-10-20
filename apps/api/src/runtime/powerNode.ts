@@ -46,6 +46,7 @@ import {
   injectCloudInit,
   injectCsr1000vConfigDrive,
   injectIosvVfat,
+  injectJunosConfigDisk,
   injectVeosFlash,
 } from "./configInjectors.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
@@ -1078,6 +1079,10 @@ export async function powerOnNode(
         console.log(
           `[powerNode] selected CSR1000v config-drive layout=${configDrive.layout} artifact=${configDrive.outputPath}`,
         );
+      } else if (configInjectMethod === "junos-config-disk") {
+        const imgPath = getNodeConfigDrivePath(labId, nodeId, "img");
+        configExtraArgs = await injectJunosConfigDisk(startupConfig, imgPath);
+        console.log(`[powerNode] injected Junos config disk: ${imgPath}`);
       } else if (configInjectMethod === "veos-flash") {
         // Flash partition lives inside the main overlay disk (partition 2)
         await injectVeosFlash(startupConfig, effectiveImagePath);
@@ -1149,7 +1154,10 @@ export async function powerOnNode(
     // CSR1000v (IOS-XE): main disk on IDE so BIOS boots it; virtio config
     // disk is invisible to BIOS but scanned by IOS-XE for day-0 config.
     mainDiskInterface:
-      configInjectMethod === "csr1000v-vfat" ? "ide" : undefined,
+      configInjectMethod === "csr1000v-vfat" ||
+      configInjectMethod === "junos-config-disk"
+        ? "ide"
+        : undefined,
     config: {
       ramMb: node.config.ramMb,
       vcpu: node.config.vcpu,

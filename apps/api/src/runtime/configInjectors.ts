@@ -127,6 +127,51 @@ export async function injectCsr1000vVfat(
   return [...configDrive.qemuArgs];
 }
 
+// --- Juniper vMX / vJunos (junos-config-disk) ---
+// Junos images accept day-0 config from a second disk containing
+// `boot/juniper.conf` (the convention used by Juniper's make-config.sh and
+// vrnetlab's metadata disk; also verified against vMX metadata images).
+// We also drop a root-level copy for images that scan the filesystem root.
+// Requires mtools (mformat + mmd + mcopy).
+export async function injectJunosConfigDisk(
+  config: string,
+  outputPath: string,
+): Promise<string[]> {
+  await mkdir(path.dirname(outputPath), { recursive: true });
+
+  const tmpConfig = path.join(os.tmpdir(), `nc-junos-cfg-${Date.now()}.conf`);
+  try {
+    await writeFile(tmpConfig, config, "utf8");
+    // 10 MB FAT image, same as Juniper's make-config.sh metadata disk.
+    await execFileAsync("dd", [
+      "if=/dev/zero",
+      `of=${outputPath}`,
+      "bs=1024",
+      "count=10240",
+    ]);
+    await execFileAsync("mformat", ["-i", outputPath, "::"]);
+    await execFileAsync("mmd", ["-i", outputPath, "::/boot"]);
+    await execFileAsync("mcopy", [
+      "-i",
+      outputPath,
+      tmpConfig,
+      "::/boot/juniper.conf",
+    ]);
+    await execFileAsync("mcopy", [
+      "-i",
+      outputPath,
+      tmpConfig,
+      "::/juniper.conf",
+    ]);
+  } finally {
+    await rm(tmpConfig, { force: true });
+  }
+
+  // Main disk is forced to IDE (hda) so the config disk lands at hdb —
+  // matching the EVE-NG / make-config.sh convention.
+  return ["-drive", `file=${outputPath},format=raw,if=ide,index=0,unit=1`];
+}
+
 // --- Cisco IOSv vfat ---
 // Creates a small raw FAT image containing startup-config.
 // IOSv reads this disk on boot as its NVRAM startup config.

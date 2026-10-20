@@ -36,7 +36,14 @@ export const TemplateSchema = z.object({
     nicModel: z.string().min(1).optional(),
     acceleration: z.string().min(1),
     configInjectMethod: z
-      .enum(["cloud-init", "iosv-vfat", "csr1000v-vfat", "veos-flash", "none"])
+      .enum([
+        "cloud-init",
+        "iosv-vfat",
+        "csr1000v-vfat",
+        "veos-flash",
+        "junos-config-disk",
+        "none",
+      ])
       .optional(),
   }),
   configSchema: z.object({

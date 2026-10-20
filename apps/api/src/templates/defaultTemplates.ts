@@ -327,6 +327,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "junos-config-disk",
     },
     configSchema: {
       ramMb: { default: 2048, min: 1024, max: 8192 },
@@ -345,6 +346,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "junos-config-disk",
     },
     configSchema: {
       ramMb: { default: 2048, min: 1024, max: 8192 },
@@ -453,6 +455,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "junos-config-disk",
     },
     configSchema: {
       ramMb: { default: 1024, min: 512, max: 4096 },
@@ -471,6 +474,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "junos-config-disk",
     },
     configSchema: {
       ramMb: { default: 2048, min: 1024, max: 8192 },

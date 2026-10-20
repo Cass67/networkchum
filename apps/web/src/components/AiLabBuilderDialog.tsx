@@ -386,10 +386,16 @@ export function AiLabBuilderDialog({
             className="field-input ai-spec-input"
             aria-label="Lab Spec"
             rows={6}
-            placeholder="e.g. Two CSR routers connected to one Ubuntu host, all in one subnet"
+            placeholder="e.g. Build an MPLS lab at CCNP level: two CSR routers running OSPF+LDP core, one Arista switch as CE, plus an Ubuntu test host — and write full device configs"
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
           />
+          <span className="field-hint">
+            Config generation covers platforms with day-0 injection today: Cisco
+            IOSv / CSR 1000v, Arista vEOS, and Juniper vMX / vRR / cRPD (day-0
+            config disk). Other devices still get topology and links; their
+            configs would not apply at boot (the preview flags them).
+          </span>
         </label>
         <div className="dialog-actions">
           <button
@@ -431,9 +437,31 @@ export function AiLabBuilderDialog({
                     {node.displayName ?? "unresolved"}
                     {node.imageBound ? " (image bound)" : ""}
                   </span>
+                  <span>
+                    {node.startupConfig
+                      ? node.configInjectMethod
+                        ? `config ✓ (${node.configInjectMethod})`
+                        : "config saved, NOT injectable"
+                      : "no config"}
+                  </span>
                 </div>
               ))}
             </div>
+            {preview.nodes.some((node) => node.startupConfig) ? (
+              <div className="ai-configs">
+                {preview.nodes
+                  .filter((node) => node.startupConfig)
+                  .map((node) => (
+                    <details key={node.name}>
+                      <summary>
+                        {node.name} config ({node.startupConfig!.length} chars,{" "}
+                        {node.configInjectMethod ?? "not injectable"})
+                      </summary>
+                      <pre className="ai-config-text">{node.startupConfig}</pre>
+                    </details>
+                  ))}
+              </div>
+            ) : null}
             <ul className="ai-links" aria-label="AI Lab Links">
               {preview.links.map((link) => (
                 <li key={link.name}>

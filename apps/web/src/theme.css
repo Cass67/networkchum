@@ -1165,6 +1165,32 @@ body {
   font-size: 0.85rem;
 }
 
+.ai-configs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.ai-configs summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.ai-config-text {
+  margin: 0.3rem 0 0;
+  padding: 0.6rem;
+  max-height: 12rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--field-bg);
+  color: var(--text);
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+}
+
 .disconnect-popup-title {
   font-size: 0.82rem;
   text-align: center;

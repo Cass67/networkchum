@@ -181,6 +181,8 @@ export function buildLabDocumentFromSpec(
         imageId: null,
         imageBound: false,
         interfaceCount: null,
+        configInjectMethod: null,
+        startupConfig: specNode.startupConfig || undefined,
       });
       continue;
     }
@@ -206,6 +208,16 @@ export function buildLabDocumentFromSpec(
       });
     }
 
+    const injectMethod = template.boot.configInjectMethod ?? null;
+    const requestedConfig = specNode.startupConfig?.trim();
+    if (requestedConfig && !injectMethod) {
+      issues.push({
+        severity: "warning",
+        message: `${template.displayName} cannot inject a day-0 config; "${specNode.name}" config is saved to the lab but will NOT apply at boot (configure it manually or pick a supported device)`,
+        nodeName: specNode.name,
+      });
+    }
+
     resolvedTemplateByNode.set(specNode.name, template);
     previewNodes.push({
       name: specNode.name,
@@ -217,6 +229,8 @@ export function buildLabDocumentFromSpec(
       imageId: image?.id ?? null,
       imageBound: Boolean(image),
       interfaceCount: null,
+      configInjectMethod: injectMethod,
+      startupConfig: requestedConfig || undefined,
     });
   }
 
@@ -383,6 +397,20 @@ export function buildLabDocumentFromSpec(
     }
   });
 
+  // AI-generated configs land in an active config set, and each configured
+  // node gets an inject-once boot action — without the boot action the
+  // runtime never injects the day-0 disk (powerNode gates injection on it).
+  const configEntries: Array<{ nodeId: string; config: string }> = [];
+  for (const [name, specNode] of specNodeByName) {
+    const config = specNode.startupConfig?.trim();
+    if (!config) continue;
+    const template = resolvedTemplateByNode.get(name);
+    if (!template?.boot.configInjectMethod) continue; // warned above
+    const node = documentNodes.find((entry) => entry.name === name);
+    if (!node) continue;
+    configEntries.push({ nodeId: node.id, config });
+  }
+
   const document: LabDocument | null = anyUnresolved
     ? null
     : LabDocumentSchema.parse({
@@ -394,9 +422,24 @@ export function buildLabDocumentFromSpec(
         networks,
         attachments,
         annotations: [],
-        startupConfigSets: [],
-        nodeBootActions: [],
-        activeConfigSetId: null,
+        startupConfigSets:
+          configEntries.length > 0
+            ? [
+                {
+                  id: "cfg-ai-generated",
+                  name: "AI-generated configs",
+                  nodeConfigs: configEntries,
+                },
+              ]
+            : [],
+        nodeBootActions: configEntries.flatMap((entry) => [
+          {
+            nodeId: entry.nodeId,
+            startupConfig: "once" as const,
+            runningConfigBackup: "none" as const,
+          },
+        ]),
+        activeConfigSetId: configEntries.length > 0 ? "cfg-ai-generated" : null,
       });
 
   return {

@@ -45,6 +45,10 @@ export const AiLabNodeSpecSchema = z.object({
   interfaceCount: z.number().int().positive().optional(),
   vcpu: z.number().int().nonnegative().optional(),
   ramMb: z.number().int().nonnegative().optional(),
+  // Raw day-0 startup config for the platform's inject method (e.g. IOS
+  // config for cisco-iosv/cisco-asr, EOS config for arista-veos). Only
+  // include for templates the catalog marks as supporting day-0 config.
+  startupConfig: z.string().max(100_000).optional(),
 });
 export type AiLabNodeSpec = z.infer<typeof AiLabNodeSpecSchema>;
 
@@ -83,6 +87,9 @@ export const AiLabPreviewNodeSchema = z.object({
   imageId: z.string().min(1).nullable(),
   imageBound: z.boolean(),
   interfaceCount: z.number().int().nonnegative().nullable(),
+  // null when the template cannot inject a day-0 config at boot.
+  configInjectMethod: z.string().min(1).nullable(),
+  startupConfig: z.string().optional(),
   message: z.string().min(1).optional(),
 });
 export type AiLabPreviewNode = z.infer<typeof AiLabPreviewNodeSchema>;

@@ -38,6 +38,8 @@ const matchedPreview = {
       imageId: "img-xrv",
       imageBound: true,
       interfaceCount: 2,
+      configInjectMethod: "csr1000v-vfat",
+      startupConfig: "hostname r1\nend\n",
     },
     {
       name: "r2",
@@ -48,6 +50,7 @@ const matchedPreview = {
       imageId: "img-xrv",
       imageBound: true,
       interfaceCount: 2,
+      configInjectMethod: "csr1000v-vfat",
     },
     {
       name: "host1",
@@ -58,6 +61,7 @@ const matchedPreview = {
       imageId: null,
       imageBound: false,
       interfaceCount: 1,
+      configInjectMethod: null,
     },
   ],
   links: [
@@ -86,6 +90,7 @@ const unresolvedPreview = {
       imageId: null,
       imageBound: false,
       interfaceCount: null,
+      configInjectMethod: null,
     },
   ],
   document: null,
@@ -190,6 +195,20 @@ describe("AiLabBuilderDialog", () => {
     expect(screen.getByLabelText("LLM Model").getAttribute("list")).toBe(
       "ai-model-options",
     );
+  });
+
+  it("shows generated configs with their inject method", async () => {
+    renderDialog({});
+
+    fireEvent.change(screen.getByLabelText("Lab Spec"), {
+      target: { value: "configured lab" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Lab" }));
+
+    expect(await screen.findByText(/config ✓ \(csr1000v-vfat\)/)).toBeTruthy();
+    expect(
+      screen.getByText(/r1 config \(.*chars, csr1000v-vfat\)/),
+    ).toBeTruthy();
   });
 
   it("hands the selected devices to preview and commit", async () => {

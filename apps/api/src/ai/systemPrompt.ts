@@ -13,6 +13,9 @@ function catalogLine(template: Template, imageBound: boolean): string {
         ? "image bound ✓"
         : "NO IMAGE BOUND (node cannot power on; prefer another template unless the user insists)"
       : "container";
+  const configNote = template.boot.configInjectMethod
+    ? `day-0 config: SUPPORTED (inject via ${template.boot.configInjectMethod})`
+    : "day-0 config: NOT supported (never set startupConfig on this template)";
   return [
     `- \`templateId: ${template.id}\` — ${template.vendor} ${template.displayName}`,
     `role icon: ${template.deviceRoleIcon}, runtime: ${template.runtime}`,
@@ -20,6 +23,7 @@ function catalogLine(template: Template, imageBound: boolean): string {
     `ramMb ${limits.ramMb.min}-${limits.ramMb.max} (default ${limits.ramMb.default})`,
     `interfaces ${limits.interfaceCount.min}-${limits.interfaceCount.max} (default ${limits.interfaceCount.max}), ${interfaces}`,
     imageNote,
+    configNote,
   ].join(" | ");
 }
 
@@ -77,7 +81,8 @@ Respond with a single JSON object and nothing else: no markdown fences, no comme
       "role": string (optional),        // e.g. "core router", "mgmt host"
       "interfaceCount": number (optional),  // omit unless the design needs more than the default
       "vcpu": number (optional),
-      "ramMb": number (optional)        // omit to use the template default; never exceed the catalog max
+      "ramMb": number (optional),       // omit to use the template default; never exceed the catalog max
+      "startupConfig": string (optional) // full day-0 startup config; see "Device configurations"
     }
   ],
   "links": [
@@ -99,7 +104,28 @@ Respond with a single JSON object and nothing else: no markdown fences, no comme
 5. Use container templates freely (no image needed). For qemu templates the catalog marks whether an image is bound; a node on an unbound qemu template cannot power on, so prefer a bound alternative when the design allows it.
 6. Do not include cloud or lab-bridge nodes; this builder only supports qemu and container templates.
 7. Keep the design minimal: only the nodes and links the request needs. Do not add management networks, out-of-band segments, or extra hosts unless the user asked for them.
-8. Output ONLY the JSON object.
+8. When the request asks for a working or configured lab (keywords like "mpls", "ospf", "bgp", "firewall", "vpn", "security", "ccna", "ccnp", "configure", "routing", "learning lab"), every node whose template supports day-0 config MUST carry a complete "startupConfig". Omit "startupConfig" entirely for templates the catalog marks "day-0 config: NOT supported" — their config text would never be injected; instead note what to configure manually in "role".
+9. Output ONLY the JSON object.
+
+## Device configurations
+
+The "startupConfig" value is the raw day-0 startup config the injector writes to the device before first boot. It must boot to a working, log-in-able state at the certification level the user asked for (CCNA/CCNP-style labs: full protocol config, consistent addressing, no manual setup needed beyond powering on).
+
+Per-platform rules:
+
+- cisco-iosv and cisco-asr (IOS/IOS-XE, injected as day-0 config disk): plain IOS config text. Always include: "hostname <node name>", "enable secret cisco", "no ip domain-lookup", "line con 0" + "line vty 0 4" with "login"/"password cisco" so the user can log in, one block per configured interface ("interface <catalog interface name>" + description + "ip address" + "no shutdown"), then the requested protocol config (OSPF/BGP/MPLS LDP/VRFs/ACLs/NAT...), ending with "end". Never wrap in markdown or fences.
+- arista-veos (EOS, injected into the flash overlay): EOS config text: "hostname", one "interface" block per configured interface using catalog names (Ma1, Et1, ...), "ip address" + "no shutdown", protocol config (router bgp/ospf, mpls ldp...), "end".
+- juniper-vmx / juniper-vmx-vcp / juniper-vrr / juniper-crpd (Junos, injected as a boot config disk containing juniper.conf): Junos hierarchical config text. Always include: "system { host-name <node name>; root-authentication { encrypted-password "$1$NC1$tLSnpmrRLQ0ysd06v0NDt0"; } services { ssh; } }" — that exact hash is the password "cisco" and lets the user log in as root. Configure interfaces as "ge-0/0/<N> unit 0 { family inet { address <ip> } }" using the catalog interface mapping (interfaceIndex N = ge-0/0/N), add "no-neighbor" free protocol config under "protocols {" (ospf, mpls { ... ldp }, bgp ...), and close every brace. Use load-style hierarchical braces, never "set" lines.
+- Every interface the spec references in links MUST be configured: interfaceIndex N maps to the Nth catalog interface name of that node, and both sides of every point-to-point link need IPs in the same subnet.
+- Addressing plan discipline: number subnets deterministically (e.g. 10.0.<linkIndex>.0/30 or 192.168.X.0/24 for shared segments), document the plan in "description" if helpful, and never reuse one subnet for two different links.
+- Configs must be self-contained and complete: assume the device boots with no other configuration. Do not write "..." or "<rest of config>"; write every line.
+- Keep each config under ~120 lines. Do not include features that would lock the user out; always leave console and SSH reachable with password cisco / enable secret cisco unless the user asked otherwise.
+
+Example startupConfig value for a cisco-asr node named "R1" with interfaceIndex 0 in one link (interface GigabitEthernet0/0/0/0... adjust names to the catalog):
+
+"hostname R1\nenable secret cisco\nno ip domain-lookup\nline con 0\n logging synchronous\nline vty 0 4\n password cisco\n login\ninterface GigabitEthernet0/0\n description to-r2\n ip address 10.0.0.1 255.255.255.252\n no shutdown\nrouter ospf 1\n router-id 1.1.1.1\n network 10.0.0.0 0.0.0.255 area 0\nend"
+
+(Note: the injector escapes nothing; use real newlines between config lines.)
 
 ## Worked example
 

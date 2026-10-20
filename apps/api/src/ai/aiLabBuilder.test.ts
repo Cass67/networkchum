@@ -74,6 +74,10 @@ const asrTemplate: Template = {
   ...routerTemplate,
   id: "cisco-asr",
   displayName: "Cisco CSR 1000v",
+  boot: {
+    ...routerTemplate.boot,
+    configInjectMethod: "csr1000v-vfat",
+  },
 };
 
 const routerImage: ImageRecord = {
@@ -92,7 +96,12 @@ describe("buildLabDocumentFromSpec", () => {
   const templates = [routerTemplate, hostTemplate, eosTemplate, asrTemplate];
 
   function build(specInput: {
-    nodes: Array<{ name: string; templateId: string; ramMb?: number }>;
+    nodes: Array<{
+      name: string;
+      templateId: string;
+      ramMb?: number;
+      startupConfig?: string;
+    }>;
     links: Array<{
       name?: string;
       members: Array<{ node: string; interfaceIndex?: number }>;
@@ -243,7 +252,38 @@ describe("buildLabDocumentFromSpec", () => {
     ).toBe("none");
   });
 
-  it("restricts resolution to the selected devices", () => {
+  it("saves configs into an active set with inject-once boot actions", () => {
+    const preview = build({
+      nodes: [
+        {
+          name: "r1",
+          templateId: "cisco-asr",
+          startupConfig: "hostname r1\nenable secret cisco\nend\n",
+        },
+        { name: "host1", templateId: "linux-ubuntu-container" },
+      ],
+      links: [],
+      accelerationMode: "kvm",
+    });
+
+    expect(preview.document).not.toBeNull();
+    const document = LabDocumentSchema.parse(preview.document);
+    expect(document.activeConfigSetId).toBe("cfg-ai-generated");
+    expect(document.startupConfigSets[0]?.name).toBe("AI-generated configs");
+    expect(document.startupConfigSets[0]?.nodeConfigs[0]?.nodeId).toBe(
+      document.nodes.find((node) => node.name === "r1")?.id,
+    );
+    expect(document.nodeBootActions).toHaveLength(1);
+    expect(document.nodeBootActions[0]).toMatchObject({
+      startupConfig: "once",
+    });
+
+    const r1 = preview.nodes.find((node) => node.name === "r1");
+    expect(r1?.configInjectMethod).toBe("csr1000v-vfat");
+    expect(r1?.startupConfig).toContain("hostname r1");
+  });
+
+  it("warns but succeeds when a qemu template has no bound image", () => {
     const preview = build({
       nodes: [
         { name: "r1", templateId: "csr1000v" },
@@ -279,6 +319,30 @@ describe("buildLabDocumentFromSpec", () => {
     ).toBeNull();
     expect(
       preview.issues.some((issue) => issue.message.includes("no bound image")),
+    ).toBe(true);
+  });
+
+  it("warns and skips the config set when the template cannot inject", () => {
+    const preview = build({
+      nodes: [
+        {
+          name: "r1",
+          templateId: "cisco-xrv9k",
+          startupConfig: "hostname r1\n",
+        },
+      ],
+      links: [],
+    });
+
+    expect(preview.document).not.toBeNull();
+    const document = LabDocumentSchema.parse(preview.document);
+    expect(document.startupConfigSets).toHaveLength(0);
+    expect(document.activeConfigSetId).toBeNull();
+    expect(document.nodeBootActions).toHaveLength(0);
+    expect(
+      preview.issues.some((issue) =>
+        issue.message.includes("cannot inject a day-0 config"),
+      ),
     ).toBe(true);
   });
 
@@ -730,6 +794,48 @@ describe("ai routes", () => {
     });
     expect(response.statusCode).toBe(400);
     expect(response.json().message).toContain("among the selected devices");
+  });
+
+  it("creates config sets and boot actions for generated configs", async () => {
+    const spec = {
+      name: "Cfg Lab",
+      nodes: [
+        {
+          name: "r1",
+          templateId: "cisco-asr",
+          startupConfig: "hostname r1\nenable secret cisco\nend\n",
+        },
+      ],
+      links: [],
+    };
+    calls.length = 0;
+    llmResponses = [
+      {
+        body: { choices: [{ message: { content: JSON.stringify(spec) } }] },
+      },
+    ];
+    const previewResponse = await app.inject({
+      method: "POST",
+      url: "/ai/labs/preview",
+      payload: { prompt: "one configured router" },
+    });
+    expect(previewResponse.statusCode).toBe(200);
+    const { preview } = previewResponse.json() as { preview: AiLabPreview };
+    expect(preview.nodes[0]?.configInjectMethod).toBe("csr1000v-vfat");
+    expect(preview.nodes[0]?.startupConfig).toContain("hostname r1");
+
+    const commitResponse = await app.inject({
+      method: "POST",
+      url: "/ai/labs/commit",
+      payload: { name: "Cfg Lab", spec },
+    });
+    expect(commitResponse.statusCode).toBe(201);
+    const { lab } = commitResponse.json();
+    expect(lab.document.activeConfigSetId).toBe("cfg-ai-generated");
+    expect(lab.document.startupConfigSets[0]?.nodeConfigs).toHaveLength(1);
+    expect(lab.document.nodeBootActions[0]).toMatchObject({
+      startupConfig: "once",
+    });
   });
 
   it("talks to the anthropic provider with native headers", async () => {

@@ -60,7 +60,7 @@ export async function callLlm(input: {
   maxTokens?: number;
 }): Promise<string> {
   const { settings, messages, fetcher } = input;
-  const maxTokens = input.maxTokens ?? 4096;
+  const maxTokens = input.maxTokens ?? 8192;
   const system = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)

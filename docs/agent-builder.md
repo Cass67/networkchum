@@ -11,7 +11,10 @@ files, real schemas, and real conventions from the current build.
 ## 1. Feature Summary
 
 - The user describes a lab in natural language ("two CSR routers connected to
-  one Ubuntu host, all in one subnet") and clicks **Generate**.
+  one Ubuntu host, all in one subnet") and clicks **Generate**. The spec can
+  also carry full per-device day-0 configs, so the generated lab boots
+  configured and ready to log into (CCNA/CCNP-style MPLS/OSPF/BGP/firewall
+  labs).
 - The API calls the configured LLM with a **network-engineer system prompt**
   that contains the live device catalog (template ids, image bindings, resource
   limits) and a strict JSON output contract.
@@ -23,6 +26,30 @@ files, real schemas, and real conventions from the current build.
 - The user previews the resolved lab (nodes, links, any issues), then commits
   it. Commit re-runs the same deterministic builder and creates the lab via
   `createLabFromDocument`, exactly like a topology import commit.
+
+### Config generation limits (stated up front)
+
+Day-0 config injection exists only for platforms with a working injector, so
+config generation is limited to:
+
+| Platform                           | Template(s)                                                     | Inject method       | Mechanism                                                                                                                                                                                                          |
+| ---------------------------------- | --------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cisco IOSv                         | `cisco-iosv`                                                    | `iosv-vfat`         | FAT12 disk with `startup-config`, virtio                                                                                                                                                                           |
+| Cisco CSR 1000v                    | `cisco-asr`                                                     | `csr1000v-vfat`     | FAT12 disk with `iosxe_config.txt`, virtio; main disk forced to IDE                                                                                                                                                |
+| Arista vEOS                        | `arista-veos`                                                   | `veos-flash`        | config written into the flash overlay partition                                                                                                                                                                    |
+| Juniper vMX / vMX-VCP / vRR / cRPD | `juniper-vmx`, `juniper-vmx-vcp`, `juniper-vrr`, `juniper-crpd` | `junos-config-disk` | 10 MB FAT disk with `boot/juniper.conf` (+ root copy), IDE hdb — replicating Juniper's `make-config.sh` metadata-disk convention (see the vJunos-router/vMX KVM docs and the vrnetlab/vMX metadata-disk precedent) |
+
+Every other template (NX-OS, XRv9k, vSRX, FortiGate, pfSense, VyOS, …) has no
+inject method: the spec may still carry config text for them, but the builder
+warns ("cannot inject a day-0 config") and the config is saved into the lab's
+config set without applying at boot. The dialog states these limits directly
+under the spec textarea, and the preview flags every affected node.
+
+> Caveat: the `junos-config-disk` injector follows the documented Juniper
+> make-config.sh convention but has not been validated against a real vJunos
+> image yet. If an image ignores the day-0 disk, the config is still saved in
+> the lab and can be pasted manually; report back the boot log and the
+> injector gets tuned.
 
 Design rules:
 
@@ -360,6 +387,12 @@ The system prompt is the product here. Requirements:
    no markdown fences, no commentary.
 5. Container templates are always usable; qemu templates only when an image is
    bound (flagged in the catalog lines).
+6. A "Device configurations" section teaches the model to emit complete,
+   boot-to-login day-0 configs per injectable platform (IOS/IOS-XE, EOS,
+   Junos hierarchical config with a fixed root-password hash for `cisco`),
+   with addressing-plan discipline: every link member interface must be
+   configured, interfaceIndex N maps to the Nth catalog interface name, and
+   subnets are numbered deterministically per link.
 
 **File: `apps/api/src/ai/generateLabSpec.ts`** (new) — the orchestration the
 preview route runs:

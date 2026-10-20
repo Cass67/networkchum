@@ -15,7 +15,13 @@
   automatically (`POST /ai/provider/probe`); qemu nodes use the host-detected
   acceleration like the Add Node flow; the dialog supports hand-picking
   devices so the AI wires only those; dialogs get a solid `.dialog` base
-  (the canvas no longer bleeds through); see `docs/agent-builder.md`)
+  (the canvas no longer bleeds through); **device config generation**: the
+  spec can carry full day-0 startup configs — saved into an active config
+  set with inject-once boot actions, covering Cisco IOSv/CSR 1000v
+  (vfat day-0 disks), Arista vEOS (flash overlay), and Juniper vMX/vRR/cRPD
+  (new `junos-config-disk` injector, Juniper make-config.sh convention);
+  unsupported platforms are flagged in the preview; see
+  `docs/agent-builder.md`)
 - **Lab interconnect**: a Lab Bridge node in each lab merges the cabled
   networks into one broadcast domain across labs (mutual peer references;
   management uplink networks excluded; qemu VMs over the socket virtual
