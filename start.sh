@@ -658,14 +658,25 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
           sudo -n "$IP_BIN" link del nc-verify0 >/dev/null 2>&1 || true
           printf '  verified: ip can create TAP devices (via sudo)\n'
         else
-          install_ip_sudo_rule
-          sudo -k 2>/dev/null || true
-          if sudo -n "$IP_BIN" tuntap add dev nc-verify0 mode tap \
-            >/dev/null 2>&1; then
-            sudo -n "$IP_BIN" link del nc-verify0 >/dev/null 2>&1 || true
-            printf '  verified: ip can create TAP devices (via sudo)\n'
+          if [ -t 0 ]; then
+            install_ip_sudo_rule
+            # Clear any cached sudo credential so this really tests the rule.
+            sudo -k 2>/dev/null || true
+            if sudo -n "$IP_BIN" tuntap add dev nc-verify0 mode tap \
+              >/dev/null 2>&1; then
+              sudo -n "$IP_BIN" link del nc-verify0 >/dev/null 2>&1 || true
+              printf '  verified: ip can create TAP devices (via sudo)\n'
+            else
+              printf 'WARN: sudo still needs a password for ip; using socket networking\n' \
+                >&2
+              TAP_MODE=socket
+            fi
           else
-            printf 'WARN: sudo still needs a password for ip; using socket networking\n' \
+            # Non-interactive reinstall (ssh): an interactive sudo grant is
+            # impossible, and the ip rule may be shadowed by a later (ALL) ALL
+            # entry. Fall back to socket networking — the host keeps working
+            # exactly as before; re-run install-service from a TTY to grant TAP.
+            printf 'WARN: passwordless ip verification failed and there is no TTY for the sudo grant; using socket networking\n' \
               >&2
             TAP_MODE=socket
           fi
