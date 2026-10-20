@@ -674,11 +674,21 @@ if [ "$SCRIPT_NAME" = "install-service" ] ||
           else
             # Non-interactive reinstall (ssh): an interactive sudo grant is
             # impossible, and the ip rule may be shadowed by a later (ALL) ALL
-            # entry. Fall back to socket networking — the host keeps working
-            # exactly as before; re-run install-service from a TTY to grant TAP.
-            printf 'WARN: passwordless ip verification failed and there is no TTY for the sudo grant; using socket networking\n' \
-              >&2
-            TAP_MODE=socket
+            # entry. Keep the installed unit's networking mode when it used
+            # socket backend, so a reinstall never degrades a working setup.
+            if [ -f "$USER_UNIT_PATH" ] &&
+              grep -q "NETWORKCHUM_NETWORK_BACKEND=socket" "$USER_UNIT_PATH" 2>/dev/null; then
+              printf '  keeping socket networking from the installed unit\n'
+              TAP_MODE=socket
+            elif [ -f "$SYSTEM_UNIT_PATH" ] &&
+              grep -q "NETWORKCHUM_NETWORK_BACKEND=socket" "$SYSTEM_UNIT_PATH" 2>/dev/null; then
+              printf '  keeping socket networking from the installed unit\n'
+              TAP_MODE=socket
+            else
+              printf 'WARN: passwordless ip verification failed and there is no TTY for the sudo grant; using socket networking\n' \
+                >&2
+              TAP_MODE=socket
+            fi
           fi
         fi
       else
