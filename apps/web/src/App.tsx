@@ -12,6 +12,7 @@ import "./theme.css";
 
 import {
   createApiClient,
+  getStoredApiToken,
   setOnTokenRequired,
   setStoredApiToken,
 } from "./api/client.js";
@@ -2547,6 +2548,19 @@ export function App({
             <option value="neon">Neon Icons</option>
           </select>
         </label>
+        <button
+          type="button"
+          className="btn btn-sm"
+          aria-label="API Token"
+          title="Replace the API token used by this browser"
+          onClick={() => {
+            setApiTokenDraft(getStoredApiToken());
+            setShowApiTokenDialog(true);
+          }}
+          data-testid="api-token-button"
+        >
+          API Token
+        </button>
         <label className="compact-field">
           <span className="sr-only">Native Console Preference</span>
           <select

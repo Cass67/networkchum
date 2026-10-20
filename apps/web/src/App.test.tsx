@@ -2545,6 +2545,38 @@ describe("App", () => {
     });
   });
 
+  it("opens the API token dialog prefilled from browser storage", () => {
+    const lab = {
+      id: "lab-1",
+      name: "New Lab",
+      document: { nodes: [], networks: [], attachments: [] },
+    };
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listTemplates: async () => [],
+      listImages: async () => [],
+      createLab: async () => lab,
+      getLab: async () => lab,
+      addNode: async () => lab,
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["sh"],
+      }),
+    };
+
+    window.localStorage.setItem("networkchum-api-token", "stored-token");
+    render(<App api={api} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "API Token" }));
+
+    const input = screen.getByLabelText("API token");
+    expect(input).toHaveValue("stored-token");
+
+    window.localStorage.removeItem("networkchum-api-token");
+  });
+
   it("defaults the icon theme to visio and remembers overrides across remounts", async () => {
     const api = {
       listLabs: async () => [],
