@@ -134,6 +134,7 @@ describe("POST /ai/images/classify", () => {
         suggestedTemplateId: "juniper-vrr",
         suggestedRamMb: 8192,
         suggestedVcpu: 4,
+        suggestedReason: "Junos Evolved router",
         suggestedSource: "ai",
       });
       // Manual binding preserved; suggestion still recorded.

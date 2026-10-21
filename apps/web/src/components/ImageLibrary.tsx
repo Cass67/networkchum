@@ -19,6 +19,7 @@ type ImageSummary = {
   suggestedTemplateId?: string | null;
   suggestedRamMb?: number | null;
   suggestedVcpu?: number | null;
+  suggestedReason?: string | null;
   suggestedSource?: string | null;
   source: string;
   catalogState: string;
@@ -511,6 +512,9 @@ export function ImageLibrary({
                     image.suggestedRamMb &&
                     image.suggestedVcpu
                       ? ` • AI: ${image.suggestedRamMb} MB / ${image.suggestedVcpu} vCPU`
+                      : ""}
+                    {image.suggestedSource === "ai" && image.suggestedReason
+                      ? ` — ${image.suggestedReason}`
                       : ""}
                   </p>
                 </div>

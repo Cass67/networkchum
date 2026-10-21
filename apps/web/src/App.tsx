@@ -278,6 +278,7 @@ type ApiClient = {
       suggestedTemplateId?: string | null;
       suggestedRamMb?: number | null;
       suggestedVcpu?: number | null;
+      suggestedReason?: string | null;
       suggestedSource?: string | null;
       source: string;
       catalogState: string;
@@ -1339,6 +1340,7 @@ export function App({
       suggestedTemplateId?: string | null;
       suggestedRamMb?: number | null;
       suggestedVcpu?: number | null;
+      suggestedReason?: string | null;
       suggestedSource?: string | null;
       source: string;
       catalogState: string;

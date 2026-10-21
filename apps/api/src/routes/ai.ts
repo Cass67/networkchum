@@ -166,6 +166,7 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
         suggestedTemplateId: result.templateId,
         suggestedRamMb: result.ramMb,
         suggestedVcpu: result.vcpu,
+        suggestedReason: result.reason,
         suggestedSource: "ai" as const,
       };
     });

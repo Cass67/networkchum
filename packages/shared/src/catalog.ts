@@ -71,6 +71,7 @@ export const ImageRecordSchema = z.object({
   suggestedTemplateId: z.string().min(1).nullable().optional(),
   suggestedRamMb: z.number().int().positive().nullable().optional(),
   suggestedVcpu: z.number().int().positive().nullable().optional(),
+  suggestedReason: z.string().nullable().optional(),
   suggestedSource: z.enum(["heuristic", "ai"]).nullable().optional(),
   source: z.enum(["upload", "scan", "pull"]),
   catalogState: z.enum(["active", "removed"]),
