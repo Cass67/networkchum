@@ -351,6 +351,135 @@ async function resolveDebugfs(): Promise<string> {
   );
 }
 
+// --- Generic ISO builder (Linux-style directory tree -> cdrom) ---
+// Reuses the same tooling as the cloud-init injector (hdiutil on macOS,
+// genisoimage/mkisofs elsewhere).
+async function buildIsoImage(
+  tmpDir: string,
+  outputPath: string,
+  volumeLabel: string | null,
+): Promise<Array<string>> {
+  if (process.platform === "darwin") {
+    const args = ["makehybrid", "-iso", "-joliet", "-o", outputPath, tmpDir];
+    if (volumeLabel) {
+      args.splice(2, 0, "-default-volume-name", volumeLabel);
+    }
+    await execFileAsync("hdiutil", args);
+  } else {
+    const tool = await resolveIsoTool();
+    const args = ["-o", outputPath, "-r", "-J"];
+    if (volumeLabel) {
+      args.push("-V", volumeLabel);
+    }
+    args.push(tmpDir);
+    await execFileAsync(tool, args);
+  }
+  return ["-drive", `file=${outputPath},media=cdrom,readonly=on`];
+}
+
+// --- Cisco IOS-XR (XRv / XRv9k) CVAC ---
+// Cisco Virtual Appliance Configuration: an ISO labeled config-1 containing
+// iosxr_config.txt, attached as a virtio cdrom. XR applies it at boot when
+// no existing configuration is present (Cisco XRv9k install guide, CVAC).
+export async function injectIosxrCvac(
+  config: string,
+  outputPath: string,
+): Promise<string[]> {
+  const tmpDir = await makeTempDir();
+  try {
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    await writeFile(path.join(tmpDir, "iosxr_config.txt"), config, "utf8");
+    return await buildIsoImage(tmpDir, outputPath, "config-1");
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+// --- Cisco NX-OS (NX-OSv / Nexus 9000v) CVAC ---
+// Same out-of-band mechanism as XRv: an ISO containing nxos_config.txt,
+// applied at startup when no configuration exists (Cisco Nexus 9000v guide).
+export async function injectNxosCvac(
+  config: string,
+  outputPath: string,
+): Promise<string[]> {
+  const tmpDir = await makeTempDir();
+  try {
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    await writeFile(path.join(tmpDir, "nxos_config.txt"), config, "utf8");
+    return await buildIsoImage(tmpDir, outputPath, null);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+// --- Juniper vSRX bootstrap ISO ---
+// vSRX (KVM) reads juniper.conf from the root of a mounted ISO and applies
+// it on boot; the ISO must be removed before the next reboot (Juniper vSRX
+// KVM deployment guide). Inject-once boot actions handle that here: the day-0
+// drive is only attached for the first power-on.
+export async function injectVsrxBootstrapIso(
+  config: string,
+  outputPath: string,
+): Promise<string[]> {
+  const tmpDir = await makeTempDir();
+  try {
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    await writeFile(path.join(tmpDir, "juniper.conf"), config, "utf8");
+    return await buildIsoImage(tmpDir, outputPath, null);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+// --- FortiGate config drive ---
+// FortiGate-VM parses a cloud-init-style config drive: a cdrom ISO with
+// openstack/latest/user_data containing raw FortiOS CLI commands
+// (FortiGate Private Cloud guide, "Cloud-init using config drive").
+export async function injectFortigateConfigDrive(
+  config: string,
+  outputPath: string,
+): Promise<string[]> {
+  const tmpDir = await makeTempDir();
+  try {
+    await mkdir(path.join(tmpDir, "openstack", "latest"), { recursive: true });
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    await writeFile(
+      path.join(tmpDir, "openstack", "latest", "user_data"),
+      config,
+      "utf8",
+    );
+    return await buildIsoImage(tmpDir, outputPath, null);
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+// --- VyOS cloud-init (NoCloud seed) ---
+// VyOS ships with cloud-init: the config text is the raw #cloud-config
+// user-data (the model writes vyos_config_commands set-style commands).
+// A cidata ISO with user-data + meta-data, attached as cdrom (VyOS docs,
+// NoCloud data source).
+export async function injectVyosCloudInit(
+  config: string,
+  outputPath: string,
+): Promise<string[]> {
+  const tmpDir = await makeTempDir();
+  try {
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    const userData = config.startsWith("#cloud-config")
+      ? config
+      : `#cloud-config\nvyos_config_commands:\n${config
+          .split("\n")
+          .map((line) => `- ${line.trim()}`)
+          .join("\n")}\n`;
+    await writeFile(path.join(tmpDir, "user-data"), userData, "utf8");
+    await writeFile(path.join(tmpDir, "meta-data"), "", "utf8");
+    return await buildIsoImage(tmpDir, outputPath, "cidata");
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
 async function makeTempDir(): Promise<string> {
   const dir = path.join(
     os.tmpdir(),

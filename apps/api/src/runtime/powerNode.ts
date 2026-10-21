@@ -45,9 +45,14 @@ import {
 import {
   injectCloudInit,
   injectCsr1000vConfigDrive,
+  injectFortigateConfigDrive,
   injectIosvVfat,
+  injectIosxrCvac,
   injectJunosConfigDisk,
+  injectNxosCvac,
   injectVeosFlash,
+  injectVsrxBootstrapIso,
+  injectVyosCloudInit,
 } from "./configInjectors.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import { setNodeBootActions } from "../topology/mutations.js";
@@ -1079,6 +1084,29 @@ export async function powerOnNode(
         console.log(
           `[powerNode] selected CSR1000v config-drive layout=${configDrive.layout} artifact=${configDrive.outputPath}`,
         );
+      } else if (configInjectMethod === "iosxr-cvac") {
+        const isoPath = getNodeConfigDrivePath(labId, nodeId, "iso");
+        configExtraArgs = await injectIosxrCvac(startupConfig, isoPath);
+        console.log(`[powerNode] injected IOS-XR CVAC config: ${isoPath}`);
+      } else if (configInjectMethod === "nxos-cvac") {
+        const isoPath = getNodeConfigDrivePath(labId, nodeId, "iso");
+        configExtraArgs = await injectNxosCvac(startupConfig, isoPath);
+        console.log(`[powerNode] injected NX-OS CVAC config: ${isoPath}`);
+      } else if (configInjectMethod === "vsrx-bootstrap-iso") {
+        const isoPath = getNodeConfigDrivePath(labId, nodeId, "iso");
+        configExtraArgs = await injectVsrxBootstrapIso(startupConfig, isoPath);
+        console.log(`[powerNode] injected vSRX bootstrap config: ${isoPath}`);
+      } else if (configInjectMethod === "fortigate-config-drive") {
+        const isoPath = getNodeConfigDrivePath(labId, nodeId, "iso");
+        configExtraArgs = await injectFortigateConfigDrive(
+          startupConfig,
+          isoPath,
+        );
+        console.log(`[powerNode] injected FortiGate config drive: ${isoPath}`);
+      } else if (configInjectMethod === "vyos-cloud-init") {
+        const isoPath = getNodeConfigDrivePath(labId, nodeId, "iso");
+        configExtraArgs = await injectVyosCloudInit(startupConfig, isoPath);
+        console.log(`[powerNode] injected VyOS cloud-init config: ${isoPath}`);
       } else if (configInjectMethod === "junos-config-disk") {
         const imgPath = getNodeConfigDrivePath(labId, nodeId, "img");
         configExtraArgs = await injectJunosConfigDisk(startupConfig, imgPath);

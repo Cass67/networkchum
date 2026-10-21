@@ -20,8 +20,9 @@
   set with inject-once boot actions, covering Cisco IOSv/CSR 1000v
   (vfat day-0 disks), Arista vEOS (flash overlay), and Juniper vMX/vRR/cRPD
   (new `junos-config-disk` injector, Juniper make-config.sh convention);
-  unsupported platforms are flagged in the preview; see
-  `docs/agent-builder.md`)
+  extended to IOS-XR CVAC (XRv/XRv9k), NX-OS CVAC (nxosv), Juniper vSRX
+  bootstrap ISO, FortiGate config drive, and VyOS cloud-init seed; unsupported
+  platforms are flagged in the preview; see `docs/agent-builder.md`)
 - **Lab interconnect**: a Lab Bridge node in each lab merges the cabled
   networks into one broadcast domain across labs (mutual peer references;
   management uplink networks excluded; qemu VMs over the socket virtual

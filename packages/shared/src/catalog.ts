@@ -42,6 +42,11 @@ export const TemplateSchema = z.object({
         "csr1000v-vfat",
         "veos-flash",
         "junos-config-disk",
+        "iosxr-cvac",
+        "nxos-cvac",
+        "vsrx-bootstrap-iso",
+        "fortigate-config-drive",
+        "vyos-cloud-init",
         "none",
       ])
       .optional(),

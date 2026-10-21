@@ -30,26 +30,31 @@ files, real schemas, and real conventions from the current build.
 ### Config generation limits (stated up front)
 
 Day-0 config injection exists only for platforms with a working injector, so
-config generation is limited to:
+config generation covers:
 
-| Platform                           | Template(s)                                                     | Inject method       | Mechanism                                                                                                                                                                                                          |
-| ---------------------------------- | --------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Cisco IOSv                         | `cisco-iosv`                                                    | `iosv-vfat`         | FAT12 disk with `startup-config`, virtio                                                                                                                                                                           |
-| Cisco CSR 1000v                    | `cisco-asr`                                                     | `csr1000v-vfat`     | FAT12 disk with `iosxe_config.txt`, virtio; main disk forced to IDE                                                                                                                                                |
-| Arista vEOS                        | `arista-veos`                                                   | `veos-flash`        | config written into the flash overlay partition                                                                                                                                                                    |
-| Juniper vMX / vMX-VCP / vRR / cRPD | `juniper-vmx`, `juniper-vmx-vcp`, `juniper-vrr`, `juniper-crpd` | `junos-config-disk` | 10 MB FAT disk with `boot/juniper.conf` (+ root copy), IDE hdb — replicating Juniper's `make-config.sh` metadata-disk convention (see the vJunos-router/vMX KVM docs and the vrnetlab/vMX metadata-disk precedent) |
+| Platform           | Template(s)                                                     | Inject method            | Mechanism                                                                                                                                                                |
+| ------------------ | --------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cisco IOSv / vIOS  | `cisco-iosv`, `cisco-vios`, `cisco-vios-switch`                 | `iosv-vfat`              | FAT12 disk with `startup-config`, virtio                                                                                                                                 |
+| Cisco IOS-XE       | `cisco-asr`, `cisco-catalyst-8000v`, `cisco-catalyst-9000v`     | `csr1000v-vfat`          | FAT12 disk with `iosxe_config.txt`, virtio; main disk forced to IDE                                                                                                      |
+| Cisco IOS-XR       | `cisco-xrv`, `cisco-xrv9k`                                      | `iosxr-cvac`             | CVAC: ISO labeled `config-1` with `iosxr_config.txt`, virtio cdrom (Cisco XRv9k CVAC guide)                                                                              |
+| Cisco NX-OS        | `cisco-nxosv`                                                   | `nxos-cvac`              | CVAC: ISO with `nxos_config.txt`, cdrom (Cisco Nexus 9000v guide)                                                                                                        |
+| Arista vEOS        | `arista-veos`                                                   | `veos-flash`             | config written into the flash overlay partition                                                                                                                          |
+| Juniper vMX family | `juniper-vmx`, `juniper-vmx-vcp`, `juniper-vrr`, `juniper-crpd` | `junos-config-disk`      | 10 MB FAT disk with `boot/juniper.conf` (+ root copy), IDE hdb — Juniper `make-config.sh` convention                                                                     |
+| Juniper vSRX       | `juniper-vsrx`, `juniper-vsrx30`, `juniper-vsrx-ng`             | `vsrx-bootstrap-iso`     | ISO with `juniper.conf` at root, cdrom; overwrites the whole config on boot (Juniper vSRX KVM guide) — inject-once only                                                  |
+| FortiGate          | `fortinet-fortigate`                                            | `fortigate-config-drive` | cloud-init-style ISO with `openstack/latest/user_data` = raw FortiOS CLI (FortiGate Private Cloud guide)                                                                 |
+| VyOS               | `vyos`                                                          | `vyos-cloud-init`        | NoCloud `cidata` ISO; user-data is the raw `#cloud-config` YAML with `vyos_config_commands` set-style commands (VyOS docs); falls back to wrapping plain CLI in the YAML |
 
-Every other template (NX-OS, XRv9k, vSRX, FortiGate, pfSense, VyOS, …) has no
-inject method: the spec may still carry config text for them, but the builder
-warns ("cannot inject a day-0 config") and the config is saved into the lab's
-config set without applying at boot. The dialog states these limits directly
-under the spec textarea, and the preview flags every affected node.
+Not supported (no injector — the spec may carry config text but it only lands
+in the lab's config set and never applies at boot; the preview flags these):
+`cisco-asav`/`cisco-ftd` (day-0 needs structured JSON/bootstrap XML, not plain
+CLI), `paloalto-vm` (bootstrap.xml requires a full PAN-OS XML export),
+`pfsense`/`opnsense` (config.xml slice editing), `mikrotik-routeros`,
+`cumulus-vx`, `f5-bigip`, `netscaler-vpx`, `cisco-ise`, `freebsd`.
 
-> Caveat: the `junos-config-disk` injector follows the documented Juniper
-> make-config.sh convention but has not been validated against a real vJunos
-> image yet. If an image ignores the day-0 disk, the config is still saved in
-> the lab and can be pasted manually; report back the boot log and the
-> injector gets tuned.
+> Caveat: the Junos and CVAC injectors follow the documented vendor
+> conventions but have not been validated against every real image yet. If an
+> image ignores its day-0 drive, the config is still saved in the lab and can
+> be pasted manually; report back the boot log and the injector gets tuned.
 
 Design rules:
 

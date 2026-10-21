@@ -50,6 +50,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "e1000",
       acceleration: "hardware",
+      configInjectMethod: "nxos-cvac",
     },
     configSchema: {
       ramMb: { default: 8192, min: 4096, max: 16384 },
@@ -68,6 +69,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "vsrx-bootstrap-iso",
     },
     configSchema: {
       ramMb: { default: 4096, min: 2048, max: 16384 },
@@ -165,6 +167,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "e1000",
       acceleration: "hardware",
+      configInjectMethod: "iosv-vfat",
     },
     configSchema: {
       ramMb: { default: 1024, min: 512, max: 4096 },
@@ -183,6 +186,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "e1000",
       acceleration: "hardware",
+      configInjectMethod: "iosv-vfat",
     },
     configSchema: {
       ramMb: { default: 1024, min: 512, max: 4096 },
@@ -201,6 +205,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "iosxr-cvac",
     },
     configSchema: {
       ramMb: { default: 3072, min: 2048, max: 8192 },
@@ -219,6 +224,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "iosxr-cvac",
     },
     configSchema: {
       ramMb: { default: 16384, min: 8192, max: 32768 },
@@ -273,6 +279,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "vmxnet3",
       acceleration: "hardware",
+      configInjectMethod: "csr1000v-vfat",
     },
     configSchema: {
       ramMb: { default: 4096, min: 2048, max: 16384 },
@@ -291,6 +298,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "e1000",
       acceleration: "hardware",
+      configInjectMethod: "csr1000v-vfat",
     },
     configSchema: {
       ramMb: { default: 24576, min: 16384, max: 32768 },
@@ -383,6 +391,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "vsrx-bootstrap-iso",
     },
     configSchema: {
       ramMb: { default: 4096, min: 2048, max: 16384 },
@@ -401,6 +410,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "vsrx-bootstrap-iso",
     },
     configSchema: {
       ramMb: { default: 4096, min: 2048, max: 16384 },
@@ -493,6 +503,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      configInjectMethod: "fortigate-config-drive",
     },
     configSchema: {
       ramMb: { default: 1024, min: 512, max: 8192 },
@@ -565,6 +576,7 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "e1000",
       acceleration: "hardware",
+      configInjectMethod: "vyos-cloud-init",
     },
     configSchema: {
       ramMb: { default: 512, min: 256, max: 4096 },

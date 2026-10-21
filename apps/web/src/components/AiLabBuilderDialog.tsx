@@ -391,10 +391,11 @@ export function AiLabBuilderDialog({
             onChange={(event) => setPrompt(event.target.value)}
           />
           <span className="field-hint">
-            Config generation covers platforms with day-0 injection today: Cisco
-            IOSv / CSR 1000v, Arista vEOS, and Juniper vMX / vRR / cRPD (day-0
-            config disk). Other devices still get topology and links; their
-            configs would not apply at boot (the preview flags them).
+            Config generation covers the day-0 injectable platforms: Cisco
+            IOSv/vIOS, IOS-XE (CSR/Catalyst), IOS-XR (XRv/XRv9k), NX-OS, Arista
+            vEOS, Juniper (vMX, vRR, cRPD, vSRX), FortiGate, and VyOS. Other
+            devices still get topology and links; their configs would not apply
+            at boot (the preview flags them).
           </span>
         </label>
         <div className="dialog-actions">
