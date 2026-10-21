@@ -95,6 +95,9 @@ type ImageRecordSummary = {
   name: string;
   templateId: string | null;
   suggestedTemplateId?: string | null;
+  suggestedRamMb?: number | null;
+  suggestedVcpu?: number | null;
+  suggestedSource?: string | null;
   source: string;
   catalogState: string;
 };
@@ -585,6 +588,20 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
         response as Response,
       );
       return payload.lab;
+    },
+
+    async classifyImagesWithAi(
+      imageIds: string[],
+    ): Promise<ImageRecordSummary[]> {
+      const response = await fetcher(`${baseUrl}/ai/images/classify`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imageIds }),
+      });
+      const payload = await parseResponse<{ images: ImageRecordSummary[] }>(
+        response as Response,
+      );
+      return payload.images;
     },
 
     async deleteNode(labId: string, nodeId: string): Promise<LabDetails> {

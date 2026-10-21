@@ -356,8 +356,49 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
       );
       resolvedImageId = boundImage?.id ?? null;
     }
+    // AI-classified hardware (suggestedRamMb/suggestedVcpu) becomes the node's
+    // default config, clamped into the template's bounds so the suggestion
+    // can never exceed what the template supports.
+    let effectiveTemplate = template;
+    if (resolvedImageId) {
+      const image = (await listImages()).find(
+        (img) => img.id === resolvedImageId,
+      );
+      if (image?.suggestedSource === "ai") {
+        const suggestedRamMb =
+          image.suggestedRamMb !== null && image.suggestedRamMb !== undefined
+            ? Math.min(
+                template.configSchema.ramMb.max,
+                Math.max(template.configSchema.ramMb.min, image.suggestedRamMb),
+              )
+            : null;
+        const suggestedVcpu =
+          image.suggestedVcpu !== null && image.suggestedVcpu !== undefined
+            ? Math.min(
+                template.configSchema.vcpu.max,
+                Math.max(template.configSchema.vcpu.min, image.suggestedVcpu),
+              )
+            : null;
+        if (suggestedRamMb !== null || suggestedVcpu !== null) {
+          effectiveTemplate = {
+            ...template,
+            configSchema: {
+              ...template.configSchema,
+              ramMb: {
+                ...template.configSchema.ramMb,
+                default: suggestedRamMb ?? template.configSchema.ramMb.default,
+              },
+              vcpu: {
+                ...template.configSchema.vcpu,
+                default: suggestedVcpu ?? template.configSchema.vcpu.default,
+              },
+            },
+          };
+        }
+      }
+    }
     const document = addNode(lab.document, {
-      template,
+      template: effectiveTemplate,
       name: body.name,
       position: body.position,
       imageId: resolvedImageId,

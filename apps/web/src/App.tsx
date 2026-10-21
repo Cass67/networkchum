@@ -270,6 +270,19 @@ type ApiClient = {
     autoBackup?: boolean;
     document: LabDocumentData;
   }>;
+  classifyImagesWithAi?: (imageIds: string[]) => Promise<
+    Array<{
+      id: string;
+      name: string;
+      templateId: string | null;
+      suggestedTemplateId?: string | null;
+      suggestedRamMb?: number | null;
+      suggestedVcpu?: number | null;
+      suggestedSource?: string | null;
+      source: string;
+      catalogState: string;
+    }>
+  >;
   previewTopologyImport?: (file: File) => Promise<ImportPreview>;
   commitTopologyImport?: (
     draftId: string,
@@ -1324,6 +1337,9 @@ export function App({
       name: string;
       templateId: string | null;
       suggestedTemplateId?: string | null;
+      suggestedRamMb?: number | null;
+      suggestedVcpu?: number | null;
+      suggestedSource?: string | null;
       source: string;
       catalogState: string;
     }>
@@ -2956,6 +2972,18 @@ export function App({
                 if (!api.unbindImageFromTemplate) return;
                 await api.unbindImageFromTemplate(imageId);
                 await refreshImages();
+              }}
+              onClassifyWithAi={async (imageId) => {
+                if (!api.classifyImagesWithAi) {
+                  throw new Error("AI classification is unavailable");
+                }
+                const updated = await api.classifyImagesWithAi([imageId]);
+                setImages((current) =>
+                  current.map((image) => {
+                    const next = updated.find((entry) => entry.id === image.id);
+                    return next ?? image;
+                  }),
+                );
               }}
               onRemoveFromCatalog={async (imageId) => {
                 if (!api.removeImageFromCatalog) return;

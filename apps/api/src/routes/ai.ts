@@ -9,6 +9,7 @@ import {
 
 import type { AppDependencies } from "../app.js";
 import { buildLabDocumentFromSpec } from "../ai/buildLabDocumentFromSpec.js";
+import { classifyImages } from "../ai/classifyImages.js";
 import { generateLabSpec } from "../ai/generateLabSpec.js";
 import { probeModels } from "../ai/llmClient.js";
 import {
@@ -17,7 +18,7 @@ import {
   toProviderSettingsView,
 } from "../ai/providerSettingsStore.js";
 import { detectAccelerationMode } from "../runtime/hostCapabilities.js";
-import { listImages } from "../images/imageStore.js";
+import { listImages, saveImages } from "../images/imageStore.js";
 import { createLabFromDocument } from "../labs/labStore.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 
@@ -98,6 +99,82 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
           error instanceof Error ? error.message : "Model detection failed",
       });
     }
+  });
+
+  app.post("/ai/images/classify", async (request, reply) => {
+    const body = parseBody(
+      z.object({ imageIds: z.array(z.string().min(1)).min(1) }),
+      request.body,
+    );
+    if (!body.ok) {
+      return reply.code(400).send({ message: body.message });
+    }
+
+    const settings = loadAiProviderSettings();
+    if (!settings) {
+      return reply.code(400).send({
+        message:
+          "LLM provider is not configured yet. Save a provider endpoint, model, and API key first.",
+      });
+    }
+    if (settings.provider === "anthropic" && !settings.apiKey) {
+      return reply.code(400).send({
+        message: "The Anthropic provider requires an API key",
+      });
+    }
+
+    const allImages = await listImages();
+    const byId = new Map(allImages.map((image) => [image.id, image]));
+    const targets = body.data.imageIds
+      .map((imageId) => byId.get(imageId))
+      .filter((image): image is NonNullable<typeof image> => Boolean(image));
+    if (targets.length === 0) {
+      return reply.code(404).send({ message: "No matching images found" });
+    }
+
+    const templates = new TemplateRegistry().list();
+    let results;
+    try {
+      results = await classifyImages({
+        settings,
+        images: targets,
+        templates,
+        fetcher,
+      });
+    } catch (error) {
+      return reply.code(502).send({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Image classification via the LLM provider failed",
+      });
+    }
+
+    // Record the AI verdict, and adopt it as the binding only when nothing
+    // else claimed the image first (never clobber a manual bind).
+    const updatedImages = allImages.map((image) => {
+      const result = results.find((entry) => entry.imageId === image.id);
+      if (!result) {
+        return image;
+      }
+      const wasAutoBound =
+        image.templateId === null ||
+        image.templateId === image.suggestedTemplateId;
+      return {
+        ...image,
+        templateId: wasAutoBound ? result.templateId : image.templateId,
+        suggestedTemplateId: result.templateId,
+        suggestedRamMb: result.ramMb,
+        suggestedVcpu: result.vcpu,
+        suggestedSource: "ai" as const,
+      };
+    });
+    await saveImages(updatedImages);
+
+    const classifiedIds = new Set(results.map((entry) => entry.imageId));
+    return {
+      images: updatedImages.filter((image) => classifiedIds.has(image.id)),
+    };
   });
 
   app.post("/ai/labs/preview", async (request, reply) => {

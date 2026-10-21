@@ -17,6 +17,9 @@ type ImageSummary = {
   name: string;
   templateId: string | null;
   suggestedTemplateId?: string | null;
+  suggestedRamMb?: number | null;
+  suggestedVcpu?: number | null;
+  suggestedSource?: string | null;
   source: string;
   catalogState: string;
 };
@@ -49,6 +52,7 @@ type ImageLibraryProps = {
   ) => Promise<RepoPullSummary>;
   onLoadRepoPulls?: (repoId: string) => Promise<RepoPullSummary[]>;
   onPullComplete?: () => void | Promise<void>;
+  onClassifyWithAi?: (imageId: string) => void | Promise<void>;
 };
 
 type UploadDialogState =
@@ -90,11 +94,14 @@ export function ImageLibrary({
   onStartRepoPull,
   onLoadRepoPulls,
   onPullComplete,
+  onClassifyWithAi,
 }: ImageLibraryProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dialog, setDialog] = useState<UploadDialogState>({ open: false });
   const [bindDialog, setBindDialog] = useState<BindDialogState | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [classifyingId, setClassifyingId] = useState<string | null>(null);
+  const [classifyError, setClassifyError] = useState<string | null>(null);
   const [menu, setMenu] = useState<{
     imageId: string;
     x: number;
@@ -107,6 +114,23 @@ export function ImageLibrary({
       return suggested;
     }
     return templates[0]?.id ?? "";
+  }
+
+  async function handleClassify(imageId: string) {
+    if (!onClassifyWithAi) {
+      return;
+    }
+    setClassifyError(null);
+    setClassifyingId(imageId);
+    try {
+      await onClassifyWithAi(imageId);
+    } catch (error) {
+      setClassifyError(
+        error instanceof Error ? error.message : "AI classification failed",
+      );
+    } finally {
+      setClassifyingId(null);
+    }
   }
 
   function openDialog() {
@@ -441,6 +465,14 @@ export function ImageLibrary({
           </p>
         </div>
       ) : null}
+      {classifyError ? <p className="form-error">{classifyError}</p> : null}
+      {classifyingId ? (
+        <p className="resource-card-meta">
+          {images.find((image) => image.id === classifyingId)?.name ??
+            classifyingId}
+          : AI is identifying this image…
+        </p>
+      ) : null}
       <ul
         className="entity-list entity-list--stack"
         aria-label="Uploaded images"
@@ -472,7 +504,14 @@ export function ImageLibrary({
                   </div>
                   <p className="resource-card-meta">
                     {image.source}
-                    {image.templateId ? ` • bound to ${image.templateId}` : ""}
+                    {image.templateId
+                      ? ` • bound to ${image.templateId}${image.suggestedSource === "ai" ? " (AI)" : ""}`
+                      : ""}
+                    {image.suggestedSource === "ai" &&
+                    image.suggestedRamMb &&
+                    image.suggestedVcpu
+                      ? ` • AI: ${image.suggestedRamMb} MB / ${image.suggestedVcpu} vCPU`
+                      : ""}
                   </p>
                 </div>
                 <div className="resource-card-controls">
@@ -538,6 +577,17 @@ export function ImageLibrary({
                     onSelect: () => {
                       const image = images.find((i) => i.id === menu.imageId);
                       if (image) openBindDialog(image, false);
+                    },
+                  },
+                ]
+              : []),
+            ...(isActiveImage(images, menu.imageId) && onClassifyWithAi
+              ? [
+                  {
+                    label: "Ask AI to identify…",
+                    onSelect: () => {
+                      setMenu(null);
+                      void handleClassify(menu.imageId);
                     },
                   },
                 ]
