@@ -7,7 +7,11 @@ import type {
   LabDocument,
   Template,
 } from "@networkchum/shared";
-import { LabDocumentSchema, suggestTemplateId } from "@networkchum/shared";
+import {
+  LabDocumentSchema,
+  GENERIC_VM_TEMPLATE_ID,
+  suggestTemplateId,
+} from "@networkchum/shared";
 
 function randomSuffix(): string {
   return Math.random().toString(36).slice(2, 8);
@@ -70,7 +74,10 @@ function matchTemplate(
   }
 
   const suggested = suggestTemplateId(hint);
-  if (suggested) {
+  // Stay strict for AI hint resolution: an unknown hint must surface as an
+  // unresolved node so the LLM corrects it, rather than silently landing on
+  // the generic-vm baseline.
+  if (suggested && suggested !== GENERIC_VM_TEMPLATE_ID) {
     const suggestedEntry = templates.find(
       (entry) => entry.template.id === suggested,
     );

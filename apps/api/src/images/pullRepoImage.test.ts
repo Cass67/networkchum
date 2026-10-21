@@ -85,7 +85,7 @@ describe("repo pulls", () => {
         path: path.join(repoDir, "linux-min", "virtioa.qcow2"),
         source: "pull",
         catalogState: "active",
-        suggestedTemplateId: null,
+        suggestedTemplateId: "generic-vm",
       }),
     ]);
   });

@@ -19,14 +19,24 @@ describe("suggestTemplateId", () => {
     expect(suggestTemplateId("vrr-4.qcow2")).toBe("juniper-vrr");
   });
 
+  it("uses the hint name when the file name itself is generic", () => {
+    expect(suggestTemplateId("hda.qcow2", "csr1000v")).toBe("cisco-asr");
+    expect(suggestTemplateId("hda.qcow2", "some-entry")).toBe("generic-vm");
+  });
+
+  it("falls back to the generic VM baseline for unknown images", () => {
+    expect(suggestTemplateId("mystery-appliance.qcow2")).toBe("generic-vm");
+    expect(suggestTemplateId("some-unknown-os-1.2.3.qcow2")).toBe("generic-vm");
+    expect(suggestTemplateId("")).toBe("generic-vm");
+  });
+
   it("matches container image names too", () => {
     expect(suggestTemplateId("alpine-3.20.qcow2")).toBe(
       "linux-alpine-container",
     );
   });
 
-  it("returns null when nothing matches", () => {
+  it("returns null only for the reserved blank fallback disk", () => {
     expect(suggestTemplateId("blank-1G.qcow2")).toBeNull();
-    expect(suggestTemplateId("")).toBeNull();
   });
 });

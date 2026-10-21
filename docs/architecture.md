@@ -240,7 +240,7 @@ Template and image handling are separated deliberately:
 - `defaultTemplates.ts` defines the built-in node types and their resource bounds.
 - `TemplateRegistry` overlays user-adjusted defaults from `template-overrides.json`.
 - `imageService.ts` handles upload, bind/unbind, catalog removal, and file deletion.
-- `scanImages.ts` scans `qcow2` files, preserves prior bindings where possible, and heuristically suggests template IDs based on filenames.
+- `scanImages.ts` scans `qcow2` files, preserves prior bindings where possible, and heuristically suggests template IDs based on filenames. Unmatched filenames (and unmatched pull-entry hints) fall back to the `generic-vm` baseline template so any image is bootable; the reserved `blank-1G.qcow2` fallback disk never gets a suggestion.
 - `getCatalog.ts` joins templates and images into the operator-visible catalog.
 - `repoStore.ts` persists image repos to `image-repos.json`; `repoListing.ts` browses them; `pullRepoImage.ts` pulls images into the catalog.
 

@@ -675,6 +675,24 @@ export const defaultTemplates: Template[] = [
     },
   },
   {
+    id: "generic-vm",
+    runtime: "qemu",
+    displayName: "Generic VM",
+    vendor: "Generic",
+    deviceRoleIcon: "host",
+    boot: {
+      console: "serial",
+      machineType: "q35",
+      nicModel: "virtio-net-pci",
+      acceleration: "hardware",
+    },
+    configSchema: {
+      ramMb: { default: 2048, min: 512, max: 32768 },
+      vcpu: { default: 1, min: 1, max: 8 },
+      interfaceCount: { default: 4, min: 1, max: 24 },
+    },
+  },
+  {
     id: "cloud",
     runtime: "cloud",
     displayName: "Cloud (External Network)",

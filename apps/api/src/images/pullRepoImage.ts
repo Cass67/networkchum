@@ -229,8 +229,7 @@ async function registerDiskImage(
     sizeBytes,
     updatedAt: new Date().toISOString(),
     templateId: null,
-    suggestedTemplateId:
-      suggestTemplateId(baseName) ?? suggestTemplateId(suggestedName) ?? null,
+    suggestedTemplateId: suggestTemplateId(baseName, suggestedName),
     source: "pull",
     catalogState: "active",
   };

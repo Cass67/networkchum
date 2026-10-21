@@ -1,10 +1,43 @@
 /**
  * Best-effort template suggestion from a disk-image file name.
  * Shared so the API scan and the web upload wizard agree on the guess.
+ * Unmatched names fall back to the generic-vm baseline (null only for the
+ * reserved blank fallback disk). `hint` is a less-specific name (e.g. the
+ * archive/entry a file was pulled from) tried before the baseline.
  */
-export function suggestTemplateId(fileName: string): string | null {
-  const lower = fileName.toLowerCase();
+export const GENERIC_VM_TEMPLATE_ID = "generic-vm";
 
+export function suggestTemplateId(
+  fileName: string,
+  hint?: string,
+): string | null {
+  const lowerName = fileName.toLowerCase();
+
+  // The reserved fallback disk (blank-1G.qcow2, see powerNode.ts) never has
+  // an OS, so binding a template to it would put a fake bootable node in the
+  // catalog.
+  if (lowerName.includes("blank-1g")) {
+    return null;
+  }
+
+  const specific = matchTemplateToken(lowerName);
+  if (specific) {
+    return specific;
+  }
+
+  if (hint) {
+    const hinted = matchTemplateToken(hint.toLowerCase());
+    if (hinted) {
+      return hinted;
+    }
+  }
+
+  // Unknown vendor/OS: land on the generic VM baseline so any image is at
+  // least bootable; the user can rebind to a vendor template later.
+  return "generic-vm";
+}
+
+function matchTemplateToken(lower: string): string | null {
   if (lower.includes("csr1000v") || lower.includes("csr1000")) {
     return "cisco-asr";
   }
