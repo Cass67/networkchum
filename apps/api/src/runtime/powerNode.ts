@@ -49,10 +49,13 @@ import {
   injectIosvVfat,
   injectIosxrCvac,
   injectJunosConfigDisk,
+  injectJunosEvoConfigDisk,
   injectNxosCvac,
   injectVeosFlash,
   injectVsrxBootstrapIso,
   injectVyosCloudInit,
+  junosEvoProfileArgs,
+  resolveJunosEvoUefiFirmware,
 } from "./configInjectors.js";
 import { TemplateRegistry } from "../templates/templateRegistry.js";
 import { setNodeBootActions } from "../topology/mutations.js";
@@ -923,6 +926,55 @@ export async function powerOnNode(
   const template = templateRegistry.get(node.templateId);
   const configInjectMethod = template?.boot.configInjectMethod;
 
+  // Junos Evolved images need a platform-identity profile on EVERY boot
+  // (Bochs SMBIOS identity + USB bus, UEFI for 24.2R+). Without it the image
+  // loops forever on "unsupported platform or XID mismatch" and never
+  // provisions — refuse to boot a 24.2R+ image when no UEFI firmware exists
+  // rather than leaving the lab with a hung node.
+  let evoProfileArgs: string[] = [];
+  if (configInjectMethod === "junos-evo-config-disk" && hasRealImage) {
+    let uefi = await resolveJunosEvoUefiFirmware();
+    if (uefi?.kind === "pflash") {
+      // OVMF vars must be writable per node, so each node gets its own copy.
+      const nodeVarsPath = getNodeConfigDrivePath(labId, nodeId, "vars");
+      try {
+        await access(nodeVarsPath);
+      } catch {
+        await copyFile(uefi.varsPath, nodeVarsPath);
+      }
+      uefi = {
+        kind: "pflash",
+        codePath: uefi.codePath,
+        varsPath: nodeVarsPath,
+      };
+    }
+    const profileArgs = junosEvoProfileArgs(
+      path.basename(resolvedImagePath ?? imagePath),
+      uefi,
+    );
+    if (profileArgs === null) {
+      const state = {
+        labId,
+        nodeId,
+        status: "failed" as const,
+        runtime: node.runtime,
+        accelerationMode: node.config.accelerationMode ?? null,
+        externalId: null,
+        connectCommand: undefined,
+        message:
+          "This Junos Evolved image (24.2R+) requires UEFI firmware (OVMF/edk2), which was not found on this host. Install it (Debian/RHEL: ovmf package; macOS: qemu via Homebrew) and power the node again.",
+        commandPreview: [],
+        updatedAt: new Date().toISOString(),
+      };
+      await upsertRuntimeState(state);
+      return state;
+    }
+    evoProfileArgs = profileArgs;
+    console.log(
+      `[powerNode] Junos Evolved profile args: ${evoProfileArgs.join(" ")}`,
+    );
+  }
+
   const activeSet = lab.document.activeConfigSetId
     ? lab.document.startupConfigSets.find(
         (s) => s.id === lab.document.activeConfigSetId,
@@ -1059,7 +1111,7 @@ export async function powerOnNode(
     }
   }
 
-  let configExtraArgs: string[] = [];
+  let configExtraArgs: string[] = [...evoProfileArgs];
   if (
     shouldInjectStartupConfig &&
     configInjectMethod &&
@@ -1111,6 +1163,14 @@ export async function powerOnNode(
         const imgPath = getNodeConfigDrivePath(labId, nodeId, "img");
         configExtraArgs = await injectJunosConfigDisk(startupConfig, imgPath);
         console.log(`[powerNode] injected Junos config disk: ${imgPath}`);
+      } else if (configInjectMethod === "junos-evo-config-disk") {
+        const imgPath = getNodeConfigDrivePath(labId, nodeId, "img");
+        const injectionArgs = await injectJunosEvoConfigDisk(
+          startupConfig,
+          imgPath,
+        );
+        configExtraArgs = [...configExtraArgs, ...injectionArgs];
+        console.log(`[powerNode] injected Junos EVO config disk: ${imgPath}`);
       } else if (configInjectMethod === "veos-flash") {
         // Flash partition lives inside the main overlay disk (partition 2)
         await injectVeosFlash(startupConfig, effectiveImagePath);

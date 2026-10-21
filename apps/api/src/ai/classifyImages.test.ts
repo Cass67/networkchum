@@ -144,6 +144,37 @@ describe("classifyImages", () => {
     ]);
   });
 
+  it("keeps a deterministic vendor match when the model suggests generic-vm", async () => {
+    const fetcher = llmResponse({
+      classifications: [
+        { imageId: "img-1", templateId: "generic-vm", ramMb: 2048, vcpu: 1 },
+      ],
+    });
+
+    const results = await classifyImages({
+      settings,
+      images: [
+        {
+          ...image("img-1", "csr1000v-16.3.qcow2"),
+          suggestedTemplateId: "cisco-iosv",
+        },
+      ],
+      templates,
+      fetcher,
+    });
+
+    // Vendor guess kept, hardware re-clamped into that template's bounds.
+    expect(results).toEqual([
+      {
+        imageId: "img-1",
+        templateId: "cisco-iosv",
+        ramMb: 1024,
+        vcpu: 1,
+        reason: null,
+      },
+    ]);
+  });
+
   it("fails with a clear message when the model returns no JSON", async () => {
     const fetcher = llmResponse("I cannot help with that");
 

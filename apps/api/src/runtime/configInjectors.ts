@@ -1,5 +1,12 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -137,12 +144,25 @@ export async function injectJunosConfigDisk(
   config: string,
   outputPath: string,
 ): Promise<string[]> {
+  await createJunosConfigDisk(config, outputPath);
+
+  // Main disk is forced to IDE (hda) so the config disk lands at hdb —
+  // matching the EVE-NG / make-config.sh convention.
+  return ["-drive", `file=${outputPath},format=raw,if=ide,index=0,unit=1`];
+}
+
+// Shared FAT config-disk builder: 10 MB raw image with boot/juniper.conf
+// (+ root-level copy), same as Juniper's make-config.sh metadata disk.
+// Requires mtools (mformat + mmd + mcopy) and dd.
+async function createJunosConfigDisk(
+  config: string,
+  outputPath: string,
+): Promise<void> {
   await mkdir(path.dirname(outputPath), { recursive: true });
 
   const tmpConfig = path.join(os.tmpdir(), `nc-junos-cfg-${Date.now()}.conf`);
   try {
     await writeFile(tmpConfig, config, "utf8");
-    // 10 MB FAT image, same as Juniper's make-config.sh metadata disk.
     await execFileAsync("dd", [
       "if=/dev/zero",
       `of=${outputPath}`,
@@ -166,10 +186,135 @@ export async function injectJunosConfigDisk(
   } finally {
     await rm(tmpConfig, { force: true });
   }
+}
 
-  // Main disk is forced to IDE (hda) so the config disk lands at hdb —
-  // matching the EVE-NG / make-config.sh convention.
-  return ["-drive", `file=${outputPath},format=raw,if=ide,index=0,unit=1`];
+// --- Juniper vJunos Evolved (junos-evo-config-disk) ---
+// Junos Evolved images check the VM's SMBIOS chassis identity on boot; when
+// the emulated hardware reports no known platform they loop forever on
+// `/sbin/jimFuncs: unsupported platform or XID mismatch` and never provision.
+// These helpers reproduce vrnetlab's launch.py profile for the image:
+//   - Bochs SMBIOS identity (platform=251 = PTX10001-36MR "BT" chipset;
+//     platform=272 / assembly 0x0DA9 = PTX10002-36QDD "BX" variant)
+//   - day-0 config on a USB storage device (not IDE like classic Junos)
+//   - UEFI firmware for images 24.2R and newer (SeaBIOS hangs on those)
+// Translated from Juniper's shipped libvirt XML (vrnetlab juniper/vjunosevolved).
+export function junosEvoRequiresUefi(imageFileName: string): boolean {
+  // vrnetlab's parse: "24.2R..." style versioning; unknown version = older
+  // convention and boots fine with the default SeaBIOS.
+  const match = imageFileName.match(/(\d{2})\.(\d)R/i);
+  if (!match) {
+    return false;
+  }
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major > 24 || (major === 24 && minor >= 2);
+}
+
+type UefiFirmware =
+  | { kind: "bios"; path: string }
+  | { kind: "pflash"; codePath: string; varsPath: string };
+
+// Monolithic firmware blobs work with plain -bios; OVMF_CODE volumes need to
+// be paired with a writable VARS flash drive (pflash).
+export async function resolveJunosEvoUefiFirmware(
+  existsFn: (candidate: string) => Promise<boolean> = async (candidate) => {
+    try {
+      await access(candidate);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+): Promise<UefiFirmware | null> {
+  const monolithic = [
+    "/usr/share/qemu/OVMF.fd",
+    "/usr/share/qemu/edk2-x86_64-code.fd",
+    "/opt/homebrew/share/qemu/edk2-x86_64-code.fd",
+    "/usr/local/share/qemu/edk2-x86_64-code.fd",
+    "/usr/share/OVMF/OVMF.fd",
+  ];
+  for (const candidate of monolithic) {
+    try {
+      if (await existsFn(candidate)) {
+        return { kind: "bios", path: candidate };
+      }
+    } catch {
+      // not present, keep probing
+    }
+  }
+
+  const paired = [
+    ["/usr/share/edk2/ovmf/OVMF_CODE.fd", "/usr/share/edk2/ovmf/OVMF_VARS.fd"],
+    ["/usr/share/OVMF/OVMF_CODE.fd", "/usr/share/OVMF/OVMF_VARS.fd"],
+  ];
+  for (const [codePath, varsPath] of paired) {
+    try {
+      if ((await existsFn(codePath)) && (await existsFn(varsPath))) {
+        return { kind: "pflash", codePath, varsPath };
+      }
+    } catch {
+      // not present, keep probing
+    }
+  }
+
+  return null;
+}
+
+// Always-on args for any Junos Evolved image: platform identity + USB bus.
+// Returns null when the image needs UEFI but no firmware could be found —
+// callers must refuse to boot rather than hang the image on SeaBIOS.
+export function junosEvoProfileArgs(
+  imageFileName: string,
+  uefi: UefiFirmware | null,
+): string[] | null {
+  const bxVariant = imageFileName.toLowerCase().includes("bx");
+  const smbiosIdentity = bxVariant
+    ? "type=1,manufacturer=Bochs,product=Bochs,serial=chassis_no=0:slot=0:type=1:assembly_id=0x0DA9:platform=272:master=0:channelized=no"
+    : "type=1,manufacturer=Bochs,product=Bochs,serial=chassis_no=0:slot=0:type=1:assembly_id=0x0D20:platform=251:master=0:channelized=no";
+
+  const args = [
+    "-smbios",
+    "type=0,vendor=Bochs,version=Bochs",
+    "-smbios",
+    "type=3,manufacturer=Bochs",
+    "-smbios",
+    smbiosIdentity,
+    "-device",
+    "qemu-xhci,id=usb",
+  ];
+
+  if (junosEvoRequiresUefi(imageFileName)) {
+    if (!uefi) {
+      return null;
+    }
+    if (uefi.kind === "bios") {
+      args.push("-bios", uefi.path);
+    } else {
+      args.push(
+        "-drive",
+        `if=pflash,format=raw,file=${uefi.codePath},readonly=on`,
+      );
+      args.push(
+        "-drive",
+        `if=pflash,format=raw,file=${uefi.varsPath},readonly=off`,
+      );
+    }
+  }
+
+  return args;
+}
+
+export async function injectJunosEvoConfigDisk(
+  config: string,
+  outputPath: string,
+): Promise<string[]> {
+  await createJunosConfigDisk(config, outputPath);
+  return [
+    "-drive",
+    `file=${outputPath},format=raw,if=none,id=config_disk`,
+    "-device",
+    "usb-storage,bus=usb.0,port=1,drive=config_disk,id=usb-disk0,removable=off,write-cache=on",
+  ];
 }
 
 // --- Cisco IOSv vfat ---

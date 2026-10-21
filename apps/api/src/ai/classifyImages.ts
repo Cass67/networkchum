@@ -83,7 +83,9 @@ export async function classifyImages(input: {
     "the template that best matches the vendor/OS the image name implies.",
     "Also state the RAM (MB) and vCPU count that image realistically needs,",
     "inside that template's bounds. If nothing fits, use template id",
-    "generic-vm. Respond with JSON only:",
+    "generic-vm. Never replace a vendor-specific nameGuess with generic-vm:",
+    "vendor images need their vendor profile to boot correctly.",
+    "Respond with JSON only:",
     '{"classifications":[{"imageId":"...","templateId":"...","ramMb":2048,"vcpu":1,"reason":"short reason"}]}',
   ].join("\n");
 
@@ -121,7 +123,23 @@ export async function classifyImages(input: {
     if (seen.has(classification.imageId)) {
       continue;
     }
-    const template = knownTemplates.get(classification.templateId);
+    // The filename heuristic is a deterministic vendor match; the model may
+    // not downgrade it to the generic baseline, or the image would boot as an
+    // anonymous VM instead of getting its vendor profile (e.g. Junos Evolved
+    // images must land on juniper-vrr, not generic-vm).
+    let templateId = classification.templateId;
+    const nameGuess = images.find(
+      (image) => image.id === classification.imageId,
+    )?.suggestedTemplateId;
+    if (
+      templateId === "generic-vm" &&
+      nameGuess &&
+      nameGuess !== "generic-vm" &&
+      knownTemplates.has(nameGuess)
+    ) {
+      templateId = nameGuess;
+    }
+    const template = knownTemplates.get(templateId);
     if (!template) {
       continue;
     }
