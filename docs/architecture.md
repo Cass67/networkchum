@@ -23,7 +23,7 @@ flowchart LR
   API["Local API<br/>apps/api on :4000"]
   Bridge["Native Console Bridge<br/>tools/native-console-bridge on :4010"]
   Shared["packages/shared<br/>schemas and types"]
-  Data["File-backed state<br/>labs.json<br/>images.json<br/>runtime-states.json<br/>template-overrides.json"]
+  Data["File-backed state<br/>labs.json<br/>images.json<br/>image-repos.json<br/>runtime-states.json<br/>template-overrides.json"]
   QEMU["QEMU VMs<br/>serial TCP ports<br/>optional socket NIC ports"]
   Docker["Docker containers"]
   Switch["In-process virtualSwitch<br/>socket backend only"]
@@ -104,15 +104,16 @@ If you keep those seams clear in your head, the codebase becomes much easier to 
 
 ### Where State Lives
 
-| State               | Source of truth           | Persistence      | Primary owner                                       | Notes                                                                                                            |
-| ------------------- | ------------------------- | ---------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Labs and topology   | `labs.json`               | File-backed JSON | `labStore.ts`                                       | Stores `LabDocument` records with nodes, networks, attachments, annotations, and startup config set placeholders |
-| Runtime state       | `runtime-states.json`     | File-backed JSON | `runtimeStateStore.ts`                              | Stores actual process/container status, console ports, NIC ports, and command previews                           |
-| Images              | `images.json`             | File-backed JSON | `imageStore.ts`, `imageService.ts`, `scanImages.ts` | Tracks uploaded and scanned `qcow2` images plus template bindings                                                |
-| Template overrides  | `template-overrides.json` | File-backed JSON | `templateOverrideStore.ts`                          | Stores user-edited default RAM/vCPU/interface counts for built-in templates                                      |
-| Built-in templates  | `defaultTemplates.ts`     | Source code      | `TemplateRegistry`                                  | Static definitions for VM and container node types                                                               |
-| Derived catalog     | Computed at request time  | Not persisted    | `getCatalog.ts`                                     | Join of templates and active image bindings                                                                      |
-| Browser preferences | `localStorage`            | Browser storage  | `App.tsx`                                           | Theme, native console mode, and saved custom terminal definitions                                                |
+| State               | Source of truth           | Persistence      | Primary owner                                        | Notes                                                                                                            |
+| ------------------- | ------------------------- | ---------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Labs and topology   | `labs.json`               | File-backed JSON | `labStore.ts`                                        | Stores `LabDocument` records with nodes, networks, attachments, annotations, and startup config set placeholders |
+| Runtime state       | `runtime-states.json`     | File-backed JSON | `runtimeStateStore.ts`                               | Stores actual process/container status, console ports, NIC ports, and command previews                           |
+| Images              | `images.json`             | File-backed JSON | `imageStore.ts`, `imageService.ts`, `scanImages.ts`  | Tracks uploaded and scanned `qcow2` images plus template bindings                                                |
+| Image repos         | `image-repos.json`        | File-backed JSON | `repoStore.ts`, `repoListing.ts`, `pullRepoImage.ts` | Configured local/URL image sources; pulled files land in `images/repos/<repoId>/` and register in `images.json`  |
+| Template overrides  | `template-overrides.json` | File-backed JSON | `templateOverrideStore.ts`                           | Stores user-edited default RAM/vCPU/interface counts for built-in templates                                      |
+| Built-in templates  | `defaultTemplates.ts`     | Source code      | `TemplateRegistry`                                   | Static definitions for VM and container node types                                                               |
+| Derived catalog     | Computed at request time  | Not persisted    | `getCatalog.ts`                                      | Join of templates and active image bindings                                                                      |
+| Browser preferences | `localStorage`            | Browser storage  | `App.tsx`                                            | Theme, native console mode, and saved custom terminal definitions                                                |
 
 ### State Relationships
 
@@ -121,6 +122,7 @@ flowchart TD
   subgraph Persisted["Persisted state"]
     Labs["labs.json"]
     Images["images.json"]
+    Repos["image-repos.json"]
     Runtime["runtime-states.json"]
     Overrides["template-overrides.json"]
   end
@@ -157,10 +159,12 @@ flowchart TD
   DataDir["NETWORKCHUM_DATA_DIR<br/>(default: apps/api/data)"]
   DataDir --> Labs["labs.json"]
   DataDir --> Images["images.json"]
+  DataDir --> Repos["image-repos.json"]
   DataDir --> Runtime["runtime-states.json"]
   DataDir --> Overrides["template-overrides.json"]
   DataDir --> ImageDir["images/"]
   ImageDir --> Uploads["uploads/*.qcow2"]
+  ImageDir --> Pulled["repos/&lt;repoId&gt;/&lt;image&gt;/*.qcow2"]
   DataDir --> Overlays["overlays/&lt;labId&gt;/&lt;nodeId&gt;.qcow2"]
 ```
 
@@ -205,6 +209,7 @@ Important implementation notes:
 - `consoleRoutes`
 - `templateRoutes`
 - `imageRoutes`
+- `imageRepoRoutes` (local-directory and URL repos for device images)
 - `catalogRoutes`
 - `labRoutes`
 
@@ -237,6 +242,19 @@ Template and image handling are separated deliberately:
 - `imageService.ts` handles upload, bind/unbind, catalog removal, and file deletion.
 - `scanImages.ts` scans `qcow2` files, preserves prior bindings where possible, and heuristically suggests template IDs based on filenames.
 - `getCatalog.ts` joins templates and images into the operator-visible catalog.
+- `repoStore.ts` persists image repos to `image-repos.json`; `repoListing.ts` browses them; `pullRepoImage.ts` pulls images into the catalog.
+
+Image repos are sources of device disk images: a local directory or a URL.
+`repoListing.ts` auto-detects the URL strategy — ishare2-style shares such as
+`https://labhub.eu.org/0:/addons/qemu/` are listed through the published
+ishare2 index (with checksums), URLs ending in `.json` are treated as
+ishare2-style manifests, and anything else is parsed as an HTML directory
+listing. Pulls run in the background (`POST /image-repos/:repoId/pulls` then
+poll `GET /image-repos/:repoId/pulls`), download into
+`data/images/repos/<repoId>/…`, extract archives (tar via the system `tar`,
+zip via JSZip), verify MD5/SHA1 checksums, skip executable files, and register
+the resulting `.qcow2` files as pull-sourced images so they can be bound to
+templates and used in topologies like any other catalog image.
 
 Important behavior:
 

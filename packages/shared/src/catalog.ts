@@ -69,7 +69,7 @@ export const ImageRecordSchema = z.object({
   updatedAt: z.string().min(1),
   templateId: z.string().min(1).nullable(),
   suggestedTemplateId: z.string().min(1).nullable().optional(),
-  source: z.enum(["upload", "scan"]),
+  source: z.enum(["upload", "scan", "pull"]),
   catalogState: z.enum(["active", "removed"]),
 });
 

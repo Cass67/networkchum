@@ -99,6 +99,46 @@ type ImageRecordSummary = {
   catalogState: string;
 };
 
+export type ImageRepoSummary = {
+  id: string;
+  name: string;
+  kind: "local" | "url";
+  path?: string | null;
+  url?: string | null;
+  addedAt: string;
+};
+
+export type RepoEntrySummary = {
+  name: string;
+  path: string;
+  kind: "folder" | "file";
+  url: string | null;
+  sizeBytes: number | null;
+  checksumMd5?: string | null;
+  checksumSha1?: string | null;
+};
+
+export type RepoListingSummary = {
+  repoId: string;
+  path: string;
+  folders: RepoEntrySummary[];
+  files: RepoEntrySummary[];
+};
+
+export type RepoPullSummary = {
+  id: string;
+  repoId: string;
+  entryPath: string;
+  status: "running" | "done" | "error";
+  startedAt: string;
+  finishedAt: string | null;
+  currentFile: string | null;
+  bytesReceived: number | null;
+  images: string[];
+  warnings: string[];
+  error: string | null;
+};
+
 type StartupConfigSetSummary = {
   id: string;
   name: string;
@@ -216,7 +256,12 @@ type TemplatePayload = {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    const detail = (await response.json().catch(() => null)) as {
+      message?: string;
+    } | null;
+    throw new Error(
+      detail?.message ?? `Request failed with status ${response.status}`,
+    );
   }
 
   return response.json() as Promise<T>;
@@ -742,6 +787,74 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
         response as Response,
       );
       return payload.image;
+    },
+
+    async listImageRepos(): Promise<ImageRepoSummary[]> {
+      const response = await fetcher(`${baseUrl}/image-repos`);
+      const payload = await parseResponse<{ repos: ImageRepoSummary[] }>(
+        response as Response,
+      );
+      return payload.repos;
+    },
+
+    async addImageRepo(input: {
+      name: string;
+      kind: "local" | "url";
+      path?: string;
+      url?: string;
+    }): Promise<ImageRepoSummary> {
+      const response = await fetcher(`${baseUrl}/image-repos`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const payload = await parseResponse<{ repo: ImageRepoSummary }>(
+        response as Response,
+      );
+      return payload.repo;
+    },
+
+    async deleteImageRepo(repoId: string): Promise<void> {
+      const response = await fetcher(`${baseUrl}/image-repos/${repoId}`, {
+        method: "DELETE",
+      });
+      await parseResponse(response as Response);
+    },
+
+    async listRepoEntries(
+      repoId: string,
+      dirPath = "/",
+    ): Promise<RepoListingSummary> {
+      const response = await fetcher(
+        `${baseUrl}/image-repos/${repoId}/entries?path=${encodeURIComponent(dirPath)}`,
+      );
+      const payload = await parseResponse<RepoListingSummary>(
+        response as Response,
+      );
+      return payload;
+    },
+
+    async startRepoPull(
+      repoId: string,
+      entryPath: string,
+    ): Promise<RepoPullSummary> {
+      const response = await fetcher(`${baseUrl}/image-repos/${repoId}/pulls`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entryPath }),
+      });
+      const payload = await parseResponse<{ pull: RepoPullSummary }>(
+        response as Response,
+      );
+      return payload.pull;
+    },
+
+    async listRepoPulls(repoId: string): Promise<RepoPullSummary[]> {
+      const response = await fetcher(`${baseUrl}/image-repos/${repoId}/pulls`);
+      const payload = await parseResponse<{ pulls: RepoPullSummary[] }>(
+        response as Response,
+      );
+      return payload.pulls;
     },
 
     async updateTemplate(

@@ -389,6 +389,154 @@ describe("createApiClient", () => {
     expect(image.id).toBe("img-1");
   });
 
+  it("adds and browses an image repo through the backend", async () => {
+    const fetcher = vi.fn(async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/image-repos" && init?.method === "POST") {
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({
+            repo: {
+              id: "repo-labhub",
+              name: "LabHub qemu",
+              kind: "url",
+              path: null,
+              url: "https://labhub.eu.org/0:/addons/qemu/",
+              addedAt: "2026-10-21T00:00:00.000Z",
+            },
+          }),
+        };
+      }
+      if (url === "/api/image-repos/repo-labhub/entries?path=%2Flinux-min") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            repoId: "repo-labhub",
+            path: "/linux-min",
+            folders: [],
+            files: [
+              {
+                name: "virtioa.qcow2",
+                path: "/linux-min/virtioa.qcow2",
+                kind: "file",
+                url: null,
+                sizeBytes: 10,
+              },
+            ],
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
+
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+    const repo = await client.addImageRepo({
+      name: "LabHub qemu",
+      kind: "url",
+      url: "https://labhub.eu.org/0:/addons/qemu/",
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/image-repos",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "LabHub qemu",
+          kind: "url",
+          url: "https://labhub.eu.org/0:/addons/qemu/",
+        }),
+      }),
+    );
+    expect(repo.id).toBe("repo-labhub");
+
+    const listing = await client.listRepoEntries("repo-labhub", "/linux-min");
+    expect(listing.files).toEqual([
+      expect.objectContaining({ name: "virtioa.qcow2" }),
+    ]);
+  });
+
+  it("starts and polls a repo pull through the backend", async () => {
+    const fetcher = vi.fn(async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/image-repos/repo-1/pulls" && init?.method === "POST") {
+        return {
+          ok: true,
+          status: 202,
+          json: async () => ({
+            pull: {
+              id: "pull-1",
+              repoId: "repo-1",
+              entryPath: "/linux-min",
+              status: "running",
+              startedAt: "2026-10-21T00:00:00.000Z",
+              finishedAt: null,
+              currentFile: null,
+              bytesReceived: null,
+              images: [],
+              warnings: [],
+              error: null,
+            },
+          }),
+        };
+      }
+      if (url === "/api/image-repos/repo-1/pulls") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            pulls: [
+              {
+                id: "pull-1",
+                repoId: "repo-1",
+                entryPath: "/linux-min",
+                status: "done",
+                startedAt: "2026-10-21T00:00:00.000Z",
+                finishedAt: "2026-10-21T00:01:00.000Z",
+                currentFile: null,
+                bytesReceived: 1234,
+                images: ["img-1"],
+                warnings: [],
+                error: null,
+              },
+            ],
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
+
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+    const pull = await client.startRepoPull("repo-1", "/linux-min");
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/image-repos/repo-1/pulls",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ entryPath: "/linux-min" }),
+      }),
+    );
+    expect(pull.status).toBe("running");
+
+    const pulls = await client.listRepoPulls("repo-1");
+    expect(pulls).toEqual([
+      expect.objectContaining({ status: "done", images: ["img-1"] }),
+    ]);
+  });
+
+  it("surfaces the backend error message when adding a repo fails", async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => ({ message: "Path is not a directory: /nope" }),
+    }));
+    const client = createApiClient(fetcher as unknown as typeof fetch);
+
+    await expect(
+      client.addImageRepo({ name: "Bad", kind: "local", path: "/nope" }),
+    ).rejects.toThrow("Path is not a directory: /nope");
+  });
+
   it("deletes a lab through the backend", async () => {
     const fetcher = vi.fn(async () => ({
       ok: true,

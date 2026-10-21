@@ -23,6 +23,9 @@ import {
 } from "./api/client.js";
 import type {
   ContainerEngine,
+  ImageRepoSummary,
+  RepoListingSummary,
+  RepoPullSummary,
   RunningConfigBackupRecord,
 } from "./api/client.js";
 import { AddNodeDialog } from "./components/AddNodeDialog.js";
@@ -506,6 +509,23 @@ type ApiClient = {
     source: string;
     catalogState: string;
   }>;
+  listImageRepos?: () => Promise<ImageRepoSummary[]>;
+  addImageRepo?: (input: {
+    name: string;
+    kind: "local" | "url";
+    path?: string;
+    url?: string;
+  }) => Promise<ImageRepoSummary>;
+  deleteImageRepo?: (repoId: string) => Promise<void>;
+  listRepoEntries?: (
+    repoId: string,
+    dirPath: string,
+  ) => Promise<RepoListingSummary>;
+  startRepoPull?: (
+    repoId: string,
+    entryPath: string,
+  ) => Promise<RepoPullSummary>;
+  listRepoPulls?: (repoId: string) => Promise<RepoPullSummary[]>;
   updateTemplate?: (
     templateId: string,
     input: {
@@ -1307,6 +1327,7 @@ export function App({
       catalogState: string;
     }>
   >([]);
+  const [repos, setRepos] = useState<ImageRepoSummary[]>([]);
   const [selectedCableId, setSelectedCableId] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(
@@ -1481,8 +1502,9 @@ export function App({
       api.listCatalog(),
       api.listTemplates?.() ?? Promise.resolve([]),
       api.listImages?.() ?? Promise.resolve([]),
+      api.listImageRepos?.() ?? Promise.resolve([]),
     ])
-      .then(([nextLabs, nextCatalog, nextTemplates, nextImages]) => {
+      .then(([nextLabs, nextCatalog, nextTemplates, nextImages, nextRepos]) => {
         if (cancelled) {
           return;
         }
@@ -1496,6 +1518,7 @@ export function App({
           ),
         );
         setImages(nextImages);
+        setRepos(nextRepos);
         setSelectedLabId((current) => {
           if (current && nextLabs.length === 0) {
             return current;
@@ -1518,6 +1541,7 @@ export function App({
         setCatalog(demoCatalog);
         setImageBindableTemplates(deriveImageBindableTemplates(demoCatalog));
         setImages([]);
+        setRepos([]);
       });
 
     return () => {
@@ -2877,6 +2901,37 @@ export function App({
             <ImageLibrary
               images={images}
               templates={imageBindableTemplates}
+              repos={repos}
+              onAddRepo={async (input) => {
+                if (!api.addImageRepo) {
+                  throw new Error("Repo management is unavailable");
+                }
+                const repo = await api.addImageRepo(input);
+                setRepos((await api.listImageRepos?.()) ?? []);
+                return repo;
+              }}
+              onRemoveRepo={async (repoId) => {
+                await api.deleteImageRepo?.(repoId);
+                setRepos((await api.listImageRepos?.()) ?? []);
+              }}
+              onLoadRepoEntries={async (repoId, dirPath) => {
+                if (!api.listRepoEntries) {
+                  throw new Error("Repo browsing is unavailable");
+                }
+                return api.listRepoEntries(repoId, dirPath);
+              }}
+              onStartRepoPull={async (repoId, entryPath) => {
+                if (!api.startRepoPull) {
+                  throw new Error("Repo pulls are unavailable");
+                }
+                return api.startRepoPull(repoId, entryPath);
+              }}
+              onLoadRepoPulls={async (repoId) => {
+                return (await api.listRepoPulls?.(repoId)) ?? [];
+              }}
+              onPullComplete={async () => {
+                await refreshImages();
+              }}
               onSelectImage={(imageId) => {
                 setSelectedImageId(imageId);
                 setSelectedNodeId(null);

@@ -2,8 +2,15 @@ import { useRef, useState } from "react";
 
 import { suggestTemplateId } from "@networkchum/shared";
 
+import type {
+  ImageRepoSummary,
+  RepoListingSummary,
+  RepoPullSummary,
+} from "../api/client.js";
+
 import { ConfirmDialog } from "./ConfirmDialog.js";
 import { ContextMenu } from "./ContextMenu.js";
+import { ImageRepoBrowser } from "./ImageRepoBrowser.js";
 
 type ImageSummary = {
   id: string;
@@ -23,6 +30,24 @@ type ImageLibraryProps = {
   onRemoveFromCatalog: (imageId: string) => void | Promise<void>;
   onDeleteImageFile: (imageId: string) => void | Promise<void>;
   onSelectImage?: (imageId: string) => void;
+  repos?: ImageRepoSummary[];
+  onAddRepo?: (input: {
+    name: string;
+    kind: "local" | "url";
+    path?: string;
+    url?: string;
+  }) => Promise<ImageRepoSummary>;
+  onRemoveRepo?: (repoId: string) => Promise<void>;
+  onLoadRepoEntries?: (
+    repoId: string,
+    dirPath: string,
+  ) => Promise<RepoListingSummary>;
+  onStartRepoPull?: (
+    repoId: string,
+    entryPath: string,
+  ) => Promise<RepoPullSummary>;
+  onLoadRepoPulls?: (repoId: string) => Promise<RepoPullSummary[]>;
+  onPullComplete?: () => void | Promise<void>;
 };
 
 type UploadDialogState =
@@ -57,6 +82,13 @@ export function ImageLibrary({
   onRemoveFromCatalog,
   onDeleteImageFile,
   onSelectImage,
+  repos,
+  onAddRepo,
+  onRemoveRepo,
+  onLoadRepoEntries,
+  onStartRepoPull,
+  onLoadRepoPulls,
+  onPullComplete,
 }: ImageLibraryProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dialog, setDialog] = useState<UploadDialogState>({ open: false });
@@ -154,6 +186,15 @@ export function ImageLibrary({
     suggestedForWizard !== null &&
     templates.some((t) => t.id === suggestedForWizard);
 
+  const repoBrowserEnabled =
+    repos != null &&
+    onAddRepo != null &&
+    onRemoveRepo != null &&
+    onLoadRepoEntries != null &&
+    onStartRepoPull != null &&
+    onLoadRepoPulls != null &&
+    onPullComplete != null;
+
   return (
     <section className="panel-section">
       <div className="panel-section-header">
@@ -169,6 +210,18 @@ export function ImageLibrary({
           Upload Image
         </button>
       </div>
+
+      {repoBrowserEnabled ? (
+        <ImageRepoBrowser
+          repos={repos ?? []}
+          onAddRepo={onAddRepo!}
+          onRemoveRepo={onRemoveRepo!}
+          onLoadRepoEntries={onLoadRepoEntries!}
+          onStartRepoPull={onStartRepoPull!}
+          onLoadRepoPulls={onLoadRepoPulls!}
+          onPullComplete={onPullComplete!}
+        />
+      ) : null}
 
       {dialog.open && (
         <div
