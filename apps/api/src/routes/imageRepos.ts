@@ -30,6 +30,7 @@ const entriesQuerySchema = z.object({
 
 const pullBodySchema = z.object({
   entryPath: z.string().trim().min(1),
+  templateId: z.string().trim().min(1).optional(),
 });
 
 function slugify(value: string): string {
@@ -130,7 +131,7 @@ export const imageRepoRoutes: FastifyPluginAsync<AppDependencies> = async (
     const { repoId } = z
       .object({ repoId: z.string().min(1) })
       .parse(request.params);
-    const { entryPath } = pullBodySchema.parse(request.body);
+    const { entryPath, templateId } = pullBodySchema.parse(request.body);
 
     const repo = (await listImageRepos()).find((entry) => entry.id === repoId);
     if (!repo) {
@@ -139,7 +140,7 @@ export const imageRepoRoutes: FastifyPluginAsync<AppDependencies> = async (
 
     let pull;
     try {
-      pull = await startRepoPull({ repo, entryPath, fetcher });
+      pull = await startRepoPull({ repo, entryPath, fetcher, templateId });
     } catch (error) {
       return reply.code(400).send({
         message:

@@ -62,6 +62,8 @@ export type StartRepoPullInput = {
   repo: ImageRepo;
   entryPath: string;
   fetcher?: Fetcher;
+  /** When set, newly registered images are bound to this template. */
+  templateId?: string;
 };
 
 /**
@@ -80,18 +82,20 @@ export async function startRepoPull(
     id: `pull-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     repoId: input.repo.id,
     entryPath,
+    templateId: input.templateId ?? null,
     status: "running",
     startedAt: new Date().toISOString(),
     finishedAt: null,
     currentFile: null,
     bytesReceived: null,
+    totalBytes: null,
     images: [],
     warnings: [],
     error: null,
   };
   pulls.set(record.id, record);
 
-  void runPull(input.repo, entryPath, record, input.fetcher);
+  void runPull(input.repo, entryPath, record, input.fetcher, input.templateId);
 
   return record;
 }
@@ -106,6 +110,7 @@ async function runPull(
   entryPath: string,
   record: RepoPull,
   fetcher?: Fetcher,
+  templateId?: string,
 ): Promise<void> {
   try {
     const strategy = createRepoListingStrategy(repo, fetcher);
@@ -114,12 +119,38 @@ async function runPull(
     } else {
       await pullFromUrl(repo, entryPath, strategy, record, fetcher ?? fetch);
     }
+    if (templateId) {
+      await bindImagesToTemplate(record, templateId);
+    }
     record.status = "done";
     record.finishedAt = new Date().toISOString();
   } catch (error) {
     record.status = "error";
     record.error = error instanceof Error ? error.message : String(error);
     record.finishedAt = new Date().toISOString();
+  }
+}
+
+/** Binds every image registered by this pull to the chosen template. */
+async function bindImagesToTemplate(
+  record: RepoPull,
+  templateId: string,
+): Promise<void> {
+  const images = await listImages();
+  let changed = false;
+  for (const imageId of record.images) {
+    const image = images.find((entry) => entry.id === imageId);
+    if (!image) {
+      continue;
+    }
+    image.templateId = templateId;
+    if (image.catalogState === "removed") {
+      image.catalogState = "active";
+    }
+    changed = true;
+  }
+  if (changed) {
+    await saveImages(images);
   }
 }
 
@@ -296,6 +327,13 @@ async function pullFromUrl(
   const prefixToStrip = isFolder
     ? `${entryPath}/`
     : `${parentDirPath(entryPath)}/`;
+
+  // Expected download size for the progress bar (url repos only).
+  const totalBytes = files.reduce(
+    (sum, file) => sum + (file.sizeBytes ?? 0),
+    0,
+  );
+  record.totalBytes = totalBytes > 0 ? totalBytes : null;
 
   let totalReceived = 0;
   for (const file of files) {

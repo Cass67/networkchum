@@ -45,12 +45,17 @@ export const RepoPullSchema = z.object({
   repoId: z.string().min(1),
   /** Repo-relative path of the pulled folder or file. */
   entryPath: z.string().min(1),
+  /** Optional template the pulled images get bound to after registration. */
+  templateId: z.string().nullable(),
   status: RepoPullStatusSchema,
   startedAt: z.string().min(1),
   finishedAt: z.string().nullable(),
   currentFile: z.string().nullable(),
   /** Bytes downloaded so far (url repos only; null for local repos). */
   bytesReceived: z.number().int().nonnegative().nullable(),
+  /** Total expected download size when known; null for local repos. */
+  totalBytes: z.number().int().nonnegative().nullable(),
+  /** Bound image ids, after the pull registers them. */
   images: z.array(z.string()).default([]),
   warnings: z.array(z.string()).default([]),
   error: z.string().nullable(),

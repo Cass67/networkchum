@@ -524,6 +524,7 @@ type ApiClient = {
   startRepoPull?: (
     repoId: string,
     entryPath: string,
+    templateId?: string,
   ) => Promise<RepoPullSummary>;
   listRepoPulls?: (repoId: string) => Promise<RepoPullSummary[]>;
   updateTemplate?: (
@@ -2920,11 +2921,11 @@ export function App({
                 }
                 return api.listRepoEntries(repoId, dirPath);
               }}
-              onStartRepoPull={async (repoId, entryPath) => {
+              onStartRepoPull={async (repoId, entryPath, templateId) => {
                 if (!api.startRepoPull) {
                   throw new Error("Repo pulls are unavailable");
                 }
-                return api.startRepoPull(repoId, entryPath);
+                return api.startRepoPull(repoId, entryPath, templateId);
               }}
               onLoadRepoPulls={async (repoId) => {
                 return (await api.listRepoPulls?.(repoId)) ?? [];

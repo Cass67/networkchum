@@ -45,6 +45,7 @@ type ImageLibraryProps = {
   onStartRepoPull?: (
     repoId: string,
     entryPath: string,
+    templateId?: string,
   ) => Promise<RepoPullSummary>;
   onLoadRepoPulls?: (repoId: string) => Promise<RepoPullSummary[]>;
   onPullComplete?: () => void | Promise<void>;
@@ -214,6 +215,7 @@ export function ImageLibrary({
       {repoBrowserEnabled ? (
         <ImageRepoBrowser
           repos={repos ?? []}
+          templates={templates}
           onAddRepo={onAddRepo!}
           onRemoveRepo={onRemoveRepo!}
           onLoadRepoEntries={onLoadRepoEntries!}

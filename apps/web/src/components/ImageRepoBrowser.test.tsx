@@ -13,8 +13,14 @@ afterEach(() => {
   cleanup();
 });
 
+const TEMPLATES = [
+  { id: "juniper-vrr", name: "Juniper VRR" },
+  { id: "cisco-asr", name: "Cisco ASR" },
+];
+
 function renderBrowser(
   overrides: {
+    repos?: ImageRepoSummary[];
     onLoadRepoEntries?: (
       repoId: string,
       dirPath: string,
@@ -22,6 +28,7 @@ function renderBrowser(
     onStartRepoPull?: (
       repoId: string,
       entryPath: string,
+      templateId?: string,
     ) => Promise<RepoPullSummary>;
     onLoadRepoPulls?: (repoId: string) => Promise<RepoPullSummary[]>;
   } = {},
@@ -39,18 +46,27 @@ function renderBrowser(
       async (): Promise<RepoListingSummary> => ({
         repoId: repo.id,
         path: "/",
-        folders: [
+        folders: [],
+        files: [
           {
-            name: "linux-min",
-            path: "/linux-min",
-            kind: "folder",
+            name: "vJunosEvolved-23.1R1.8.qcow2",
+            path: "/vJunosEvolved-23.1R1.8.qcow2",
+            kind: "file",
             url: null,
             sizeBytes: 1024,
             checksumMd5: null,
             checksumSha1: null,
           },
+          {
+            name: "mystery.qcow2",
+            path: "/mystery.qcow2",
+            kind: "file",
+            url: null,
+            sizeBytes: 2048,
+            checksumMd5: null,
+            checksumSha1: null,
+          },
         ],
-        files: [],
       }),
     );
   const onStartRepoPull =
@@ -59,12 +75,14 @@ function renderBrowser(
       async (): Promise<RepoPullSummary> => ({
         id: "pull-1",
         repoId: repo.id,
-        entryPath: "/linux-min",
+        entryPath: "/vJunosEvolved-23.1R1.8.qcow2",
+        templateId: null,
         status: "running",
         startedAt: new Date().toISOString(),
         finishedAt: null,
         currentFile: null,
         bytesReceived: null,
+        totalBytes: null,
         images: [],
         warnings: [],
         error: null,
@@ -76,7 +94,8 @@ function renderBrowser(
 
   render(
     <ImageRepoBrowser
-      repos={[repo]}
+      repos={overrides.repos ?? [repo]}
+      templates={TEMPLATES}
       onAddRepo={vi.fn()}
       onRemoveRepo={vi.fn()}
       onLoadRepoEntries={onLoadRepoEntries}
@@ -98,6 +117,7 @@ describe("ImageRepoBrowser", () => {
     render(
       <ImageRepoBrowser
         repos={[]}
+        templates={TEMPLATES}
         onAddRepo={onAddRepo}
         onRemoveRepo={vi.fn()}
         onLoadRepoEntries={vi.fn()}
@@ -123,32 +143,51 @@ describe("ImageRepoBrowser", () => {
     });
   });
 
-  it("browses a repo and pulls a folder", async () => {
-    const { onLoadRepoEntries, onStartRepoPull } = renderBrowser({});
-    const repoBrowser = new Promise((resolve) => setTimeout(resolve, 0));
+  it("suggests a device for recognizable images and lets you pick one", async () => {
+    const { onStartRepoPull } = renderBrowser({});
 
     fireEvent.click(screen.getByRole("button", { name: "Browse" }));
+    await screen.findByText(/vJunosEvolved/i);
 
-    await repoBrowser;
-    expect(onLoadRepoEntries).toHaveBeenCalledWith("repo-labhub", "/");
-    expect(screen.getByText(/linux-min\//i)).toBeInTheDocument();
+    // The name matcher suggests Juniper VRR, shown as a hint and preselected.
+    expect(screen.getByText(/looks like Juniper VRR/i)).toBeInTheDocument();
+    const select = screen.getByLabelText(
+      /Device for vJunosEvolved/i,
+    ) as HTMLSelectElement;
+    expect(select.value).toBe("juniper-vrr");
 
-    fireEvent.click(screen.getByRole("button", { name: "Pull folder" }));
-    expect(onStartRepoPull).toHaveBeenCalledWith("repo-labhub", "/linux-min");
+    // Unknown images default to "Device?" until the user picks one.
+    const mysterySelect = screen.getByLabelText(
+      /Device for mystery/i,
+    ) as HTMLSelectElement;
+    expect(mysterySelect.value).toBe("");
+
+    const row = screen.getByText(/vJunosEvolved/i).closest("li")!;
+    const pullButton = [...row.querySelectorAll("button")].find(
+      (button) => button.textContent === "Pull",
+    )!;
+    fireEvent.click(pullButton);
+    expect(onStartRepoPull).toHaveBeenCalledWith(
+      "repo-labhub",
+      "/vJunosEvolved-23.1R1.8.qcow2",
+      "juniper-vrr",
+    );
   });
 
-  it("shows pull progress and completion", async () => {
+  it("shows a progress bar with percent while pulling", async () => {
     vi.useFakeTimers();
     try {
       const running: RepoPullSummary = {
         id: "pull-1",
         repoId: "repo-labhub",
-        entryPath: "/linux-min",
+        entryPath: "/vJunosEvolved-23.1R1.8.qcow2",
+        templateId: "juniper-vrr",
         status: "running",
         startedAt: new Date().toISOString(),
         finishedAt: null,
-        currentFile: "/linux-min/virtioa.qcow2",
-        bytesReceived: 2048,
+        currentFile: null,
+        bytesReceived: 512,
+        totalBytes: 1024,
         images: [],
         warnings: [],
         error: null,
@@ -156,26 +195,63 @@ describe("ImageRepoBrowser", () => {
       const done: RepoPullSummary = {
         ...running,
         status: "done",
-        currentFile: null,
         finishedAt: new Date().toISOString(),
         images: ["img-1"],
       };
       const onLoadRepoPulls = vi
         .fn()
         .mockImplementationOnce(async () => [] as RepoPullSummary[])
-        .mockImplementation(async () => [running] as RepoPullSummary[]);
-      const { onLoadRepoEntries } = renderBrowser({ onLoadRepoPulls });
-      void onLoadRepoEntries;
+        .mockImplementationOnce(async () => [running])
+        .mockImplementation(async () => [done]);
+      const { onStartRepoPull } = renderBrowser({ onLoadRepoPulls });
+      void onStartRepoPull;
 
       fireEvent.click(screen.getByRole("button", { name: "Browse" }));
 
-      await vi.advanceTimersByTimeAsync(2100);
-      expect(screen.getByText(/Pulling \/linux-min/i)).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(
+        screen.getByRole("progressbar").getAttribute("aria-valuenow"),
+      ).toBe("50");
+      expect(screen.getByText(/50%/)).toBeInTheDocument();
 
-      onLoadRepoPulls.mockImplementation(async () => [done]);
-      await vi.advanceTimersByTimeAsync(2100);
-      await vi.advanceTimersByTimeAsync(2100);
+      await vi.advanceTimersByTimeAsync(1100);
+      await vi.advanceTimersByTimeAsync(1100);
       expect(screen.getByText(/Pull complete/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps pull buttons disabled while a pull runs", async () => {
+    vi.useFakeTimers();
+    try {
+      const running: RepoPullSummary = {
+        id: "pull-1",
+        repoId: "repo-labhub",
+        entryPath: "/vJunosEvolved-23.1R1.8.qcow2",
+        templateId: null,
+        status: "running",
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        currentFile: null,
+        bytesReceived: null,
+        totalBytes: null,
+        images: [],
+        warnings: [],
+        error: null,
+      };
+      const onLoadRepoPulls = vi.fn().mockImplementation(async () => [running]);
+      renderBrowser({ onLoadRepoPulls });
+
+      fireEvent.click(screen.getByRole("button", { name: "Browse" }));
+      await vi.advanceTimersByTimeAsync(1100);
+
+      const pulls = [...screen.getAllByRole("button", { name: /Pull/ })];
+      expect(pulls.length).toBeGreaterThan(0);
+      expect(pulls.every((button) => button.hasAttribute("disabled"))).toBe(
+        true,
+      );
+      expect(screen.getByText(/Pulling \/vJunosEvolved/i)).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

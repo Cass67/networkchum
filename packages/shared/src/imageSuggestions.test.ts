@@ -11,6 +11,14 @@ describe("suggestTemplateId", () => {
     expect(suggestTemplateId("veos-usb.qcow2")).toBe("arista-veos");
   });
 
+  it("maps Juniper Evolved / vJunos images to VRR", () => {
+    expect(suggestTemplateId("vJunosEvolved-23.1R1.8.qcow2")).toBe(
+      "juniper-vrr",
+    );
+    expect(suggestTemplateId("vjuniper-23.2R1.qcow2")).toBe("juniper-vrr");
+    expect(suggestTemplateId("vrr-4.qcow2")).toBe("juniper-vrr");
+  });
+
   it("matches container image names too", () => {
     expect(suggestTemplateId("alpine-3.20.qcow2")).toBe(
       "linux-alpine-container",

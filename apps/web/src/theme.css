@@ -1780,3 +1780,43 @@ body {
   filter: drop-shadow(0 0 1px color-mix(in srgb, var(--glyph-neon-vm) 65%, transparent))
     drop-shadow(0 0 4px color-mix(in srgb, var(--glyph-neon-vm) 30%, transparent));
 }
+
+/* Repo pull progress */
+.repo-device-select {
+  max-width: 9rem;
+  min-width: 5.5rem;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.72rem;
+}
+
+.pull-progress {
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.pull-progress-label,
+.pull-progress-meta {
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+}
+
+.pull-progress-meta {
+  color: var(--text-muted);
+}
+
+.pull-progress-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  overflow: hidden;
+}
+
+.pull-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  transition: width 0.4s ease;
+}

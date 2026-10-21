@@ -54,6 +54,15 @@ export function suggestTemplateId(fileName: string): string | null {
   if (lower.includes("vsrx")) {
     return "juniper-vsrx";
   }
+  if (
+    lower.includes("vjunos") ||
+    lower.includes("junosevo") ||
+    lower.includes("evolved") ||
+    lower.includes("vrr") ||
+    lower.includes("vjuniper")
+  ) {
+    return "juniper-vrr";
+  }
   if (lower.includes("vmxvfp") || lower.includes("vfp")) {
     return "juniper-vmx-vfp";
   }

@@ -129,11 +129,13 @@ export type RepoPullSummary = {
   id: string;
   repoId: string;
   entryPath: string;
+  templateId: string | null;
   status: "running" | "done" | "error";
   startedAt: string;
   finishedAt: string | null;
   currentFile: string | null;
   bytesReceived: number | null;
+  totalBytes: number | null;
   images: string[];
   warnings: string[];
   error: string | null;
@@ -837,11 +839,12 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
     async startRepoPull(
       repoId: string,
       entryPath: string,
+      templateId?: string,
     ): Promise<RepoPullSummary> {
       const response = await fetcher(`${baseUrl}/image-repos/${repoId}/pulls`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ entryPath }),
+        body: JSON.stringify({ entryPath, templateId }),
       });
       const payload = await parseResponse<{ pull: RepoPullSummary }>(
         response as Response,

@@ -150,6 +150,8 @@ describe("repo pulls", () => {
     expect(finished.warnings).toEqual([expect.stringContaining("install.sh")]);
     expect(finished.images).toHaveLength(1);
     expect(finished.bytesReceived).toBe(QCOW2_CONTENT.length);
+    // The skipped install.sh still counts toward the expected total.
+    expect(finished.totalBytes).toBe(QCOW2_CONTENT.length + 1);
 
     const images = await listImages();
     expect(images).toEqual([
@@ -273,5 +275,46 @@ describe("repo pulls", () => {
       "csr1000v",
     );
     expect(await readdir(targetDir)).toEqual(["hda.qcow2"]);
+  });
+
+  it("binds pulled images to the chosen template", async () => {
+    const md5 = createHash("md5").update(QCOW2_CONTENT).digest("hex");
+    const manifest = {
+      images: [
+        {
+          name: "linux-min",
+          files: [
+            {
+              path: "/linux-min/virtioa.qcow2",
+              size: QCOW2_CONTENT.length,
+              checksum: { md5 },
+            },
+          ],
+        },
+      ],
+    };
+
+    const fetcher = (async (input: unknown) => {
+      const url = typeof input === "string" ? input : String(input);
+      if (url === "https://example.test/index.json") {
+        return new Response(JSON.stringify(manifest), { status: 200 });
+      }
+      return new Response(QCOW2_CONTENT, { status: 200 });
+    }) as typeof fetch;
+
+    const pull = await startRepoPull({
+      repo: manifestRepo(),
+      entryPath: "/linux-min",
+      fetcher,
+      templateId: "juniper-vrr",
+    });
+    const finished = await waitForPull(pull.id);
+
+    expect(finished.status).toBe("done");
+    expect(finished.templateId).toBe("juniper-vrr");
+    expect(finished.images).toHaveLength(1);
+
+    const images = await listImages();
+    expect(images[0]?.templateId).toBe("juniper-vrr");
   });
 });

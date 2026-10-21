@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { suggestTemplateId } from "@networkchum/shared";
+
 import type {
   ImageRepoSummary,
   RepoListingSummary,
@@ -10,6 +12,7 @@ import { ConfirmDialog } from "./ConfirmDialog.js";
 
 type ImageRepoBrowserProps = {
   repos: ImageRepoSummary[];
+  templates?: Array<{ id: string; name: string }>;
   onAddRepo: (input: {
     name: string;
     kind: "local" | "url";
@@ -24,6 +27,7 @@ type ImageRepoBrowserProps = {
   onStartRepoPull: (
     repoId: string,
     entryPath: string,
+    templateId?: string,
   ) => Promise<RepoPullSummary>;
   onLoadRepoPulls: (repoId: string) => Promise<RepoPullSummary[]>;
   onPullComplete: () => void | Promise<void>;
@@ -59,6 +63,19 @@ function repoLocation(repo: ImageRepoSummary): string {
   return repo.kind === "local" ? (repo.path ?? "") : (repo.url ?? "");
 }
 
+function progressPercent(pull: {
+  bytesReceived: number | null;
+  totalBytes: number | null;
+}): number {
+  if (!pull.totalBytes) {
+    return 0;
+  }
+  const percent = Math.round(
+    ((pull.bytesReceived ?? 0) / pull.totalBytes) * 100,
+  );
+  return Math.min(100, Math.max(0, percent));
+}
+
 function parentPath(dirPath: string): string {
   const trimmed = dirPath.replace(/\/+$/, "");
   if (trimmed === "") {
@@ -83,6 +100,7 @@ function pathSegments(dirPath: string): Array<{ label: string; path: string }> {
 
 export function ImageRepoBrowser({
   repos,
+  templates = [],
   onAddRepo,
   onRemoveRepo,
   onLoadRepoEntries,
@@ -104,6 +122,11 @@ export function ImageRepoBrowser({
     null,
   );
   const [startingPullPath, setStartingPullPath] = useState<string | null>(null);
+  const [pullStartError, setPullStartError] = useState<string | null>(null);
+  // Per-entry device choice at pull time: entryPath → templateId ("" = unknown).
+  const [deviceChoices, setDeviceChoices] = useState<Record<string, string>>(
+    {},
+  );
   const onLoadRepoPullsRef = useRef(onLoadRepoPulls);
   const onPullCompleteRef = useRef(onPullComplete);
   const onLoadRepoEntriesRef = useRef(onLoadRepoEntries);
@@ -173,7 +196,7 @@ export function ImageRepoBrowser({
       }
     };
     void load();
-    const timer = setInterval(load, 2000);
+    const timer = setInterval(load, 1000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -207,18 +230,36 @@ export function ImageRepoBrowser({
     }
   }
 
-  async function handlePull(entryPath: string) {
+  async function handlePull(entryPath: string, templateId?: string) {
     if (!browsedRepoId || startingPullPath) {
       return;
     }
     setStartingPullPath(entryPath);
+    setPullStartError(null);
     try {
-      await onStartRepoPullRef.current(browsedRepoId, entryPath);
-    } catch {
-      // Pull start failures surface via the pulls list on the next poll.
+      await onStartRepoPullRef.current(browsedRepoId, entryPath, templateId);
+    } catch (error) {
+      setPullStartError(
+        error instanceof Error ? error.message : "Failed to start pull",
+      );
     } finally {
       setStartingPullPath(null);
     }
+  }
+
+  /** What the name suggests, resolved to a device the user can pick. */
+  function suggestionFor(name: string): { id: string; name: string } | null {
+    const suggested = suggestTemplateId(name);
+    if (!suggested) {
+      return null;
+    }
+    const template = templates.find((entry) => entry.id === suggested);
+    return template ? { id: template.id, name: template.name } : null;
+  }
+
+  /** Default device choice for an entry: its suggestion, or empty. */
+  function defaultChoice(name: string): string {
+    return suggestionFor(name)?.id ?? "";
   }
 
   const browsedRepo =
@@ -428,50 +469,84 @@ export function ImageRepoBrowser({
 
                   {listing ? (
                     <ul className="entity-list" aria-label="Repo entries">
-                      {listing.folders.map((folder) => (
-                        <li key={folder.path} className="entity-list-item">
-                          <div className="list-card-row">
-                            <button
-                              type="button"
-                              className="resource-card-button"
-                              onClick={() => setCurrentPath(folder.path)}
-                            >
-                              {folder.name}/
-                            </button>
-                            <span className="resource-card-meta">
-                              {formatBytes(folder.sizeBytes)}
-                            </span>
-                            <button
-                              type="button"
-                              className="btn btn-sm"
-                              onClick={() => void handlePull(folder.path)}
-                              disabled={startingPullPath != null}
-                            >
-                              Pull folder
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                      {listing.files.map((file) => (
-                        <li key={file.path} className="entity-list-item">
-                          <div className="list-card-row">
-                            <span className="resource-card-button">
-                              {file.name}
-                            </span>
-                            <span className="resource-card-meta">
-                              {formatBytes(file.sizeBytes)}
-                            </span>
-                            <button
-                              type="button"
-                              className="btn btn-sm"
-                              onClick={() => void handlePull(file.path)}
-                              disabled={startingPullPath != null}
-                            >
-                              Pull
-                            </button>
-                          </div>
-                        </li>
-                      ))}
+                      {[
+                        ...listing.folders.map((entry) => ({
+                          entry,
+                          isFolder: true,
+                        })),
+                        ...listing.files.map((entry) => ({
+                          entry,
+                          isFolder: false,
+                        })),
+                      ].map(({ entry, isFolder }) => {
+                        const suggestion = suggestionFor(entry.name);
+                        const selected =
+                          deviceChoices[entry.path] ??
+                          defaultChoice(entry.name);
+                        const isPulling = runningPull?.entryPath === entry.path;
+                        const pullLabel = isPulling
+                          ? "Pulling…"
+                          : isFolder
+                            ? "Pull folder"
+                            : "Pull";
+                        return (
+                          <li key={entry.path} className="entity-list-item">
+                            <div className="list-card-row">
+                              {isFolder ? (
+                                <button
+                                  type="button"
+                                  className="resource-card-button"
+                                  onClick={() => setCurrentPath(entry.path)}
+                                >
+                                  {entry.name}/
+                                </button>
+                              ) : (
+                                <span className="resource-card-button">
+                                  {entry.name}
+                                </span>
+                              )}
+                              <span className="resource-card-meta">
+                                {formatBytes(entry.sizeBytes)}
+                                {suggestion
+                                  ? ` • looks like ${suggestion.name}`
+                                  : ""}
+                              </span>
+                              <select
+                                className="field-input repo-device-select"
+                                value={selected}
+                                aria-label={`Device for ${entry.name}`}
+                                disabled={runningPull != null}
+                                onChange={(event) =>
+                                  setDeviceChoices((current) => ({
+                                    ...current,
+                                    [entry.path]: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">Device?</option>
+                                {templates.map((template) => (
+                                  <option key={template.id} value={template.id}>
+                                    {template.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                onClick={() =>
+                                  void handlePull(
+                                    entry.path,
+                                    selected || undefined,
+                                  )
+                                }
+                                disabled={runningPull != null}
+                              >
+                                {pullLabel}
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
                       {listing.folders.length === 0 &&
                       listing.files.length === 0 ? (
                         <li className="entity-list-item">
@@ -483,16 +558,57 @@ export function ImageRepoBrowser({
                     </ul>
                   ) : null}
 
+                  {pullStartError ? (
+                    <p className="form-error">{pullStartError}</p>
+                  ) : null}
+
                   {runningPull ? (
-                    <p aria-live="polite">
-                      Pulling {runningPull.entryPath}
-                      {runningPull.currentFile
-                        ? ` — ${runningPull.currentFile}`
-                        : ""}
-                      {runningPull.bytesReceived != null
-                        ? ` (${formatBytes(runningPull.bytesReceived)})`
-                        : ""}
-                    </p>
+                    <div className="pull-progress" aria-live="polite">
+                      <p className="pull-progress-label">
+                        Pulling {runningPull.entryPath}
+                        {runningPull.currentFile
+                          ? ` — ${runningPull.currentFile.split("/").at(-1)}`
+                          : ""}
+                        {runningPull.templateId
+                          ? ` → binds to ${
+                              templates.find(
+                                (template) =>
+                                  template.id === runningPull.templateId,
+                              )?.name ?? runningPull.templateId
+                            }`
+                          : ""}
+                      </p>
+                      {runningPull.totalBytes ? (
+                        <>
+                          <div
+                            className="pull-progress-bar"
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={progressPercent(runningPull)}
+                            aria-label="Pull progress"
+                          >
+                            <div
+                              className="pull-progress-fill"
+                              style={{
+                                width: `${progressPercent(runningPull)}%`,
+                              }}
+                            />
+                          </div>
+                          <p className="pull-progress-meta">
+                            {formatBytes(runningPull.bytesReceived ?? 0)} of{" "}
+                            {formatBytes(runningPull.totalBytes ?? 0)} (
+                            {progressPercent(runningPull)}%)
+                          </p>
+                        </>
+                      ) : (
+                        <p className="pull-progress-meta">
+                          {runningPull.bytesReceived != null
+                            ? formatBytes(runningPull.bytesReceived)
+                            : "working…"}
+                        </p>
+                      )}
+                    </div>
                   ) : null}
                   {latestFinishedPull && !runningPull ? (
                     <p>
