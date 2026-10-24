@@ -132,8 +132,8 @@ describe("POST /ai/images/classify", () => {
       expect(unbound).toMatchObject({
         templateId: "juniper-vrr",
         suggestedTemplateId: "juniper-vrr",
-        suggestedRamMb: 8192,
-        suggestedVcpu: 4,
+        suggestedRamMb: 16384,
+        suggestedVcpu: 8,
         suggestedReason: "Junos Evolved router",
         suggestedSource: "ai",
       });
@@ -147,8 +147,8 @@ describe("POST /ai/images/classify", () => {
       await classifyApp.close();
     }
 
-    // New nodes for the classified image adopt the AI hardware, clamped into
-    // the template's bounds (juniper-vrr: ram max 8192, vcpu max 4).
+    // New nodes for the classified image adopt the AI hardware (juniper-vrr
+    // bounds: ram max 16384, vcpu max 8).
     const nodeApp = buildApp({
       runtime: {
         runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
@@ -184,8 +184,8 @@ describe("POST /ai/images/classify", () => {
           };
         }
       ).lab.document.nodes[0];
-      expect(node?.config.ramMb).toBe(8192);
-      expect(node?.config.vcpu).toBe(4);
+      expect(node?.config.ramMb).toBe(16384);
+      expect(node?.config.vcpu).toBe(8);
     } finally {
       await nodeApp.close();
     }
