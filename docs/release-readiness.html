@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetworkChum — Release Readiness Report</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1d212a;
+    --line: #2b303b;
+    --text: #e6e8ef;
+    --muted: #9aa3b5;
+    --green: #35c47a;
+    --red: #ef5b64;
+    --amber: #f0b64d;
+    --blue: #5aa7ff;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    padding: 40px 20px 80px;
+  }
+  main { max-width: 980px; margin: 0 auto; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 22px; margin-bottom: 28px; }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  h2 { font-size: 19px; margin: 36px 0 12px; letter-spacing: -0.01em; }
+  h3 { font-size: 15px; margin: 22px 0 8px; color: var(--text); }
+  p { margin: 10px 0; }
+  .sub { color: var(--muted); font-size: 13.5px; }
+  .meta { color: var(--muted); font-size: 13px; font-family: var(--mono); margin-top: 10px; }
+  .verdict {
+    display: flex; align-items: center; gap: 14px;
+    background: linear-gradient(180deg, #2a1a1d, #1c1517);
+    border: 1px solid #5a2a30; border-radius: 12px;
+    padding: 20px 22px; margin: 18px 0 8px;
+  }
+  .verdict .badge {
+    flex: 0 0 auto; background: var(--red); color: #150a0c;
+    font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 6px 11px; border-radius: 999px;
+  }
+  .verdict .headline { font-size: 17px; font-weight: 600; }
+  .verdict .detail { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 14px; }
+  .card .q { color: var(--muted); font-family: var(--mono); font-size: 12px; margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  tr:last-child td { border-bottom: none; }
+  td.num { color: var(--muted); font-family: var(--mono); font-size: 12.5px; width: 34px; }
+  .ok   { color: var(--green); font-weight: 600; }
+  .bad  { color: var(--red);   font-weight: 600; }
+  .warn { color: var(--amber); font-weight: 600; }
+  code, pre { font-family: var(--mono); font-size: 12.5px; }
+  code { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; color: #cfd6e4; }
+  pre {
+    background: #0b0e13; border: 1px solid var(--line); border-radius: 9px;
+    padding: 14px 16px; overflow-x: auto; color: #c8d0dd; line-height: 1.5;
+  }
+  .blocker { border-left: 3px solid var(--red); padding-left: 16px; margin: 26px 0; }
+  .blocker h3 { color: #ff8087; margin-top: 0; }
+  .blocker .evidence { margin-top: 8px; }
+  .evidence-label { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.07em; margin-top: 10px; }
+  .nonblocker { border-left: 3px solid var(--amber); padding-left: 16px; margin: 26px 0; }
+  .step {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 18px; margin: 10px 0;
+  }
+  .step .title { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; }
+  .step .title strong { font-size: 14.5px; }
+  .step .exit { color: var(--green); font-size: 12.5px; font-family: var(--mono); }
+  .step .why { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .step pre { margin: 10px 0 0; }
+  .pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .pill.red { background: #3a1d22; color: #ff939a; border: 1px solid #5a2a30; }
+  .pill.green { background: #143223; color: #7ee2a8; border: 1px solid #235f3d; }
+  .pill.amber { background: #33290f; color: #f4cd7c; border: 1px solid #6a5417; }
+  .pill.blue { background: #142537; color: #8ec6ff; border: 1px solid #24558a; }
+  footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+  ul { margin: 8px 0 8px 20px; padding: 0; }
+  li { margin: 5px 0; }
+  .checklist { list-style: none; margin-left: 0; }
+  .checklist li::before { content: "▢"; color: var(--muted); margin-right: 8px; display: inline-block; }
+  .checklist li.done::before { content: "▣"; color: var(--green); }
+  @media print {
+    body { background: #fff; color: #111; padding: 0; }
+    .card, .step, table, pre { background: #fff; border-color: #ccc; }
+    .verdict { background: #fff; border-color: #a33; }
+    .verdict .detail, .sub, .meta, .q, .why, td.num, .evidence-label { color: #555; }
+    code { background: #f4f4f4; color: #111; }
+    pre { color: #111; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>NetworkChum — Release Readiness Report</h1>
+  <p class="sub">Assessment of whether the current repository can be released, with the blockers, evidence, and the plan to get green.</p>
+  <div class="meta">Repo: github.com:Cass67/networkchum &nbsp;·&nbsp; Branch: main &nbsp;·&nbsp; Commit: 2de7591 &nbsp;·&nbsp; Date: Fri Oct 23 2026</div>
+</header>
+
+<div class="verdict">
+  <span class="badge" style="background: var(--green); color: #06170d;">Update</span>
+  <div>
+    <div class="headline">As of 2026-10-24, blockers 1–4 are fixed: CI is green, tests pass at HEAD, runtime audit is clean, and <code>v0.1.0</code> is tagged.</div>
+    <div class="detail">Still open before calling the release done: full-flow browser verification and clean-install validation. The original assessment below is kept as the historical record.</div>
+  </div>
+</div>
+
+<h2>What was verified</h2>
+<table>
+  <thead><tr><th>Check</th><th>Result</th><th>Evidence</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Production build (<code>npm run build</code>)</td>
+      <td class="ok">PASS</td>
+      <td><code>tsc</code> for shared/api/web clean; vite built 74 modules. <code>dist/index.html</code> 0.40&nbsp;kB, <code>index-*.js</code> 422.00&nbsp;kB (118.25&nbsp;kB gzip), <code>NodeConsole-*.js</code> 335.68&nbsp;kB (85.34&nbsp;kB gzip), CSS 31.31&nbsp;kB + 5.24&nbsp;kB.</td>
+    </tr>
+    <tr>
+      <td>Full suite in the working tree (<code>npm test</code>)</td>
+      <td class="ok">PASS</td>
+      <td>api: 42 files / 282 tests; web: 21 files / 221 tests; shared: 5 files / 23 tests; scripts+bridge: 66 tests. <strong>592 tests, 0 failing.</strong></td>
+    </tr>
+    <tr>
+      <td>Full suite at committed <code>HEAD</code></td>
+      <td class="bad">FAIL</td>
+      <td>1 failed / 1 passed in <code>apps/api/src/ai/classifyImages.route.test.ts</code> (run against a pristine archive of <code>2de7591</code>).</td>
+    </tr>
+    <tr>
+      <td>CI workflow</td>
+      <td class="bad">FAIL</td>
+      <td>Every run fails in 0s; the job never starts. Latest: run <code>39539940204</code> (2026-10-21T03:41:18Z).</td>
+    </tr>
+    <tr>
+      <td>Lockfile in sync (CI precondition)</td>
+      <td class="ok">PASS</td>
+      <td>Ran <code>npm install --package-lock-only</code> in a throwaway copy; <code>git diff --exit-code package-lock.json</code> clean. <em>LOCKFILE_IN_SYNC</em></td>
+    </tr>
+    <tr>
+      <td>Runtime dependency audit</td>
+      <td class="bad">FAIL</td>
+      <td><code>npm audit --omit=dev</code>: 6 high-severity advisories across fastify, find-my-way, ws.</td>
+    </tr>
+    <tr>
+      <td>Live deployment health (read-only)</td>
+      <td class="ok">PASS</td>
+      <td><code>GET 192.168.2.57:4000/health</code> → 200; <code>192.168.2.57:5173/</code> → 200; <code>GET /labs</code> unauthenticated → 401 (token auth enforced).</td>
+    </tr>
+    <tr>
+      <td>Release artifact</td>
+      <td class="bad">MISSING</td>
+      <td>No git tags. All packages at <code>0.1.0</code>. CHANGELOG ends at <code>## Unreleased</code>.</td>
+    </tr>
+    <tr>
+      <td>End-to-end / browser verification</td>
+      <td class="bad">NONE</td>
+      <td>No E2E or browser test suite exists; coverage is unit-level only.</td>
+    </tr>
+    <tr>
+      <td>Documentation</td>
+      <td class="ok">PASS</td>
+      <td>README.md, INSTALL.md, SECURITY.md, CONTRIBUTING.md, CHANGELOG.md, docs/architecture.md, docs/agent-builder.md.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Cleanup status — 2026-10-24</h2>
+<p class="sub">What was fixed after this assessment. Findings below are retained for the record.</p>
+<table>
+  <thead><tr><th>Item</th><th>Status</th><th>Evidence</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>1 · CI never executes</td>
+      <td class="ok">FIXED</td>
+      <td>Run <code>40111871632</code> on <code>main</code> → success. Commits <code>76c7eba</code> (valid timeout key), <code>533fe24</code> (install deps), <code>9e81ffa</code> (build before test).</td>
+    </tr>
+    <tr>
+      <td>2 · Committed HEAD red / dirty tree</td>
+      <td class="ok">FIXED</td>
+      <td><code>fc31951</code> updates the juniper-vrr expectations; full suite green at HEAD.</td>
+    </tr>
+    <tr>
+      <td>3 · Runtime dependency advisories</td>
+      <td class="ok">FIXED</td>
+      <td><code>f4c939b</code>: fastify 5.12.7, ws 8.22.0, zod 4.6.7; <code>npm audit --omit=dev</code> → 0 vulnerabilities. Deployed to the live box (versions verified there).</td>
+    </tr>
+    <tr>
+      <td>4 · No release artifact</td>
+      <td class="ok">FIXED</td>
+      <td>CHANGELOG has a dated <code>0.1.0</code> section (<code>b3dbb45</code>); annotated tag <code>v0.1.0</code> pushed.</td>
+    </tr>
+    <tr>
+      <td>5 · No end-to-end verification</td>
+      <td class="warn">PARTIAL</td>
+      <td>Headless-Chrome smoke on the live build: page renders, no error overlay, browser→API <code>/health</code> 200 and unauthenticated <code>/labs</code> 401. Full flow checklist (create lab, boot qemu + container, console, image pull, AI builder) and clean-install validation are still manual.</td>
+    </tr>
+    <tr>
+      <td>Extra · Linux-only test failures</td>
+      <td class="ok">FIXED</td>
+      <td><code>d40d4da</code>: injectable TAP probe (<code>powerNode.ts</code>) and fake mtools for the IOSv injection test; suite green on macOS and Linux.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Blockers (original assessment)</h2>
+
+<div class="blocker">
+  <h3>1 · CI never executes anything</h3>
+  <p><code>.github/workflows/ci.yml</code> line 10 uses <code>timeout-ms: 15</code>. GitHub Actions accepts <code>timeout-minutes</code>; the unknown key makes the workflow file invalid, so the job is rejected before checkout. All five most recent runs on <code>main</code> end as <code>failure</code> at <code>0s</code> — nothing has ever been tested or built in CI.</p>
+  <div class="evidence">
+    <div class="evidence-label">Evidence — workflow</div>
+    <pre>- runs-on: ubuntu-latest
+  timeout-ms: 15          <-- invalid key, workflow rejected
+  steps:</pre>
+    <div class="evidence-label">Evidence — recent runs</div>
+    <pre>completed  failure  Junos Evolved boot profile: platform identity, USB config disk, UEFI
+           .github/workflows/ci.yml   main   push   39539940204   0s   2026-10-21T03:41:18Z
+completed  failure  Persist and display the AI classification reason   ...   39538592248   0s
+completed  failure  AI image classification: template + hardware ...   39538108840   0s</pre>
+  </div>
+  <p><strong>Fix:</strong> change <code>timeout-ms: 15</code> → <code>timeout-minutes: 15</code>, push, and confirm a run that actually executes test + build.</p>
+</div>
+
+<div class="blocker">
+  <h3>2 · Committed main is red and the tree is dirty</h3>
+  <p>The Junos Evolved commit raised the juniper-vrr hardware bounds to <code>ramMb max 16384</code> / <code>vcpu max 8</code> in <code>apps/api/src/templates/defaultTemplates.ts:495-496</code>, but the classifier test still asserts the old <code>8192 / 4</code> values. The fix exists only as an uncommitted working-tree edit — so the release would either ship a red HEAD or ship an untracked fix.</p>
+  <div class="evidence">
+    <div class="evidence-label">Evidence — current template bounds</div>
+    <pre>configSchema: {
+  ramMb: { default: 8192, min: 4096, max: 16384 },   // defaultTemplates.ts:495
+  vcpu: { default: 4, min: 1, max: 8 },              // defaultTemplates.ts:496
+}</pre>
+    <div class="evidence-label">Evidence — HEAD test run (pristine archive of 2de7591)</div>
+    <pre>+   "suggestedRamMb": 16384
+-   "suggestedVcpu": 4
++   "suggestedVcpu": 8
+ ❯ src/ai/classifyImages.route.test.ts:132:23
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)</pre>
+    <div class="evidence-label">Evidence — uncommitted working tree</div>
+    <pre> M apps/api/src/ai/classifyImages.route.test.ts   (8192/4 → 16384/8; real fix)
+ M tools/native-console-bridge/server.js          (formatting only; unrelated)</pre>
+  </div>
+  <p><strong>Fix:</strong> commit the test expectation update (separately from the <code>server.js</code> formatting noise), then confirm the suite is green at HEAD.</p>
+</div>
+
+<div class="blocker">
+  <h3>3 · Six high-severity runtime vulnerabilities</h3>
+  <p><code>npm audit --omit=dev</code> reports 6 high-severity advisories in production dependencies. These are the API server and WebSocket layer, and the API is LAN-exposed with token auth — this is worth fixing before a release.</p>
+  <div class="evidence">
+    <div class="evidence-label">Evidence — installed vs. required</div>
+    <pre>fastify      5.8.4   installed   → needs &gt;= 5.12.7  (latest 5.12.7)
+  advisories: GHSA-247c-9743-5963, GHSA-w2qp-rph6-63g4, GHSA-3m5p-2c4r-xxw2,
+              GHSA-4mh8-r7rc-xpvc, GHSA-667r-xxjv-c9mm, GHSA-p68q-wchp-6fh7,
+              GHSA-hwr6-493r-vm6h, GHSA-9q9j-q6p8-xq58
+find-my-way  9.5.0   installed   → needs &gt;= 9.7      (latest 9.10.0)
+  advisory: GHSA-c96f-x56v-gq3h
+ws           8.20.0  installed   → needs &gt;= 8.22.0   (latest 8.22.0)
+  advisories: GHSA-58qx-3vcg-4xpx, GHSA-96hv-2xvq-fx4p
+
+npm audit (all deps): 19 vulnerabilities — 4 critical, 11 high, 2 moderate, 2 low
+                      (critical ones are dev-only; the 6 above are runtime)</pre>
+  </div>
+  <p><strong>Fix:</strong> bump <code>fastify</code> to ≥5.12.7 and <code>ws</code> to ≥8.22.0 (find-my-way follows fastify), refresh the lockfile, then re-run the full suite and build. Target: <code>0</code> high/critical runtime advisories.</p>
+</div>
+
+<div class="blocker">
+  <h3>4 · No release artifact</h3>
+  <p>There is no tagged commit, and the changelog is still in the <code>Unreleased</code> section. A release needs a dated changelog entry, a version bump if desired, and an annotated tag.</p>
+  <div class="evidence">
+    <div class="evidence-label">Evidence</div>
+    <pre>git tag              → (empty)
+package.json         → "version": "0.1.0"
+apps/api/package.json→ "version": "0.1.0"
+apps/web/package.json→ "version": "0.1.0"
+packages/shared      → "version": "0.1.0"
+CHANGELOG.md         → "## Unreleased" (no dated release)</pre>
+  </div>
+</div>
+
+<div class="blocker">
+  <h3>5 · No end-to-end verification</h3>
+  <p>All coverage is unit-level (vitest). There is no browser/E2E suite. Repo rules require a change touching frontend and backend to be verified in a real browser, not by curl against error paths. The live box is healthy, but it has not been verified against this build or this commit.</p>
+  <div class="evidence">
+    <div class="evidence-label">Evidence — live box reachability (read-only)</div>
+    <pre>http://192.168.2.57:4000/health      → 200
+http://192.168.2.57:5173/            → 200
+http://192.168.2.57:4000/labs (no token) → 401</pre>
+  </div>
+</div>
+
+<h2>Non-blockers / pre-flight notes</h2>
+
+<div class="nonblocker">
+  <ul>
+    <li><strong>Pre-commit config exists but is not wired into npm:</strong> <code>.pre-commit-config.yaml</code> defines prettier, eslint, tsc-noemit, gitleaks, shellcheck and other hooks, but <code>package.json</code> has no lint/format script — they only run if pre-commit is installed locally.</li>
+    <li><strong>Local-only directories are correctly ignored:</strong> <code>.networkchum/</code> (<code>.gitignore:8</code>), <code>.worktrees/</code> (<code>.gitignore:7</code>) and <code>node_modules/</code> (<code>.gitignore:1</code>) are not tracked. No token files are tracked.</li>
+    <li><strong>Worktrees/branches:</strong> <code>git branch --merged main</code> lists <code>codex/role-based-node-icons</code>, <code>codex/task4-legacy-nic-backends</code> and <code>feature/csr1000v-startup-config</code> — no unmerged work outside <code>main</code>.</li>
+    <li><strong>Engine requirement:</strong> <code>engines.node &gt;= 22</code>; the host runs Node v22.23.2 — consistent.</li>
+    <li><strong>Unrelated formatting diff:</strong> the <code>tools/native-console-bridge/server.js</code> change is a line-wrap only and should be committed separately or dropped.</li>
+  </ul>
+</div>
+
+<h2>Plan to get release-ready</h2>
+<p class="sub">Execute in order. Each step has an exit criterion; do not proceed until it is met.</p>
+
+<div class="step">
+  <div class="title"><strong>1 — Commit the test fix</strong><span class="exit">exit: full suite green in working tree</span></div>
+  <div class="why">Stage only the classifyImages test update; keep the <code>server.js</code> formatting change as a separate commit (or drop it).</div>
+  <pre>git add apps/api/src/ai/classifyImages.route.test.ts
+git commit -m "Fix juniper-vrr hardware expectations after template bounds update"
+npm test</pre>
+</div>
+
+<div class="step">
+  <div class="title"><strong>2 — Fix CI and prove it runs</strong><span class="exit">exit: one fully green run on main, not a 0s failure</span></div>
+  <div class="why">Replace the invalid key, push, and confirm the workflow executes checkout → lockfile check → test → build.</div>
+  <pre>sed -i '' 's/timeout-ms: 15/timeout-minutes: 15/' .github/workflows/ci.yml
+git commit -m "ci: use valid timeout-minutes key"
+git push origin main
+gh run list --branch main --limit 3   # verify completion + success</pre>
+</div>
+
+<div class="step">
+  <div class="title"><strong>3 — Patch vulnerable runtime deps</strong><span class="exit">exit: npm audit --omit=dev free of high/critical; suite+build green</span></div>
+  <div class="why">Bump fastify (≥5.12.7) and ws (≥8.22.0); find-my-way resolves transitively via fastify. Refresh the lockfile so the CI sync check passes.</div>
+  <pre>npm install fastify@^5.12.7 ws@^8.22.0 --workspace @networkchum/api
+npm audit --omit=dev
+npm test &amp;&amp; npm run build</pre>
+</div>
+
+<div class="step">
+  <div class="title"><strong>4 — Browser smoke test on the live box</strong><span class="exit">exit: every flow completes, no console errors</span></div>
+  <div class="why">Satisfies the "frontend+backend verified in a browser" rule. Deploy the build, then from a LAN machine open <code>http://192.168.2.57:5173/</code> with the API token and walk the flows.</div>
+  <pre>Checklist (in browser):
+  ☐ create a lab
+  ☐ boot one qemu device
+  ☐ boot one container device
+  ☐ open each console and see live output
+  ☐ pull an image from a repo URL
+  ☐ AI lab builder: preview a lab, then commit it
+  ☐ confirm no browser console errors
+
+Deploy (on the box):
+  cd ~/networkchum &amp;&amp; git pull --ff-only &amp;&amp; npm run build
+  systemctl --user restart networkchum</pre>
+</div>
+
+<div class="step">
+  <div class="title"><strong>5 — Clean-install validation</strong><span class="exit">exit: install and uninstall both clean on fresh Linux</span></div>
+  <div class="why">Validate the shipped installer path, not just the dev path.</div>
+  <pre>./install.sh
+./start.sh install-service
+curl -s -o /dev/null -w '%{http_code}' http://&lt;host&gt;:4000/health     # expect 200
+curl -s -o /dev/null -w '%{http_code}' http://&lt;host&gt;:4000/labs       # expect 401
+./start.sh uninstall-service</pre>
+</div>
+
+<div class="step">
+  <div class="title"><strong>6 — Cut the release</strong><span class="exit">exit: tagged commit matching a dated changelog entry</span></div>
+  <div class="why">Move the <code>Unreleased</code> section into a dated version entry (optionally bump packages), commit, and tag.</div>
+  <pre># edit CHANGELOG.md: "## Unreleased" -&gt; "## 0.1.0 — 2026-10-23"
+git commit -am "Release 0.1.0"
+git tag -a v0.1.0 -m "NetworkChum 0.1.0"
+git push origin main --tags</pre>
+</div>
+
+<div class="step">
+  <div class="title"><strong>7 — Deploy</strong><span class="exit">exit: live box serving the tagged build</span></div>
+  <div class="why">Ship the release to the Linux host (not the Mac, not localhost).</div>
+  <pre>git push origin main
+# on 192.168.2.57 (networkchum):
+cd ~/networkchum &amp;&amp; git pull --ff-only &amp;&amp; npm run build &amp;&amp; systemctl --user restart networkchum
+# verify: /health → 200, UI → 200, unauth /labs → 401</pre>
+</div>
+
+<h2>Release gate</h2>
+<ul class="checklist">
+  <li>CI green on <code>main</code> (workflow actually executes)</li>
+  <li>Full test suite green at the tagged commit</li>
+  <li><code>npm audit --omit=dev</code> clean of high/critical runtime advisories</li>
+  <li>Browser smoke checklist passed on the live box</li>
+  <li>Clean install + uninstall validated on fresh Linux</li>
+  <li>Tagged commit matching a dated changelog entry</li>
+</ul>
+
+<h2>Appendix — reproduce these findings</h2>
+<pre># build &amp; tests
+npm run build
+npm test
+npm run test --workspace @networkchum/api
+
+# failing test at committed HEAD (without touching the working tree)
+TMP=$(mktemp -d); git archive HEAD | tar -x -C "$TMP"
+# ... then run vitest against $TMP/apps/api/src/ai/classifyImages.route.test.ts
+
+# CI history
+gh run list --limit 5
+
+# dependency audit
+npm audit --omit=dev
+npm ls fastify ws find-my-way
+
+# live box (read-only)
+curl -s -o /dev/null -w '%{http_code}' http://192.168.2.57:4000/health
+curl -s -o /dev/null -w '%{http_code}' http://192.168.2.57:4000/labs</pre>
+
+<footer>
+  Read-only assessment — no files, commits, or deployments were changed while producing this report.
+  Repo state: <code>main @ 2de7591</code>, two modified working-tree files. Generated 2026-10-23.
+</footer>
+
+</main>
+</body>
+</html>
