@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 — 2026-10-24
 
 ### Added
 
@@ -57,3 +57,5 @@
   them (root-owned data directories were breaking every mutation with
   `EACCES`)
 - Node icons no longer render a dark square behind them in the neon theme
+- Runtime dependency advisories patched: `fastify` 5.12.7, `ws` 8.22.0 and
+  `zod` 4.6.7 (`npm audit --omit=dev` now reports 0 vulnerabilities)
