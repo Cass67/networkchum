@@ -86,6 +86,7 @@ type ScheduleRunningConfigBackupParams = {
 type RuntimeDependencies = {
   runCommand?: (command: string, args: string[]) => Promise<CommandResult>;
   hasBinary?: (command: string) => Promise<boolean>;
+  tapExists?: (tapName: string) => Promise<boolean>;
   resolveQemuBinary?: () => Promise<string | null>;
   launchQemu?: (
     command: string[],
@@ -1074,7 +1075,7 @@ export async function powerOnNode(
     const networkResult = await ensureTapNetworking(
       lab.document,
       runCommand,
-      undefined,
+      dependencies.tapExists,
       nodeId,
     );
     if (!networkResult.ok) {

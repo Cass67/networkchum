@@ -63,7 +63,7 @@ mkdir -p "$(dirname "$of")"
       `#!/bin/sh
 printf '%s\n' "$*" >> "${mcopyLogPath}"
 case "$*" in
-  *::iosxe_config.txt*) exit 0 ;;
+  *::iosxe_config.txt*|*::startup-config*) exit 0 ;;
   *) exit 1 ;;
 esac
 `,
@@ -1376,6 +1376,7 @@ describe("powerOnNode", () => {
       const state = await powerOnNode(lab.id, nodeId, {
         runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
         hasBinary: async () => true,
+        tapExists: async () => true,
         findAvailablePort: async (port) => port,
         launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
       });
@@ -1573,6 +1574,7 @@ describe("powerOnNode", () => {
       const state = await powerOnNode(lab.id, nodeId, {
         runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
         hasBinary: async () => true,
+        tapExists: async () => true,
         findAvailablePort: async (port) => port,
         launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
       });
@@ -1633,6 +1635,7 @@ describe("powerOnNode", () => {
       const state = await powerOnNode(lab.id, nodeId, {
         runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
         hasBinary: async () => true,
+        tapExists: async () => true,
         findAvailablePort: async (port) => port,
         launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
       });
@@ -1656,68 +1659,74 @@ describe("powerOnNode", () => {
     tempDirs.push(tempDir);
     process.env.NETWORKCHUM_DATA_DIR = tempDir;
 
-    const runScenario = async (withBootAction: boolean) => {
-      const registry = new TemplateRegistry();
-      const lab = await createLab(
-        withBootAction ? "IOSv Boot Action Lab" : "IOSv No Boot Action Lab",
-      );
-      const template = registry.get("cisco-iosv")!;
-      let document = addNode(lab.document, {
-        template,
-        name: `iosv-${withBootAction ? "action" : "default"}`,
-        position: { x: 10, y: 10 },
-        imageId: "/tmp/iosv.qcow2",
-      });
-      const nodeId = document.nodes[0]!.id;
-      if (withBootAction) {
-        document = setNodeBootActions(document, nodeId, {
-          startupConfig: "once",
-          runningConfigBackup: "none",
+    const { restorePath } = await installFakeCsrTools(tempDir);
+    try {
+      const runScenario = async (withBootAction: boolean) => {
+        const registry = new TemplateRegistry();
+        const lab = await createLab(
+          withBootAction ? "IOSv Boot Action Lab" : "IOSv No Boot Action Lab",
+        );
+        const template = registry.get("cisco-iosv")!;
+        let document = addNode(lab.document, {
+          template,
+          name: `iosv-${withBootAction ? "action" : "default"}`,
+          position: { x: 10, y: 10 },
+          imageId: "/tmp/iosv.qcow2",
         });
-      }
-      await updateLabDocument(lab.id, {
-        ...document,
-        startupConfigSets: [
-          {
-            id: "set-1",
-            name: "Active Config",
-            nodeConfigs: [{ nodeId, config: "hostname iosv\n" }],
-          },
-        ],
-        activeConfigSetId: "set-1",
-      });
+        const nodeId = document.nodes[0]!.id;
+        if (withBootAction) {
+          document = setNodeBootActions(document, nodeId, {
+            startupConfig: "once",
+            runningConfigBackup: "none",
+          });
+        }
+        await updateLabDocument(lab.id, {
+          ...document,
+          startupConfigSets: [
+            {
+              id: "set-1",
+              name: "Active Config",
+              nodeConfigs: [{ nodeId, config: "hostname iosv\n" }],
+            },
+          ],
+          activeConfigSetId: "set-1",
+        });
 
-      const state = await powerOnNode(lab.id, nodeId, {
-        runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
-        hasBinary: async () => true,
-        findAvailablePort: async (port) => port,
-        launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
-      });
+        const state = await powerOnNode(lab.id, nodeId, {
+          runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
+          hasBinary: async () => true,
+          tapExists: async () => true,
+          findAvailablePort: async (port) => port,
+          launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
+        });
 
-      return { state, lab, nodeId };
-    };
+        return { state, lab, nodeId };
+      };
 
-    const withoutAction = await runScenario(false);
-    expect(
-      (withoutAction.state?.commandPreview ?? []).some(
-        (arg) =>
-          typeof arg === "string" &&
-          arg.includes(
-            `${tempDir}/configs/${withoutAction.lab.id}/${withoutAction.nodeId}-startup.img`,
-          ),
-      ),
-    ).toBe(false);
+      const withoutAction = await runScenario(false);
+      expect(
+        (withoutAction.state?.commandPreview ?? []).some(
+          (arg) =>
+            typeof arg === "string" &&
+            arg.includes(
+              `${tempDir}/configs/${withoutAction.lab.id}/${withoutAction.nodeId}-startup.img`,
+            ),
+        ),
+      ).toBe(false);
 
-    const withAction = await runScenario(true);
-    expect(
-      (withAction.state?.commandPreview ?? []).some(
-        (arg) =>
-          typeof arg === "string" &&
-          arg.includes(
-            `${tempDir}/configs/${withAction.lab.id}/${withAction.nodeId}-startup.img`,
-          ),
-      ),
-    ).toBe(true);
+      const withAction = await runScenario(true);
+      expect(
+        (withAction.state?.commandPreview ?? []).some(
+          (arg) =>
+            typeof arg === "string" &&
+            arg.includes(
+              `${tempDir}/configs/${withAction.lab.id}/${withAction.nodeId}-startup.img`,
+            ),
+        ),
+      ).toBe(true);
+    } finally {
+      restorePath();
+    }
   });
 
   it("persists and logs exact CSR1000v commandPreview in runtime state when startup config is active", async () => {
@@ -1759,6 +1768,7 @@ describe("powerOnNode", () => {
       const state = await powerOnNode(lab.id, nodeId, {
         runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
         hasBinary: async () => true,
+        tapExists: async () => true,
         findAvailablePort: async (port) => port,
         launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
       });
@@ -1811,6 +1821,7 @@ describe("powerOnNode", () => {
     const state = await powerOnNode(lab.id, nodeId, {
       runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
       hasBinary: async () => true,
+      tapExists: async () => true,
       findAvailablePort: async (port) => port,
       launchQemu: async () => ({ ok: true, pid: 12345, stderr: "" }),
     });
@@ -1844,6 +1855,7 @@ describe("powerOnNode", () => {
     const state = await powerOnNode(lab.id, nodeId, {
       runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
       hasBinary: async (command) => command === "/usr/libexec/qemu-kvm",
+      tapExists: async () => true,
       findAvailablePort: async (port) => port,
       launchQemu: async (command) => {
         launchedBinary = command[0] ?? "";
@@ -1879,6 +1891,7 @@ describe("powerOnNode", () => {
     const state = await powerOnNode(lab.id, nodeId, {
       runCommand: async () => ({ ok: true, stdout: "", stderr: "" }),
       hasBinary: async () => true,
+      tapExists: async () => true,
       findAvailablePort: async (port) => port,
       launchQemu: async () => ({
         ok: false,
