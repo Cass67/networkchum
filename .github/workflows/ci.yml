@@ -22,7 +22,7 @@ jobs:
           npm install --package-lock-only
           git diff --exit-code package-lock.json \
             || (echo "::error::package-lock.json is out of sync with package.json"; exit 1)
-      - name: Test
-        run: npm test
       - name: Build
         run: npm run build
+      - name: Test
+        run: npm test
