@@ -249,7 +249,8 @@ export function createBridgeServer(options = {}) {
 const isMainModule =
   import.meta.main === true ||
   (process.argv[1] !== undefined &&
-    realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]));
+    realpathSync(fileURLToPath(import.meta.url)) ===
+      realpathSync(process.argv[1]));
 
 if (isMainModule) {
   const server = createBridgeServer();
