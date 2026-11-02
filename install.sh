@@ -404,7 +404,12 @@ install_linux_dnf() {
 
   run_cmd sudo dnf install -y git curl ca-certificates xz
   install_linux_nodejs
+  # RHEL 9 ships /usr/libexec/qemu-kvm and only links it into PATH via the
+  # qemu-kvm-core/qemu-kvm-tools split; install the core package alongside.
   run_cmd sudo dnf install -y "$qemu_package" qemu-img iproute socat xterm
+  if [ "$qemu_package" = "qemu-kvm" ]; then
+    run_cmd sudo dnf install -y qemu-kvm-core
+  fi
 
   case "$runtime" in
     podman)
@@ -420,7 +425,10 @@ install_linux_dnf() {
       else
         run_cmd sudo dnf install -y podman podman-docker
       fi
-      run_cmd sudo systemctl enable --now docker
+      # podman-docker is a CLI shim with no docker.service; enabling it would fail.
+      if [ "$DRY_RUN" -eq 1 ] || dnf list --installed docker-ce moby-engine >/dev/null 2>&1; then
+        run_cmd sudo systemctl enable --now docker
+      fi
       run_cmd sudo usermod -aG docker "$user_name"
       ;;
     *)
