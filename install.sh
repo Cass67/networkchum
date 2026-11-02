@@ -454,7 +454,7 @@ install_linux_pacman() {
       ;;
     docker)
       run_cmd sudo pacman -S --needed --noconfirm docker
-      run_cmd sudo systemctl enable --now docker
+      run_cmd sudo systemctl enable --now docker || true
       run_cmd sudo usermod -aG docker "$user_name"
       ;;
     *)
@@ -480,7 +480,7 @@ install_linux_zypper() {
       ;;
     docker)
       run_cmd sudo zypper --non-interactive install docker
-      run_cmd sudo systemctl enable --now docker
+      run_cmd sudo systemctl enable --now docker || true
       run_cmd sudo usermod -aG docker "$user_name"
       ;;
     *)
