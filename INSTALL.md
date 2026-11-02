@@ -278,6 +278,18 @@ Arch:
 sudo pacman -S --needed git curl ca-certificates xz
 ```
 
+openSUSE or SLES:
+
+```bash
+sudo zypper install git curl ca-certificates xz
+```
+
+`./install.sh` supports these families: `apt` (Debian, Ubuntu), `dnf` (Fedora,
+RHEL, CentOS Stream, Rocky, Alma, Oracle Linux), `pacman` (Arch), and `zypper`
+(openSUSE, SLES), plus Homebrew on macOS. Each of the Linux families is
+exercised by booting a cloud image, running the installer, building, installing
+the service and checking `/health`; see `scripts/vm-install-test.sh`.
+
 Recommended Node.js install on Linux:
 
 ```bash
