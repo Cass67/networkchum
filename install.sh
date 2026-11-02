@@ -425,11 +425,11 @@ install_linux_dnf() {
       else
         run_cmd sudo dnf install -y podman podman-docker
       fi
-      # podman-docker is a CLI shim with no docker.service; enabling it would fail.
+      # podman-docker is a CLI shim with no docker.service or docker group.
       if [ "$DRY_RUN" -eq 1 ] || dnf list --installed docker-ce moby-engine >/dev/null 2>&1; then
         run_cmd sudo systemctl enable --now docker
+        run_cmd sudo usermod -aG docker "$user_name"
       fi
-      run_cmd sudo usermod -aG docker "$user_name"
       ;;
     *)
       die "unsupported Linux container runtime: $runtime"
