@@ -111,319 +111,201 @@
 
 <header>
   <h1>NetworkChum — Release Readiness Report</h1>
-  <p class="sub">Assessment of whether the current repository can be released, with the blockers, evidence, and the plan to get green.</p>
-  <div class="meta">Repo: github.com:Cass67/networkchum &nbsp;·&nbsp; Branch: main &nbsp;·&nbsp; Commit: 2de7591 &nbsp;·&nbsp; Date: Fri Oct 23 2026</div>
+  <p class="sub">Whether the current repository can be released: the gates, the evidence, and what is still open.</p>
+  <div class="meta">Repo: github.com:Cass67/networkchum &nbsp;·&nbsp; Branch: main &nbsp;·&nbsp; Commit: f59f0a8 &nbsp;·&nbsp; Date: Mon Nov 2 2026 &nbsp;·&nbsp; Live host: 192.168.2.1 (ubt26)</div>
 </header>
 
 <div class="verdict">
-  <span class="badge" style="background: var(--green); color: #06170d;">Update</span>
+  <span class="badge" style="background: var(--green); color: #06170d;">Ready</span>
   <div>
-    <div class="headline">As of 2026-10-24, blockers 1–4 are fixed: CI is green, tests pass at HEAD, runtime audit is clean, and <code>v0.1.0</code> is tagged.</div>
-    <div class="detail">Still open before calling the release done: full-flow browser verification and clean-install validation. The original assessment below is kept as the historical record.</div>
+    <div class="headline">Release-ready on automated gates: CI, tests, audits, build, clean install and the full platform matrix all pass, and the app is live and healthy on the new host.</div>
+    <div class="detail">Only the manual browser walkthrough of the UI flows is outstanding. The <code>v0.1.0</code> tag still points at <code>6adff4c</code>; HEAD is seven commits past it.</div>
   </div>
-</div>
-
-<h2>What was verified</h2>
-<table>
-  <thead><tr><th>Check</th><th>Result</th><th>Evidence</th></tr></thead>
-  <tbody>
-    <tr>
-      <td>Production build (<code>npm run build</code>)</td>
-      <td class="ok">PASS</td>
-      <td><code>tsc</code> for shared/api/web clean; vite built 74 modules. <code>dist/index.html</code> 0.40&nbsp;kB, <code>index-*.js</code> 422.00&nbsp;kB (118.25&nbsp;kB gzip), <code>NodeConsole-*.js</code> 335.68&nbsp;kB (85.34&nbsp;kB gzip), CSS 31.31&nbsp;kB + 5.24&nbsp;kB.</td>
-    </tr>
-    <tr>
-      <td>Full suite in the working tree (<code>npm test</code>)</td>
-      <td class="ok">PASS</td>
-      <td>api: 42 files / 282 tests; web: 21 files / 221 tests; shared: 5 files / 23 tests; scripts+bridge: 66 tests. <strong>592 tests, 0 failing.</strong></td>
-    </tr>
-    <tr>
-      <td>Full suite at committed <code>HEAD</code></td>
-      <td class="bad">FAIL</td>
-      <td>1 failed / 1 passed in <code>apps/api/src/ai/classifyImages.route.test.ts</code> (run against a pristine archive of <code>2de7591</code>).</td>
-    </tr>
-    <tr>
-      <td>CI workflow</td>
-      <td class="bad">FAIL</td>
-      <td>Every run fails in 0s; the job never starts. Latest: run <code>39539940204</code> (2026-10-21T03:41:18Z).</td>
-    </tr>
-    <tr>
-      <td>Lockfile in sync (CI precondition)</td>
-      <td class="ok">PASS</td>
-      <td>Ran <code>npm install --package-lock-only</code> in a throwaway copy; <code>git diff --exit-code package-lock.json</code> clean. <em>LOCKFILE_IN_SYNC</em></td>
-    </tr>
-    <tr>
-      <td>Runtime dependency audit</td>
-      <td class="bad">FAIL</td>
-      <td><code>npm audit --omit=dev</code>: 6 high-severity advisories across fastify, find-my-way, ws.</td>
-    </tr>
-    <tr>
-      <td>Live deployment health (read-only)</td>
-      <td class="ok">PASS</td>
-      <td><code>GET 192.168.2.57:4000/health</code> → 200; <code>192.168.2.57:5173/</code> → 200; <code>GET /labs</code> unauthenticated → 401 (token auth enforced).</td>
-    </tr>
-    <tr>
-      <td>Release artifact</td>
-      <td class="bad">MISSING</td>
-      <td>No git tags. All packages at <code>0.1.0</code>. CHANGELOG ends at <code>## Unreleased</code>.</td>
-    </tr>
-    <tr>
-      <td>End-to-end / browser verification</td>
-      <td class="bad">NONE</td>
-      <td>No E2E or browser test suite exists; coverage is unit-level only.</td>
-    </tr>
-    <tr>
-      <td>Documentation</td>
-      <td class="ok">PASS</td>
-      <td>README.md, INSTALL.md, SECURITY.md, CONTRIBUTING.md, CHANGELOG.md, docs/architecture.md, docs/agent-builder.md.</td>
-    </tr>
-  </tbody>
-</table>
-
-<h2>Cleanup status — 2026-10-24</h2>
-<p class="sub">What was fixed after this assessment. Findings below are retained for the record.</p>
-<table>
-  <thead><tr><th>Item</th><th>Status</th><th>Evidence</th></tr></thead>
-  <tbody>
-    <tr>
-      <td>1 · CI never executes</td>
-      <td class="ok">FIXED</td>
-      <td>Run <code>40111871632</code> on <code>main</code> → success. Commits <code>76c7eba</code> (valid timeout key), <code>533fe24</code> (install deps), <code>9e81ffa</code> (build before test).</td>
-    </tr>
-    <tr>
-      <td>2 · Committed HEAD red / dirty tree</td>
-      <td class="ok">FIXED</td>
-      <td><code>fc31951</code> updates the juniper-vrr expectations; full suite green at HEAD.</td>
-    </tr>
-    <tr>
-      <td>3 · Runtime dependency advisories</td>
-      <td class="ok">FIXED</td>
-      <td><code>f4c939b</code>: fastify 5.12.7, ws 8.22.0, zod 4.6.7; <code>npm audit --omit=dev</code> → 0 vulnerabilities. Deployed to the live box (versions verified there).</td>
-    </tr>
-    <tr>
-      <td>4 · No release artifact</td>
-      <td class="ok">FIXED</td>
-      <td>CHANGELOG has a dated <code>0.1.0</code> section (<code>b3dbb45</code>); annotated tag <code>v0.1.0</code> pushed.</td>
-    </tr>
-    <tr>
-      <td>5 · No end-to-end verification</td>
-      <td class="warn">PARTIAL</td>
-      <td>Headless-Chrome smoke on the live build: page renders, no error overlay, browser→API <code>/health</code> 200 and unauthenticated <code>/labs</code> 401. Full flow checklist (create lab, boot qemu + container, console, image pull, AI builder) and clean-install validation are still manual.</td>
-    </tr>
-    <tr>
-      <td>Extra · Linux-only test failures</td>
-      <td class="ok">FIXED</td>
-      <td><code>d40d4da</code>: injectable TAP probe (<code>powerNode.ts</code>) and fake mtools for the IOSv injection test; suite green on macOS and Linux.</td>
-    </tr>
-  </tbody>
-</table>
-
-<h2>Blockers (original assessment)</h2>
-
-<div class="blocker">
-  <h3>1 · CI never executes anything</h3>
-  <p><code>.github/workflows/ci.yml</code> line 10 uses <code>timeout-ms: 15</code>. GitHub Actions accepts <code>timeout-minutes</code>; the unknown key makes the workflow file invalid, so the job is rejected before checkout. All five most recent runs on <code>main</code> end as <code>failure</code> at <code>0s</code> — nothing has ever been tested or built in CI.</p>
-  <div class="evidence">
-    <div class="evidence-label">Evidence — workflow</div>
-    <pre>- runs-on: ubuntu-latest
-  timeout-ms: 15          <-- invalid key, workflow rejected
-  steps:</pre>
-    <div class="evidence-label">Evidence — recent runs</div>
-    <pre>completed  failure  Junos Evolved boot profile: platform identity, USB config disk, UEFI
-           .github/workflows/ci.yml   main   push   39539940204   0s   2026-10-21T03:41:18Z
-completed  failure  Persist and display the AI classification reason   ...   39538592248   0s
-completed  failure  AI image classification: template + hardware ...   39538108840   0s</pre>
-  </div>
-  <p><strong>Fix:</strong> change <code>timeout-ms: 15</code> → <code>timeout-minutes: 15</code>, push, and confirm a run that actually executes test + build.</p>
-</div>
-
-<div class="blocker">
-  <h3>2 · Committed main is red and the tree is dirty</h3>
-  <p>The Junos Evolved commit raised the juniper-vrr hardware bounds to <code>ramMb max 16384</code> / <code>vcpu max 8</code> in <code>apps/api/src/templates/defaultTemplates.ts:495-496</code>, but the classifier test still asserts the old <code>8192 / 4</code> values. The fix exists only as an uncommitted working-tree edit — so the release would either ship a red HEAD or ship an untracked fix.</p>
-  <div class="evidence">
-    <div class="evidence-label">Evidence — current template bounds</div>
-    <pre>configSchema: {
-  ramMb: { default: 8192, min: 4096, max: 16384 },   // defaultTemplates.ts:495
-  vcpu: { default: 4, min: 1, max: 8 },              // defaultTemplates.ts:496
-}</pre>
-    <div class="evidence-label">Evidence — HEAD test run (pristine archive of 2de7591)</div>
-    <pre>+   "suggestedRamMb": 16384
--   "suggestedVcpu": 4
-+   "suggestedVcpu": 8
- ❯ src/ai/classifyImages.route.test.ts:132:23
- Test Files  1 failed (1)
-      Tests  1 failed | 1 passed (2)</pre>
-    <div class="evidence-label">Evidence — uncommitted working tree</div>
-    <pre> M apps/api/src/ai/classifyImages.route.test.ts   (8192/4 → 16384/8; real fix)
- M tools/native-console-bridge/server.js          (formatting only; unrelated)</pre>
-  </div>
-  <p><strong>Fix:</strong> commit the test expectation update (separately from the <code>server.js</code> formatting noise), then confirm the suite is green at HEAD.</p>
-</div>
-
-<div class="blocker">
-  <h3>3 · Six high-severity runtime vulnerabilities</h3>
-  <p><code>npm audit --omit=dev</code> reports 6 high-severity advisories in production dependencies. These are the API server and WebSocket layer, and the API is LAN-exposed with token auth — this is worth fixing before a release.</p>
-  <div class="evidence">
-    <div class="evidence-label">Evidence — installed vs. required</div>
-    <pre>fastify      5.8.4   installed   → needs &gt;= 5.12.7  (latest 5.12.7)
-  advisories: GHSA-247c-9743-5963, GHSA-w2qp-rph6-63g4, GHSA-3m5p-2c4r-xxw2,
-              GHSA-4mh8-r7rc-xpvc, GHSA-667r-xxjv-c9mm, GHSA-p68q-wchp-6fh7,
-              GHSA-hwr6-493r-vm6h, GHSA-9q9j-q6p8-xq58
-find-my-way  9.5.0   installed   → needs &gt;= 9.7      (latest 9.10.0)
-  advisory: GHSA-c96f-x56v-gq3h
-ws           8.20.0  installed   → needs &gt;= 8.22.0   (latest 8.22.0)
-  advisories: GHSA-58qx-3vcg-4xpx, GHSA-96hv-2xvq-fx4p
-
-npm audit (all deps): 19 vulnerabilities — 4 critical, 11 high, 2 moderate, 2 low
-                      (critical ones are dev-only; the 6 above are runtime)</pre>
-  </div>
-  <p><strong>Fix:</strong> bump <code>fastify</code> to ≥5.12.7 and <code>ws</code> to ≥8.22.0 (find-my-way follows fastify), refresh the lockfile, then re-run the full suite and build. Target: <code>0</code> high/critical runtime advisories.</p>
-</div>
-
-<div class="blocker">
-  <h3>4 · No release artifact</h3>
-  <p>There is no tagged commit, and the changelog is still in the <code>Unreleased</code> section. A release needs a dated changelog entry, a version bump if desired, and an annotated tag.</p>
-  <div class="evidence">
-    <div class="evidence-label">Evidence</div>
-    <pre>git tag              → (empty)
-package.json         → "version": "0.1.0"
-apps/api/package.json→ "version": "0.1.0"
-apps/web/package.json→ "version": "0.1.0"
-packages/shared      → "version": "0.1.0"
-CHANGELOG.md         → "## Unreleased" (no dated release)</pre>
-  </div>
-</div>
-
-<div class="blocker">
-  <h3>5 · No end-to-end verification</h3>
-  <p>All coverage is unit-level (vitest). There is no browser/E2E suite. Repo rules require a change touching frontend and backend to be verified in a real browser, not by curl against error paths. The live box is healthy, but it has not been verified against this build or this commit.</p>
-  <div class="evidence">
-    <div class="evidence-label">Evidence — live box reachability (read-only)</div>
-    <pre>http://192.168.2.57:4000/health      → 200
-http://192.168.2.57:5173/            → 200
-http://192.168.2.57:4000/labs (no token) → 401</pre>
-  </div>
-</div>
-
-<h2>Non-blockers / pre-flight notes</h2>
-
-<div class="nonblocker">
-  <ul>
-    <li><strong>Pre-commit config exists but is not wired into npm:</strong> <code>.pre-commit-config.yaml</code> defines prettier, eslint, tsc-noemit, gitleaks, shellcheck and other hooks, but <code>package.json</code> has no lint/format script — they only run if pre-commit is installed locally.</li>
-    <li><strong>Local-only directories are correctly ignored:</strong> <code>.networkchum/</code> (<code>.gitignore:8</code>), <code>.worktrees/</code> (<code>.gitignore:7</code>) and <code>node_modules/</code> (<code>.gitignore:1</code>) are not tracked. No token files are tracked.</li>
-    <li><strong>Worktrees/branches:</strong> <code>git branch --merged main</code> lists <code>codex/role-based-node-icons</code>, <code>codex/task4-legacy-nic-backends</code> and <code>feature/csr1000v-startup-config</code> — no unmerged work outside <code>main</code>.</li>
-    <li><strong>Engine requirement:</strong> <code>engines.node &gt;= 22</code>; the host runs Node v22.23.2 — consistent.</li>
-    <li><strong>Unrelated formatting diff:</strong> the <code>tools/native-console-bridge/server.js</code> change is a line-wrap only and should be committed separately or dropped.</li>
-  </ul>
-</div>
-
-<h2>Plan to get release-ready</h2>
-<p class="sub">Execute in order. Each step has an exit criterion; do not proceed until it is met.</p>
-
-<div class="step">
-  <div class="title"><strong>1 — Commit the test fix</strong><span class="exit">exit: full suite green in working tree</span></div>
-  <div class="why">Stage only the classifyImages test update; keep the <code>server.js</code> formatting change as a separate commit (or drop it).</div>
-  <pre>git add apps/api/src/ai/classifyImages.route.test.ts
-git commit -m "Fix juniper-vrr hardware expectations after template bounds update"
-npm test</pre>
-</div>
-
-<div class="step">
-  <div class="title"><strong>2 — Fix CI and prove it runs</strong><span class="exit">exit: one fully green run on main, not a 0s failure</span></div>
-  <div class="why">Replace the invalid key, push, and confirm the workflow executes checkout → lockfile check → test → build.</div>
-  <pre>sed -i '' 's/timeout-ms: 15/timeout-minutes: 15/' .github/workflows/ci.yml
-git commit -m "ci: use valid timeout-minutes key"
-git push origin main
-gh run list --branch main --limit 3   # verify completion + success</pre>
-</div>
-
-<div class="step">
-  <div class="title"><strong>3 — Patch vulnerable runtime deps</strong><span class="exit">exit: npm audit --omit=dev free of high/critical; suite+build green</span></div>
-  <div class="why">Bump fastify (≥5.12.7) and ws (≥8.22.0); find-my-way resolves transitively via fastify. Refresh the lockfile so the CI sync check passes.</div>
-  <pre>npm install fastify@^5.12.7 ws@^8.22.0 --workspace @networkchum/api
-npm audit --omit=dev
-npm test &amp;&amp; npm run build</pre>
-</div>
-
-<div class="step">
-  <div class="title"><strong>4 — Browser smoke test on the live box</strong><span class="exit">exit: every flow completes, no console errors</span></div>
-  <div class="why">Satisfies the "frontend+backend verified in a browser" rule. Deploy the build, then from a LAN machine open <code>http://192.168.2.57:5173/</code> with the API token and walk the flows.</div>
-  <pre>Checklist (in browser):
-  ☐ create a lab
-  ☐ boot one qemu device
-  ☐ boot one container device
-  ☐ open each console and see live output
-  ☐ pull an image from a repo URL
-  ☐ AI lab builder: preview a lab, then commit it
-  ☐ confirm no browser console errors
-
-Deploy (on the box):
-  cd ~/networkchum &amp;&amp; git pull --ff-only &amp;&amp; npm run build
-  systemctl --user restart networkchum</pre>
-</div>
-
-<div class="step">
-  <div class="title"><strong>5 — Clean-install validation</strong><span class="exit">exit: install and uninstall both clean on fresh Linux</span></div>
-  <div class="why">Validate the shipped installer path, not just the dev path.</div>
-  <pre>./install.sh
-./start.sh install-service
-curl -s -o /dev/null -w '%{http_code}' http://&lt;host&gt;:4000/health     # expect 200
-curl -s -o /dev/null -w '%{http_code}' http://&lt;host&gt;:4000/labs       # expect 401
-./start.sh uninstall-service</pre>
-</div>
-
-<div class="step">
-  <div class="title"><strong>6 — Cut the release</strong><span class="exit">exit: tagged commit matching a dated changelog entry</span></div>
-  <div class="why">Move the <code>Unreleased</code> section into a dated version entry (optionally bump packages), commit, and tag.</div>
-  <pre># edit CHANGELOG.md: "## Unreleased" -&gt; "## 0.1.0 — 2026-10-23"
-git commit -am "Release 0.1.0"
-git tag -a v0.1.0 -m "NetworkChum 0.1.0"
-git push origin main --tags</pre>
-</div>
-
-<div class="step">
-  <div class="title"><strong>7 — Deploy</strong><span class="exit">exit: live box serving the tagged build</span></div>
-  <div class="why">Ship the release to the Linux host (not the Mac, not localhost).</div>
-  <pre>git push origin main
-# on 192.168.2.57 (networkchum):
-cd ~/networkchum &amp;&amp; git pull --ff-only &amp;&amp; npm run build &amp;&amp; systemctl --user restart networkchum
-# verify: /health → 200, UI → 200, unauth /labs → 401</pre>
 </div>
 
 <h2>Release gate</h2>
-<ul class="checklist">
-  <li>CI green on <code>main</code> (workflow actually executes)</li>
-  <li>Full test suite green at the tagged commit</li>
-  <li><code>npm audit --omit=dev</code> clean of high/critical runtime advisories</li>
-  <li>Browser smoke checklist passed on the live box</li>
-  <li>Clean install + uninstall validated on fresh Linux</li>
-  <li>Tagged commit matching a dated changelog entry</li>
+<table>
+  <thead><tr><th>Gate</th><th>Status</th><th>Evidence</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>CI green on main</td>
+      <td class="ok">PASS</td>
+      <td>Run <code>41527087763</code>, success, 1m15s.</td>
+    </tr>
+    <tr>
+      <td>Full suite green at HEAD</td>
+      <td class="ok">PASS</td>
+      <td>897 tests, 0 failing — api 282, web 221, shared 46, scripts+bridge 66.</td>
+    </tr>
+    <tr>
+      <td>Production build</td>
+      <td class="ok">PASS</td>
+      <td><code>npm run build</code> clean on macOS and on the box.</td>
+    </tr>
+    <tr>
+      <td>Runtime dependency audit</td>
+      <td class="ok">PASS</td>
+      <td><code>npm audit --omit=dev</code> → 0 vulnerabilities.</td>
+    </tr>
+    <tr>
+      <td>All-dependencies audit</td>
+      <td class="ok">PASS</td>
+      <td><code>npm audit</code> → 0 vulnerabilities (was 4: 2 critical, 1 moderate, 1 low).</td>
+    </tr>
+    <tr>
+      <td>Clean install validated</td>
+      <td class="ok">PASS</td>
+      <td>Fresh Ubuntu 26.04 on ubt26: <code>install.sh</code>, <code>start.sh lan install-service</code>, uninstall/reinstall.</td>
+    </tr>
+    <tr>
+      <td>Installer validated per platform</td>
+      <td class="ok">PASS</td>
+      <td>Six cloud images, see the matrix below.</td>
+    </tr>
+    <tr>
+      <td>Live deployment healthy</td>
+      <td class="ok">PASS</td>
+      <td><code>/health</code> 200, UI 200, unauthenticated <code>/labs</code> 401, authenticated 200, bad token 401.</td>
+    </tr>
+    <tr>
+      <td>Tagged commit + dated changelog</td>
+      <td class="warn">PASS, with caveat</td>
+      <td><code>v0.1.0</code> exists and matches <code>6adff4c</code>, but HEAD is seven commits past it.</td>
+    </tr>
+    <tr>
+      <td>Browser flow checklist</td>
+      <td class="warn">NOT DONE</td>
+      <td>Skipped by request; partial coverage recorded below.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Platform matrix — VM-tested 2026-11-02</h2>
+<p class="sub">Each run boots a cloud image in QEMU/KVM, runs <code>install.sh --yes</code> for real (including the Node 24 download from nodejs.org), builds, installs the systemd service, checks <code>/health</code>, then uninstalls.</p>
+<table>
+  <thead><tr><th>Distro</th><th>Package family</th><th>install.sh</th><th>Build</th><th>Service</th><th>/health</th><th>Uninstall</th></tr></thead>
+  <tbody>
+    <tr><td>Ubuntu 24.04</td><td><code>apt</code></td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">200</td><td class="ok">PASS</td></tr>
+    <tr><td>Debian 12</td><td><code>apt</code></td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">200</td><td class="ok">PASS</td></tr>
+    <tr><td>Fedora 42 (Cloud Base, mutable)</td><td><code>dnf</code></td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">200</td><td class="ok">PASS</td></tr>
+    <tr><td>Rocky Linux 9</td><td><code>dnf</code></td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">200</td><td class="ok">PASS</td></tr>
+    <tr><td>Arch Linux</td><td><code>pacman</code></td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">200</td><td class="ok">PASS</td></tr>
+    <tr><td>openSUSE Leap 15.6</td><td><code>zypper</code></td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">PASS</td><td class="ok">200</td><td class="ok">PASS</td></tr>
+  </tbody>
+</table>
+<p>Reproduce with <code>scripts/vm-install-test.sh &lt;image-url&gt; &lt;name&gt;</code> on a KVM host; the image URL for each family is in the script header.</p>
+
+<div class="nonblocker">
+  <h3>Not covered by the matrix</h3>
+  <ul>
+    <li>Container runtimes — docker and podman do not start without nested virtualisation, so only CLI presence is checked.</li>
+    <li>KVM/TAP VM labs inside the guest.</li>
+    <li>macOS / Homebrew.</li>
+    <li>Immutable Fedora (CoreOS, <code>rpm-ostree</code>) — the tested Fedora image is mutable Cloud Base on btrfs; there is no <code>rpm-ostree</code> branch in the installer.</li>
+  </ul>
+</div>
+
+<h2>What changed since the 2026-10-24 assessment</h2>
+<div class="step">
+  <div class="title"><strong>1 · New live host</strong><span class="exit">192.168.2.1 (ubt26)</span></div>
+  <div class="why">The old <code>192.168.2.57</code> box is retired. Cloned the repo, gave the box GitHub auth (registered its existing <code>actualpal-backup</code> key as a deploy key, pinned it in <code>~/.ssh/config</code>), ran the installer, built, and installed the service in LAN mode.</div>
+</div>
+<div class="step">
+  <div class="title"><strong>2 · Dev-only audit advisories cleared</strong><span class="exit">73e6686</span></div>
+  <div class="why">vitest 3 → 4.1.12 (removes critical <code>tinypool</code> and moderate <code>@vitest/mocker</code>), tsx → 4.23.15, web Vite → 7.3.7 (esbuild 0.28.2), <code>@testing-library/dom</code> declared explicitly. <code>npm audit</code> is now clean for all dependencies, not just runtime.</div>
+</div>
+<div class="step">
+  <div class="title"><strong>3 · Installer fixed against real distros</strong><span class="exit">70dd12d · 07e174a · 8aa4fcb · a51abc8 · f0cf6f0</span></div>
+  <div class="why">Six bugs, all found only by running the installer on the platforms we claim to support:</div>
+  <pre>RHEL family   moby-engine/docker-cli do not exist on Rocky/Alma
+              → prefer docker-ce, fall back to moby-engine, then podman-docker shim
+RHEL family   qemu-system-x86_64 ships in qemu-kvm-core
+              → install it alongside qemu-kvm
+RHEL family   the podman-docker shim has no docker.service and no docker group
+              → systemctl enable / usermod are now conditional
+dnf           QEMU probe used `dnf info` (installed packages only) and always
+              picked qemu-kvm → now `dnf list --available`
+Arch          `pacman -S` prompted without --noconfirm and aborted the
+              non-interactive install
+Arch/openSUSE a docker daemon that fails to start aborted the whole install
+              under `set -e` → now non-fatal</pre>
+</div>
+<div class="step">
+  <div class="title"><strong>4 · openSUSE / SLES support</strong><span class="exit">70dd12d</span></div>
+  <div class="why">New <code>zypper</code> branch (<code>qemu-x86</code>, <code>qemu-tools</code>, podman/docker), plus <code>--package-manager=zypper</code> and docs.</div>
+</div>
+<div class="step">
+  <div class="title"><strong>5 · Repeatable matrix harness</strong><span class="exit">f60d54c</span></div>
+  <div class="why"><code>scripts/vm-install-test.sh</code> boots a cloud image, runs the installer, builds, installs the service, checks health and uninstalls.</div>
+</div>
+<div class="step">
+  <div class="title"><strong>6 · Deploy notes corrected</strong><span class="exit">AGENTS.md</span></div>
+  <div class="why">New host, system unit (<code>sudo systemctl</code>, not <code>--user</code>), token at <code>~/networkchum/apps/api/data/api-token</code>, and <code>npm ci</code> in the deploy flow.</div>
+</div>
+
+<h2>Verified in the running app</h2>
+<ul>
+  <li>Lab <strong>“Release Smoke”</strong> created through the UI and persisted to <code>labs.json</code>.</li>
+  <li>Container node <strong><code>alpine-1</code></strong> added and powered on — a real <code>docker run</code> on the host.</li>
+  <li>Console command executes inside the container (<code>echo container-console-ok</code> returned output).</li>
+  <li>API reports the node <code>running</code> with the correct <code>docker exec</code> connect command.</li>
 </ul>
 
-<h2>Appendix — reproduce these findings</h2>
+<h2>Not verified</h2>
+<ul class="checklist">
+  <li>In-browser xterm pane showing live output — headless Chrome's renderer froze on Connect. Looks like a harness issue, but it is unproven.</li>
+  <li>Image pull from a repo URL.</li>
+  <li>AI lab builder: preview, then commit.</li>
+  <li>Browser console errors during those flows.</li>
+</ul>
+
+<h2>Open items / risks</h2>
+<div class="nonblocker">
+  <ul>
+    <li><strong>Tag drift:</strong> <code>v0.1.0</code> → <code>6adff4c</code>; HEAD is <code>f59f0a8</code>. Move the tag or cut <code>v0.1.1</code>.</li>
+    <li><strong>Immutable Fedora (CoreOS) is not supported</strong> — <code>rpm-ostree</code>, no installer branch.</li>
+    <li><strong>npm resolver bug:</strong> npm 10.9.8 crashes (<code>Cannot read properties of null (reading 'edgesOut')</code>) on plain <code>npm install</code> in this workspace; <code>npm ci</code> works and the deploy flow uses it.</li>
+    <li><strong>Data dir is repo-local</strong> (<code>apps/api/data</code>, gitignored) — a <code>git clean -xdf</code> on the box would wipe labs and the token.</li>
+    <li><strong>systemd warns</strong> <code>KillMode=none</code> is deprecated; intentional, so labs survive restarts.</li>
+    <li><strong>Harness flakiness:</strong> the Fedora VM occasionally dies during the final steps; <code>-no-reboot -no-shutdown</code> mostly fixes it, but it needed several attempts.</li>
+    <li><strong>Pre-commit hooks</strong> are not wired into any npm script.</li>
+  </ul>
+</div>
+
+<h2>Recommended next steps</h2>
+<ol>
+  <li>Walk the UI checklist in a real browser at <code>http://192.168.2.1:5173/</code> (token: <code>~/networkchum/apps/api/data/api-token</code> on the box).</li>
+  <li>Decide the tag: move <code>v0.1.0</code> to <code>f59f0a8</code> or cut <code>v0.1.1</code>.</li>
+  <li>Optionally decide whether Fedora CoreOS is a target worth an <code>rpm-ostree</code> branch.</li>
+</ol>
+
+<h2>Appendix — reproduce</h2>
 <pre># build &amp; tests
 npm run build
 npm test
-npm run test --workspace @networkchum/api
 
-# failing test at committed HEAD (without touching the working tree)
-TMP=$(mktemp -d); git archive HEAD | tar -x -C "$TMP"
-# ... then run vitest against $TMP/apps/api/src/ai/classifyImages.route.test.ts
+# audits
+npm audit --omit=dev
+npm audit
 
 # CI history
-gh run list --limit 5
-
-# dependency audit
-npm audit --omit=dev
-npm ls fastify ws find-my-way
+gh run list --branch main --limit 5
 
 # live box (read-only)
-curl -s -o /dev/null -w '%{http_code}' http://192.168.2.57:4000/health
-curl -s -o /dev/null -w '%{http_code}' http://192.168.2.57:4000/labs</pre>
+curl -s -o /dev/null -w '%{http_code}' http://192.168.2.1:4000/health
+curl -s -o /dev/null -w '%{http_code}' http://192.168.2.1:4000/labs      # 401 without token
+
+# installer matrix (on a KVM host)
+./scripts/vm-install-test.sh https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img ubuntu24
+./scripts/vm-install-test.sh https://cloud.debian.org/images/cloud/bookworm/latest/debian12-genericcloud-amd64.qcow2 debian12
+./scripts/vm-install-test.sh https://download.fedoraproject.org/pub/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2 fedora42
+./scripts/vm-install-test.sh https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2 rocky9
+./scripts/vm-install-test.sh https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2 arch
+./scripts/vm-install-test.sh https://download.opensuse.org/distribution/leap/15.6/appliances/openSUSE-Leap-15.6-Minimal-VM.x86_64-Cloud.qcow2 opensuse156</pre>
 
 <footer>
-  Read-only assessment — no files, commits, or deployments were changed while producing this report.
-  Repo state: <code>main @ 2de7591</code>, two modified working-tree files. Generated 2026-10-23.
+  Supersedes the 2026-10-23 assessment (which described the retired 192.168.2.57 host and pre-fix state).
+  Repo state: <code>main @ f59f0a8</code>, clean working tree. Generated 2026-11-02. Markdown twin: <code>docs/release-status.md</code>.
 </footer>
 
 </main>
