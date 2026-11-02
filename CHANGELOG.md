@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Development dependencies refreshed so `npm audit` is clean for all
+  dependencies, not just runtime: vitest 3 → 4.1.12 (drops the `tinypool`
+  critical advisories and the `@vitest/mocker` moderate ones), tsx → 4.23.15
+  and the web Vite → 7.3.7 (esbuild 0.28.2), with `@testing-library/dom`
+  declared explicitly because vitest 4 no longer hoists it.
+
 ## 0.1.0 — 2026-10-24
 
 ### Added
