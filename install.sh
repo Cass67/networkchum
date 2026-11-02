@@ -51,7 +51,7 @@ Options:
   --dry-run                     Print the commands without running them
   --yes, -y                     Non-interactive mode; choose defaults automatically
   --os=macos|linux              Override detected OS
-  --package-manager=brew|apt|dnf|pacman
+  --package-manager=brew|apt|dnf|pacman|zypper
                                 Override detected package manager
   --container-runtime=podman|docker
                                 Linux only; skip the runtime prompt
@@ -129,6 +129,11 @@ detect_package_manager() {
     return
   fi
 
+  if have_cmd zypper; then
+    printf '%s\n' "zypper"
+    return
+  fi
+
   die "could not detect a supported package manager"
 }
 
@@ -137,7 +142,7 @@ ensure_supported_combo() {
   pkg_manager=$2
 
   case "$os_name:$pkg_manager" in
-    macos:brew | linux:apt | linux:dnf | linux:pacman) ;;
+    macos:brew | linux:apt | linux:dnf | linux:pacman | linux:zypper) ;;
     *) die "unsupported OS/package manager combination: $os_name + $pkg_manager" ;;
   esac
 }
@@ -155,6 +160,8 @@ choose_container_runtime() {
   elif have_cmd docker && ! have_cmd podman; then
     default_runtime="docker"
   elif [ "$pkg_manager" = "dnf" ]; then
+    default_runtime="podman"
+  elif [ "$pkg_manager" = "zypper" ]; then
     default_runtime="podman"
   else
     default_runtime="docker"
@@ -379,8 +386,9 @@ resolve_dnf_qemu_package() {
     return
   fi
 
+  # `dnf info` only sees installed packages, so ask the repos what is available.
   for package_name in qemu-kvm qemu-system-x86 qemu-system-x86-core; do
-    if dnf info -q "$package_name" >/dev/null 2>&1; then
+    if dnf list --available "$package_name" >/dev/null 2>&1; then
       printf '%s\n' "$package_name"
       return
     fi
@@ -403,7 +411,15 @@ install_linux_dnf() {
       run_cmd sudo dnf install -y podman podman-docker
       ;;
     docker)
-      run_cmd sudo dnf install -y moby-engine docker-cli
+      # moby-engine/docker-cli are Fedora-only; RHEL-family repos ship docker-ce
+      # (when the upstream repo is enabled) or podman-docker as a CLI shim.
+      if dnf list --available docker-ce >/dev/null 2>&1; then
+        run_cmd sudo dnf install -y docker-ce docker-ce-cli containerd.io
+      elif dnf list --available moby-engine >/dev/null 2>&1; then
+        run_cmd sudo dnf install -y moby-engine docker-cli
+      else
+        run_cmd sudo dnf install -y podman podman-docker
+      fi
       run_cmd sudo systemctl enable --now docker
       run_cmd sudo usermod -aG docker "$user_name"
       ;;
@@ -430,6 +446,32 @@ install_linux_pacman() {
       ;;
     docker)
       run_cmd sudo pacman -S --needed docker
+      run_cmd sudo systemctl enable --now docker
+      run_cmd sudo usermod -aG docker "$user_name"
+      ;;
+    *)
+      die "unsupported Linux container runtime: $runtime"
+      ;;
+  esac
+
+  maybe_add_kvm_access
+}
+
+install_linux_zypper() {
+  runtime=$1
+  user_name=$(current_user)
+
+  run_cmd sudo zypper --non-interactive refresh
+  run_cmd sudo zypper --non-interactive install git curl ca-certificates xz
+  install_linux_nodejs
+  run_cmd sudo zypper --non-interactive install qemu-x86 qemu-tools iproute2 socat xterm
+
+  case "$runtime" in
+    podman)
+      run_cmd sudo zypper --non-interactive install podman podman-docker
+      ;;
+    docker)
+      run_cmd sudo zypper --non-interactive install docker
       run_cmd sudo systemctl enable --now docker
       run_cmd sudo usermod -aG docker "$user_name"
       ;;
@@ -520,7 +562,7 @@ for arg in "$@"; do
     --os=macos | --os=linux)
       OS_OVERRIDE=${arg#--os=}
       ;;
-    --package-manager=brew | --package-manager=apt | --package-manager=dnf | --package-manager=pacman)
+    --package-manager=brew | --package-manager=apt | --package-manager=dnf | --package-manager=pacman | --package-manager=zypper)
       PKG_MANAGER_OVERRIDE=${arg#--package-manager=}
       ;;
     --container-runtime=podman | --container-runtime=docker)
@@ -575,6 +617,9 @@ case "$PKG_MANAGER" in
     ;;
   pacman)
     install_linux_pacman "$LINUX_CONTAINER_RUNTIME"
+    ;;
+  zypper)
+    install_linux_zypper "$LINUX_CONTAINER_RUNTIME"
     ;;
   *)
     die "unsupported package manager for Linux: $PKG_MANAGER"
