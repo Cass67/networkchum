@@ -444,16 +444,16 @@ install_linux_pacman() {
   user_name=$(current_user)
 
   run_cmd sudo pacman -Syu --noconfirm
-  run_cmd sudo pacman -S --needed git curl ca-certificates xz
+  run_cmd sudo pacman -S --needed --noconfirm git curl ca-certificates xz
   install_linux_nodejs
-  run_cmd sudo pacman -S --needed qemu-base qemu-desktop iproute2 socat xterm
+  run_cmd sudo pacman -S --needed --noconfirm qemu-base qemu-desktop iproute2 socat xterm
 
   case "$runtime" in
     podman)
-      run_cmd sudo pacman -S --needed podman podman-docker
+      run_cmd sudo pacman -S --needed --noconfirm podman podman-docker
       ;;
     docker)
-      run_cmd sudo pacman -S --needed docker
+      run_cmd sudo pacman -S --needed --noconfirm docker
       run_cmd sudo systemctl enable --now docker
       run_cmd sudo usermod -aG docker "$user_name"
       ;;
