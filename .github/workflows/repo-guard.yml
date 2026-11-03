@@ -1,0 +1,31 @@
+# repo-guard:managed (delete this line to keep local edits across --upgrade)
+# Server-side half of repo-guard: catches what local hooks cannot, such as
+# commits made with --no-verify, from machines without the hooks, or in the web UI.
+name: repo-guard
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Risky filenames and large files
+        run: |
+          pipx run pre-commit run --all-files risky-filenames
+          pipx run pre-commit run --all-files large-files
+
+      - name: gitleaks (full history, repo .gitleaks.toml)
+        run: >-
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo"
+          ghcr.io/gitleaks/gitleaks:v8.30.1
+          git --no-banner --redact --log-opts=--all /repo

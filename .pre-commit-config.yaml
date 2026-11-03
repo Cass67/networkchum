@@ -9,48 +9,73 @@ repos:
           bash -lc '
             status=0
             for f in "$@"; do
-              case "$f" in
-                .env|.env.*|*.env|*env*|*.local|*.secret|*.secrets|*.token|*.tokens)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
-                  ;;
-                *.pem|*.key|*.p12|*.pfx|*.crt|*.csr|*.ovpn|*.asc|*.kdbx|*.sqlite|*.sqlite3)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
-                  ;;
-                *.db|*.rdb|*.bak|*.backup|*.gpg|*.age|id_rsa|id_rsa.*|id_ed25519|id_ed25519.*)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
-                  ;;
-                known_hosts|authorized_keys|auth.json|auth.json.*|credentials|credentials.*)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
-                  ;;
-                secrets|secrets.*|.npmrc|.pypirc|.netrc|.docker/config.json|.envrc|.aws/*|.ssh/*)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
-                  ;;
-                .gnupg/*|.config/*|Library/Keychains/*|history.jsonl|sessions/*|log/*)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
-                  ;;
-                Library/Application\ Support/Google/Chrome/*)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
-                  ;;
-                Library/Application\ Support/Chromium/*)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
-                  ;;
-                Library/Application\ Support/BraveSoftware/*)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
-                  ;;
-                Library/Application\ Support/Firefox/*)
-                  printf "refusing risky path=%s\n" "$f"
-                  status=1
+              b=${f##*/}
+              case "$b" in
+                .env.example|.env.sample|.env.template)
+                  # Placeholder templates are meant to be committed, at any depth;
+                  # the *env* globs below would otherwise block them.
+                  continue
                   ;;
               esac
+              risky=0
+              # Name patterns are checked against the basename as well as the
+              # full path, so deploy/id_rsa is caught like id_rsa.
+              for p in "$b" "$f"; do
+                case "$p" in
+                  .env|.env.*|*.env|*env*|*.local|*.secret|*.secrets|*.token|*.tokens) risky=1 ;;
+                  *.pem|*.key|*.p12|*.pfx|*.crt|*.csr|*.ovpn|*.asc|*.kdbx) risky=1 ;;
+                  *.jks|*.keystore) risky=1 ;;
+                  *.sqlite|*.sqlite3|*.db|*.rdb|*.bak|*.backup|*.gpg|*.age) risky=1 ;;
+                  *.tfstate|*.tfstate.*|kubeconfig|*.kubeconfig|.htpasswd) risky=1 ;;
+                  id_rsa|id_rsa.*|id_ed25519|id_ed25519.*) risky=1 ;;
+                  id_ecdsa|id_ecdsa.*|id_dsa|id_dsa.*) risky=1 ;;
+                  known_hosts|authorized_keys|auth.json|auth.json.*) risky=1 ;;
+                  credentials|credentials.*) risky=1 ;;
+                  secrets|secrets.*|.npmrc|.pypirc|.netrc|.envrc|.git-credentials) risky=1 ;;
+                  history.jsonl) risky=1 ;;
+                esac
+              done
+              # Directory patterns match at any depth, like the .gitignore template.
+              case "/$f" in
+                */.docker/config.json|*/.aws/*|*/.ssh/*|*/.gnupg/*|*/.config/*) risky=1 ;;
+                */Library/Keychains/*|*/sessions/*|*/log/*) risky=1 ;;
+                */Library/Application\ Support/Google/Chrome/*) risky=1 ;;
+                */Library/Application\ Support/Chromium/*) risky=1 ;;
+                */Library/Application\ Support/BraveSoftware/*) risky=1 ;;
+                */Library/Application\ Support/Firefox/*) risky=1 ;;
+              esac
+              if [ "$risky" -eq 1 ]; then
+                printf "refusing risky path=%s\n" "$f"
+                status=1
+              fi
+            done
+            exit "$status"
+          ' --
+        language: system
+      - id: large-files
+        name: large files and model weights
+        entry: |-
+          bash -lc '
+            # One bad git add of weights or a backup bloats history for good.
+            max_kb=${REPO_GUARD_MAX_FILE_KB:-5120}
+            status=0
+            for f in "$@"; do
+              # LFS files are pointers in git but full size on disk.
+              case "$(git check-attr filter -- "$f")" in
+                *": filter: lfs") continue ;;
+              esac
+              case "${f##*/}" in
+                *.gguf|*.safetensors|*.ckpt|*.pt|*.pth|*.onnx|*.ggml) ;;
+                *.qcow2|*.vmdk|*.vdi|*.iso|*.zst|*.7z|*.rar|*.tar) ;;
+                *)
+                  if [ ! -f "$f" ]; then continue; fi
+                  kb=$(( ($(wc -c <"$f") + 1023) / 1024 ))
+                  if [ "$kb" -le "$max_kb" ]; then continue; fi
+                  ;;
+              esac
+              printf "refusing large or binary-artifact file=%s " "$f"
+              printf "(limit %s KiB via REPO_GUARD_MAX_FILE_KB; use Git LFS)\n" "$max_kb"
+              status=1
             done
             exit "$status"
           ' --
@@ -113,13 +138,18 @@ repos:
       - id: bandit
         name: bandit
         entry: >-
-          bash -lc 'if [ -n "${VIRTUAL_ENV:-}" ] && [ -x
-          "$VIRTUAL_ENV/bin/bandit" ]; then "$VIRTUAL_ENV/bin/bandit" -q
+          bash -lc 'if [ -f bandit.yaml ]; then conf="-c bandit.yaml"; else
+          conf=""; fi; if [ -n "${VIRTUAL_ENV:-}" ] && [ -x
+          "$VIRTUAL_ENV/bin/bandit" ]; then "$VIRTUAL_ENV/bin/bandit" -q $conf
           "$@"; elif [ -x ./.venv/bin/bandit ]; then ./.venv/bin/bandit -q
-          "$@"; elif [ -x ./venv/bin/bandit ]; then ./venv/bin/bandit -q
-          "$@"; else bandit -q "$@"; fi' --
+          $conf "$@"; elif [ -x ./venv/bin/bandit ]; then ./venv/bin/bandit
+          -q $conf "$@"; else bandit -q $conf "$@"; fi' --
         language: system
         files: \.pyi?$
+        # B101 (assert_used) fires on every pytest assert, which makes this hook
+        # unpassable for any commit that touches a test. Bandit audits shipped
+        # code; test files are not a deployment surface.
+        exclude: (^|/)tests?/|(^|/)test_[^/]*\.py$|(^|/)conftest\.py$
       - id: radon-cc
         name: radon complexity
         entry: >-
@@ -145,18 +175,15 @@ repos:
       - id: pip-audit
         name: pip audit
         entry: >-
-          bash -lc 'if [ -f requirements.txt ]; then if [ -n
-          "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/pip-audit" ]; then
-          "$VIRTUAL_ENV/bin/pip-audit" -r requirements.txt; elif [ -x
-          ./.venv/bin/pip-audit ]; then ./.venv/bin/pip-audit -r
-          requirements.txt; elif [ -x ./venv/bin/pip-audit ]; then
-          ./venv/bin/pip-audit -r requirements.txt; else pip-audit -r
-          requirements.txt; fi; elif [ -f pyproject.toml ]; then if [ -n
-          "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/pip-audit" ]; then
-          "$VIRTUAL_ENV/bin/pip-audit"; elif [ -x ./.venv/bin/pip-audit ];
-          then ./.venv/bin/pip-audit; elif [ -x ./venv/bin/pip-audit ]; then
-          ./venv/bin/pip-audit; else pip-audit; fi; else echo "no Python
-          dependency manifest found, skipping pip-audit"; fi'
+          bash -lc 'if [ ! -f requirements.txt ] && [ ! -f pyproject.toml ];
+          then echo "no Python dependency manifest found, skipping pip-audit";
+          elif [ -n "${VIRTUAL_ENV:-}" ] && [ -x
+          "$VIRTUAL_ENV/bin/pip-audit" ]; then "$VIRTUAL_ENV/bin/pip-audit"
+          -r requirements.txt; elif [ -x ./.venv/bin/pip-audit ]; then
+          ./.venv/bin/pip-audit -r requirements.txt; elif [ -x
+          ./venv/bin/pip-audit ]; then ./venv/bin/pip-audit -r
+          requirements.txt; elif [ -f requirements.txt ]; then pip-audit -r
+          requirements.txt; elif [ -f pyproject.toml ]; then pip-audit; fi' --
         language: system
         pass_filenames: false
 # repo-guard:python:end
@@ -187,11 +214,14 @@ repos:
       - id: eslint
         name: eslint
         entry: >-
-          bash -lc '
-            if [ ! -f eslint.config.js ] && [ ! -f eslint.config.mjs ] && [ ! -f eslint.config.cjs ] && [ ! -f .eslintrc.js ] && [ ! -f .eslintrc.json ] && [ ! -f .eslintrc.yaml ] && [ ! -f .eslintrc.yml ]; then
-              echo "eslint: no config found, skipping"; exit 0;
-            fi;
-            if [ -x ./node_modules/.bin/eslint ]; then ./node_modules/.bin/eslint "$@"; else eslint "$@"; fi' --
+          bash -lc 'has_cfg=0; for c in eslint.config.js eslint.config.mjs
+          eslint.config.cjs eslint.config.ts eslint.config.mts eslint.config.cts
+          .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.json .eslintrc.yaml
+          .eslintrc.yml; do [ -e "$c" ] && has_cfg=1 && break; done; if [
+          "$has_cfg" -eq 0 ] && [ -f package.json ] && grep -q
+          "\"eslintConfig\"" package.json; then has_cfg=1; fi; if [ "$has_cfg"
+          -eq 0 ]; then exit 0; fi; if [ -x ./node_modules/.bin/eslint ]; then
+          ./node_modules/.bin/eslint "$@"; else eslint "$@"; fi' --
         language: system
         files: \.(js|jsx|mjs|cjs)$
       - id: prettier
@@ -211,11 +241,14 @@ repos:
       - id: eslint
         name: eslint
         entry: >-
-          bash -lc '
-            if [ ! -f eslint.config.js ] && [ ! -f eslint.config.mjs ] && [ ! -f eslint.config.cjs ] && [ ! -f .eslintrc.js ] && [ ! -f .eslintrc.json ] && [ ! -f .eslintrc.yaml ] && [ ! -f .eslintrc.yml ]; then
-              echo "eslint: no config found, skipping"; exit 0;
-            fi;
-            if [ -x ./node_modules/.bin/eslint ]; then ./node_modules/.bin/eslint "$@"; else eslint "$@"; fi' --
+          bash -lc 'has_cfg=0; for c in eslint.config.js eslint.config.mjs
+          eslint.config.cjs eslint.config.ts eslint.config.mts eslint.config.cts
+          .eslintrc .eslintrc.js .eslintrc.cjs .eslintrc.json .eslintrc.yaml
+          .eslintrc.yml; do [ -e "$c" ] && has_cfg=1 && break; done; if [
+          "$has_cfg" -eq 0 ] && [ -f package.json ] && grep -q
+          "\"eslintConfig\"" package.json; then has_cfg=1; fi; if [ "$has_cfg"
+          -eq 0 ]; then exit 0; fi; if [ -x ./node_modules/.bin/eslint ]; then
+          ./node_modules/.bin/eslint "$@"; else eslint "$@"; fi' --
         language: system
         files: \.(ts|tsx|mts|cts)$
       - id: prettier
@@ -230,12 +263,99 @@ repos:
       - id: tsc-noemit
         name: tsc --noEmit
         entry: >-
-          bash -lc '
-            TSC=$([ -x ./node_modules/.bin/tsc ] && echo ./node_modules/.bin/tsc || echo tsc);
-            for cfg in packages/shared/tsconfig.json apps/api/tsconfig.json apps/web/tsconfig.json; do
-              [ -f "$cfg" ] && "$TSC" -p "$cfg" --noEmit || true;
-            done'
+          bash -lc 'if [ -x ./node_modules/.bin/tsc ]; then
+          ./node_modules/.bin/tsc --noEmit; else tsc --noEmit; fi' --
         language: system
         files: \.(ts|tsx|mts|cts)$
         pass_filenames: false
 # repo-guard:typescript:end
+
+# repo-guard:go:start
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: bash -lc 'gofmt -w "$@"'
+        language: system
+        files: \.go$
+      - id: goimports
+        name: goimports
+        entry: bash -lc 'goimports -w "$@"'
+        language: system
+        files: \.go$
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        files: \.go$
+        pass_filenames: false
+      - id: go-test
+        name: go test
+        entry: go test ./...
+        language: system
+        files: \.(go|js|html|tmpl)$
+        pass_filenames: false
+      - id: golangci-lint
+        name: golangci-lint
+        entry: golangci-lint run --new-from-rev=HEAD
+        language: system
+        files: \.go$
+        pass_filenames: false
+      - id: govulncheck
+        name: govulncheck
+        entry: govulncheck ./...
+        language: system
+        files: \.go$
+        pass_filenames: false
+# repo-guard:go:end
+
+# repo-guard:actions:start
+  - repo: local
+    hooks:
+      - id: actionlint
+        name: actionlint
+        entry: actionlint
+        language: system
+        files: ^\.github/workflows/[^/]+\.ya?ml$
+      - id: zizmor
+        name: zizmor (workflow security)
+        entry: zizmor --offline --no-progress
+        language: system
+        files: ^\.github/(workflows/[^/]+|actions/.+/action)\.ya?ml$
+# repo-guard:actions:end
+
+# repo-guard:osv:start
+  - repo: local
+    hooks:
+      - id: osv-scanner
+        name: osv-scanner (dependency vulnerabilities)
+        entry: >-
+          bash -lc 'args=(); for f in "$@"; do args+=(-L "$f"); done;
+          osv-scanner scan source "${args[@]}"' --
+        language: system
+        files: |
+          (?x)(^|/)(
+            package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|
+            bun\.lock|deno\.lock|composer\.lock|Gemfile\.lock|go\.mod|Cargo\.lock|
+            uv\.lock|poetry\.lock|Pipfile\.lock|pdm\.lock|requirements[^/]*\.txt|
+            gradle\.lockfile|mix\.lock|pubspec\.lock|packages\.lock\.json
+          )$
+# repo-guard:osv:end
+
+# repo-guard:semgrep:start
+  - repo: local
+    hooks:
+      - id: semgrep
+        name: semgrep (SAST)
+        entry: >-
+          bash -lc 'cfg=p/default; for c in .semgrep.yml .semgrep.yaml; do if [
+          -e "$c" ]; then cfg=$c; break; fi; done; base=(); if git rev-parse -q
+          --verify HEAD >/dev/null; then base=(--baseline-commit HEAD); fi;
+          semgrep scan --config "$cfg" --error --metrics off --quiet
+          --disable-version-check "${base[@]}" "$@"' --
+        language: system
+        types_or: [
+          python, go, javascript, jsx, ts, tsx, shell, c, c++, rust, swift,
+          ruby, java, php, dockerfile, terraform,
+        ]
+# repo-guard:semgrep:end

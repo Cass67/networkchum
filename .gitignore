@@ -93,3 +93,23 @@ deploy.local.md
 # Internal release reports: regenerated locally, never tracked.
 docs/release-status.md
 docs/release-readiness.html
+*.jks
+*.keystore
+*.tfstate
+*.tfstate.*
+kubeconfig
+*.kubeconfig
+.htpasswd
+.git-credentials
+id_ecdsa
+id_ecdsa.*
+id_dsa
+id_dsa.*
+# Placeholder env templates are meant to be committed (the hook allows them too).
+!.env.example
+!.env.sample
+!.env.template
+
+# Python bytecode and caches.
+__pycache__/
+*.py[cod]
