@@ -344,7 +344,11 @@ install_linux_nodejs() {
   run_cmd sudo ln -sf "$install_dir/bin/npx" /usr/local/bin/npx
   run_cmd sudo ln -sf "$install_dir/bin/corepack" /usr/local/bin/corepack
 
+  # The official Node.js 26 x64 build links libatomic.so.1, which minimal
+  # cloud images do not ship; the callers install the distro runtime package.
+  # Fail here with a clear error instead of at the first npm invocation.
   if [ "$DRY_RUN" -eq 0 ]; then
+    run_cmd "$install_dir/bin/node" --version
     rm -rf "$temp_dir"
   fi
 }
@@ -359,7 +363,7 @@ install_linux_apt() {
   user_name=$(current_user)
 
   run_cmd sudo apt update
-  run_cmd sudo apt install -y git curl ca-certificates xz-utils
+  run_cmd sudo apt install -y git curl ca-certificates xz-utils libatomic1
   install_linux_nodejs
   run_cmd sudo apt install -y qemu-system-x86 qemu-utils iproute2 socat xterm
 
@@ -402,7 +406,7 @@ install_linux_dnf() {
   user_name=$(current_user)
   qemu_package=$(resolve_dnf_qemu_package)
 
-  run_cmd sudo dnf install -y git curl ca-certificates xz
+  run_cmd sudo dnf install -y git curl ca-certificates xz libatomic
   install_linux_nodejs
   # RHEL 9 ships /usr/libexec/qemu-kvm and only links it into PATH via the
   # qemu-kvm-core/qemu-kvm-tools split; install the core package alongside.
@@ -444,7 +448,7 @@ install_linux_pacman() {
   user_name=$(current_user)
 
   run_cmd sudo pacman -Syu --noconfirm
-  run_cmd sudo pacman -S --needed --noconfirm git curl ca-certificates xz
+  run_cmd sudo pacman -S --needed --noconfirm git curl ca-certificates xz gcc-libs
   install_linux_nodejs
   run_cmd sudo pacman -S --needed --noconfirm qemu-base qemu-desktop iproute2 socat xterm
 
@@ -470,7 +474,7 @@ install_linux_zypper() {
   user_name=$(current_user)
 
   run_cmd sudo zypper --non-interactive refresh
-  run_cmd sudo zypper --non-interactive install git curl ca-certificates xz
+  run_cmd sudo zypper --non-interactive install git curl ca-certificates xz libatomic1
   install_linux_nodejs
   run_cmd sudo zypper --non-interactive install qemu-x86 qemu-tools iproute2 socat xterm
 

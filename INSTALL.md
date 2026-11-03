@@ -319,6 +319,11 @@ sudo ln -sf "/usr/local/lib/nodejs/${NODE_TAR%.tar.xz}/bin/corepack" /usr/local/
 
 On Linux `arm64`, change the archive match from `linux-x64` to `linux-arm64`.
 
+The official Node.js 26 x64 archive links `libatomic.so.1`, which minimal
+cloud images do not ship. Install it before running `node` (`libatomic1` on
+Debian/Ubuntu and openSUSE, `libatomic` on Fedora/Rocky, `gcc-libs` on Arch);
+`install.sh` adds it automatically.
+
 Verify:
 
 ```bash

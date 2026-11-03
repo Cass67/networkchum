@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- `install.sh` installs the `libatomic` runtime package on Linux: the official
+  Node.js 26 x64 build links `libatomic.so.1`, which minimal cloud images omit,
+  so `node` failed with a loader error before `npm install`
+
 ### Changed
 
 - Node.js 26 (LTS "Lithium") is now the default runtime: `install.sh`
