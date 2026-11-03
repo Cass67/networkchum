@@ -9,7 +9,7 @@
 #
 # Cloud images used for the supported families:
 #   apt     https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-#   apt     https://cloud.debian.org/images/cloud/bookworm/latest/debian12-genericcloud-amd64.qcow2
+#   apt     https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
 #   dnf     https://download.fedoraproject.org/pub/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2
 #   dnf     https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2
 #   pacman  https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
