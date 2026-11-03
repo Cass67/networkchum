@@ -103,4 +103,6 @@ Reproduce with `scripts/vm-install-test.sh <image-url> <name>` on a KVM host; im
 - Startup measured on the live host: restart-to-`/health` ≈1.40 s on both 24
   and 26; cold `node -e ""` ≈50 ms on both. **No startup speedup observed** —
   the gains are V8 14.6 (throughput) and staying on the active LTS line.
+- Cut `v0.1.2` (Node 26) and `v0.1.3` (provider registry, ChatGPT and OpenCode
+  sign-in) on 2026-11-03; both deployed and CI green.
 - Not verified: the in-browser UI flows listed above (unchanged).

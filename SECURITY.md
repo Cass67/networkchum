@@ -29,6 +29,22 @@ serial consoles, so the API is deliberately token-gated.
   dialog re-appears.
 - Retrieve the current token with `./start.sh doctor` on the server.
 
+## AI provider credentials
+
+- LLM API keys are stored server-side in `<data-dir>/ai-provider.json` with
+  mode `0600` and are never returned to the browser; the settings endpoint
+  reports only `hasApiKey`, `authMode` and the account label.
+- Subscription sign-in (ChatGPT, OpenCode Go) stores access and refresh tokens
+  in `<data-dir>/ai-oauth.json` with mode `0600`, refreshes them before expiry,
+  and injects them as the Bearer token at request time.
+- Credentials are plaintext at rest. Keep the data directory on a host you
+  trust and out of backups you do not control.
+- Prompts, the device catalog and generated lab specs are sent to whichever
+  provider you configure (and to that vendor's backend for subscriptions). Do
+  not point the provider at an endpoint you do not trust.
+- Signing out deletes that provider's OAuth record; deleting
+  `ai-provider.json` clears the stored API key.
+
 ## Exposure
 
 - `localhost` mode (default) binds the UI and API to loopback only.

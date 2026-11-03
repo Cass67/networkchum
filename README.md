@@ -15,6 +15,12 @@ The project is aimed at an EVE-NG / PNETLab style workflow, but with a JSON-nati
 - Upload VM images, bind them to built-in templates, unbind them, or remove them from the active catalog
 - Browse local container images, search registries, pull images, and turn them into reusable templates or one-off lab nodes
 - Persist labs, runtime state, and image metadata in local JSON files
+- Build a lab from a plain-English prompt with an LLM (ChatGPT, OpenCode Go,
+  OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, xAI, Moonshot, Mistral,
+  Together, Ollama, LM Studio, or any OpenAI-compatible endpoint), including
+  day-0 startup configs for supported platforms
+- Link labs together with a Lab Bridge node
+- Gate the API with a token and serve the UI to the LAN
 - Toggle between day and night themes in the web UI
 
 ## Repo Layout

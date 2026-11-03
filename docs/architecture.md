@@ -113,6 +113,8 @@ If you keep those seams clear in your head, the codebase becomes much easier to 
 | Template overrides  | `template-overrides.json` | File-backed JSON | `templateOverrideStore.ts`                           | Stores user-edited default RAM/vCPU/interface counts for built-in templates                                      |
 | Built-in templates  | `defaultTemplates.ts`     | Source code      | `TemplateRegistry`                                   | Static definitions for VM and container node types                                                               |
 | Derived catalog     | Computed at request time  | Not persisted    | `getCatalog.ts`                                      | Join of templates and active image bindings                                                                      |
+| AI provider         | `ai-provider.json`        | File-backed JSON | `providerSettingsStore.ts`                           | Provider id, base URL, model, and API key (mode 0600); the key is never returned to the browser                  |
+| AI OAuth            | `ai-oauth.json`           | File-backed JSON | `oauthStore.ts`                                      | Subscription access/refresh tokens keyed by provider id (mode 0600), refreshed before expiry                     |
 | Browser preferences | `localStorage`            | Browser storage  | `App.tsx`                                            | Theme, native console mode, and saved custom terminal definitions                                                |
 
 ### State Relationships
@@ -451,7 +453,53 @@ Cloud behavior is keyed off the topology node's `cloudRole` and `bridgeGroup`.
 | Image upload/binding/catalog behavior     | `apps/api/src/images/imageService.ts`, `apps/api/src/images/scanImages.ts`, `apps/api/src/catalog/getCatalog.ts`, `apps/api/src/templates/templateRegistry.ts`                | The visible catalog is derived from these modules                         |
 | Web console behavior                      | `apps/web/src/components/NodeConsole.tsx`, `apps/api/src/routes/console.ts`                                                                                                   | Browser terminal and serial proxy meet here                               |
 | Native console behavior                   | `apps/web/src/App.tsx`, `tools/native-console-bridge/server.js`, `tools/native-console-helper/README.md`                                                                      | The UI, HTTP bridge, and helper assets are split across these modules     |
+| AI lab generation or provider auth        | `packages/shared/src/aiProviders.ts`, `apps/api/src/ai/generateLabSpec.ts`, `apps/api/src/ai/oauthFlows.ts`, `apps/web/src/components/AiLabBuilderDialog.tsx`                 | Registry, prompt contract, sign-in flows, and dialog meet here            |
 | Cleanup and deletion behavior             | `apps/api/src/runtime/runtimeCleanupService.ts`, `apps/api/src/topology/nodeService.ts`, `apps/api/src/labs/labService.ts`                                                    | Deletion is where topology and runtime cleanup reconnect                  |
+
+## AI Lab Builder
+
+The lab builder turns a prompt into a validated `LabDocument` without letting
+the model write documents directly.
+
+```mermaid
+sequenceDiagram
+  participant UI as AI Lab Builder dialog
+  participant API as Fastify API
+  participant LLM as Provider (chat/Codex/Anthropic)
+  participant Builder as buildLabDocumentFromSpec
+
+  UI->>API: POST /ai/labs/preview {prompt, devices?}
+  API->>API: buildSystemPrompt(catalog, images)
+  API->>LLM: constrained JSON request
+  LLM-->>API: AiLabSpec JSON
+  API->>API: validate spec, one repair round on failure
+  API->>Builder: resolve templates, clamp resources, assign ids
+  Builder-->>API: LabDocument + preview issues
+  API-->>UI: preview (nodes, links, issues)
+  UI->>API: POST /ai/labs/commit {spec}
+  API->>API: re-run the same builder, persist the lab
+```
+
+- **Provider registry** (`packages/shared/src/aiProviders.ts`) declares the
+  protocol (`openai-chat`, `anthropic-messages`, `codex-responses`), default
+  base URL and auth method per provider. The dialog renders a grouped picker
+  from it, so adding a provider is a data change.
+- **Credentials**: API keys live in `ai-provider.json`; subscription tokens
+  live in `ai-oauth.json`, both mode 0600. Subscription sign-in uses RFC 8628
+  device codes (ChatGPT, OpenCode Go) so it works when the API is on another
+  machine. Tokens are injected as the Bearer token at call time and never
+  returned to the browser.
+- **ChatGPT** uses the Codex `responses` protocol (`store: false`, SSE
+  `response.output_text.delta`), with `chatgpt-account-id` from the JWT.
+  Anthropic is API-key only; Claude subscriptions are not supported because
+  Anthropic's flow requires impersonating Claude Code.
+- **Deterministic guardrails**: the model only emits `AiLabSpec`; the API owns
+  id generation, resource clamping, interface assignment and final
+  `LabDocumentSchema` validation. A failed validation triggers one repair
+  round, then a 502.
+- **Day-0 configs** are carried in the spec and written into the lab's config
+  set; only platforms with a working injector apply them at boot (see
+  `docs/agent-builder.md` for the matrix).
 
 ## Known Gaps and Likely Evolution
 
@@ -463,7 +511,7 @@ These are not theoretical issues; they follow directly from the current implemen
 - Live topology synchronization is strongest on socket-backed QEMU because `virtualSwitch` can remap attachments at runtime. Linux TAP and container networking rely more heavily on launch-time reconciliation.
 - The native console architecture is mid-transition: the bridge is wired into the UI, the helper app exists separately, and custom terminal definitions are stored in the browser but are not yet a fully integrated end-to-end runtime contract.
 - Container templates are differentiated in the catalog and configuration layer, but the current runtime start path still launches a hard-coded container image in `powerNode.ts`.
-- The web console and bridge paths assume direct localhost access (`127.0.0.1`), which is appropriate for local development but becomes a constraint if the app is ever packaged or hosted differently.
+- The native console bridge is localhost-only by design (it spawns terminals on the machine running it); the web console resolves the API host from the page, so it works in LAN mode. Any packaging that moves the API behind TLS or a path prefix still needs URL handling work.
 - Runtime status refresh is request-based, not streamed. The UI refreshes runtime state on explicit actions and on window focus rather than via a push channel.
 
 ## Working in This Repo
