@@ -27,8 +27,12 @@ type BuildQemuCommandInput = {
   imagePath: string;
   extraDrives?: string[]; // additional disk/cdrom paths, attached as ide drives
   extraArgs?: string[]; // raw QEMU args appended after all drives (for config injectors)
-  mainDiskInterface?: "virtio" | "ide"; // default: virtio
+  mainDiskInterface?: "virtio" | "ide" | "sata"; // default: virtio
   machineType: string;
+  // UEFI firmware image (OVMF). Required when firmware is "uefi".
+  firmware?: "bios" | "uefi";
+  uefiFirmwarePath?: string;
+  cpuModel?: string;
   config: {
     ramMb: number;
     vcpu: number;
@@ -51,14 +55,41 @@ export function buildQemuCommand(input: BuildQemuCommandInput): string[] {
     "-machine",
     input.machineType,
     "-cpu",
-    "max",
+    input.cpuModel ?? "max",
     "-m",
     String(input.config.ramMb),
     "-smp",
     String(input.config.vcpu),
-    "-drive",
-    `file=${input.imagePath},if=${input.mainDiskInterface ?? "virtio"},format=qcow2`,
   ];
+
+  if (input.firmware === "uefi") {
+    if (!input.uefiFirmwarePath) {
+      throw new Error(
+        "UEFI firmware requested but no OVMF image was found (install ovmf)",
+      );
+    }
+    command.push("-bios", input.uefiFirmwarePath);
+  }
+
+  const diskInterface = input.mainDiskInterface ?? "virtio";
+  if (diskInterface === "sata") {
+    // Cisco NX-OSv 9000 boots from an AHCI-attached disk; virtio and IDE both
+    // fail (no serial output, then a kernel panic with IDE).
+    const pciBus = input.machineType.startsWith("q35") ? "pcie.0" : "pci.0";
+    command.push(
+      "-device",
+      `ahci,id=ahci0,bus=${pciBus}`,
+      "-drive",
+      `file=${input.imagePath},if=none,id=maindisk,format=qcow2`,
+      "-device",
+      `ide-hd,bus=ahci0.0,drive=maindisk,id=maindisk0,bootindex=1`,
+    );
+  } else {
+    command.push(
+      "-drive",
+      `file=${input.imagePath},if=${diskInterface},format=qcow2`,
+    );
+  }
 
   for (const extraPath of input.extraDrives ?? []) {
     const isIso = extraPath.endsWith(".iso");

@@ -118,4 +118,71 @@ describe("buildQemuCommand", () => {
 
     expect(result).not.toContain("-accel");
   });
+
+  it("attaches the main disk as SATA on an AHCI controller", () => {
+    const result = buildQemuCommand({
+      labId: "lab-1",
+      nodeId: "node-1",
+      imagePath: "/images/nxosv.qcow2",
+      config: {
+        ramMb: 8192,
+        vcpu: 2,
+        interfaceCount: 8,
+        nicModel: "e1000",
+        accelerationMode: "kvm",
+      },
+      machineType: "pc",
+      mainDiskInterface: "sata",
+    });
+
+    const commandLine = result.join(" ");
+    expect(commandLine).toContain("ahci,id=ahci0,bus=pci.0");
+    expect(commandLine).toContain("file=/images/nxosv.qcow2,if=none");
+    expect(commandLine).toContain("ide-hd,bus=ahci0.0");
+    expect(commandLine).not.toContain("if=virtio");
+  });
+
+  it("boots with UEFI firmware and a custom CPU model", () => {
+    const result = buildQemuCommand({
+      labId: "lab-1",
+      nodeId: "node-1",
+      imagePath: "/images/nxosv.qcow2",
+      config: {
+        ramMb: 8192,
+        vcpu: 2,
+        interfaceCount: 2,
+        nicModel: "e1000",
+        accelerationMode: "kvm",
+      },
+      machineType: "pc",
+      firmware: "uefi",
+      uefiFirmwarePath: "/usr/share/qemu/OVMF.fd",
+      cpuModel: "host",
+      mainDiskInterface: "sata",
+    });
+
+    expect(result).toContain("-bios");
+    expect(result).toContain("/usr/share/qemu/OVMF.fd");
+    expect(result).toContain("host");
+  });
+
+  it("fails clearly when UEFI is requested without firmware", () => {
+    expect(() =>
+      buildQemuCommand({
+        labId: "lab-1",
+        nodeId: "node-1",
+        imagePath: "/images/nxosv.qcow2",
+        config: {
+          ramMb: 8192,
+          vcpu: 2,
+          interfaceCount: 2,
+          nicModel: "e1000",
+          accelerationMode: "kvm",
+        },
+        machineType: "pc",
+        firmware: "uefi",
+        mainDiskInterface: "sata",
+      }),
+    ).toThrow(/UEFI firmware/);
+  });
 });

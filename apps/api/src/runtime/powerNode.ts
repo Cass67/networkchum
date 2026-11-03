@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { access, copyFile, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -27,6 +28,20 @@ import { buildContainerSpec } from "./container/buildContainerSpec.js";
 import { detectContainerEngine } from "./container/containerRuntimeService.js";
 import { resolveNodeImagePath } from "../images/resolveNodeImage.js";
 import { buildQemuCommand, tapName } from "./qemu/buildQemuCommand.js";
+
+// UEFI firmware for templates that need it (NX-OSv 9000). Prefer the unified
+// image; fall back to the distro layouts.
+function resolveUefiFirmware(): string | undefined {
+  const candidates = [
+    "/usr/share/qemu/OVMF.fd",
+    "/usr/share/ovmf/OVMF.fd",
+    "/usr/share/OVMF/OVMF.fd",
+    "/usr/share/OVMF/OVMF_CODE.fd",
+    "/usr/local/share/qemu/OVMF.fd",
+    "/opt/homebrew/share/qemu/OVMF.fd",
+  ];
+  return candidates.find((candidate) => existsSync(candidate));
+}
 import {
   isQemuProcessCommandLine,
   resolveQemuBinary,
@@ -1232,6 +1247,16 @@ export async function powerOnNode(
     console.log(`[powerNode] NIC ports: ${nicPorts.join(", ")}`);
   }
 
+  const boot = template?.boot;
+  const firmware = boot?.firmware === "uefi" ? "uefi" : "bios";
+  const uefiFirmwarePath =
+    firmware === "uefi" ? resolveUefiFirmware() : undefined;
+  if (firmware === "uefi" && !uefiFirmwarePath) {
+    throw new Error(
+      `Template ${node.templateId} needs UEFI firmware but no OVMF image was found. Install the ovmf package (for example /usr/share/qemu/OVMF.fd).`,
+    );
+  }
+
   const qemuCommand = buildQemuCommand({
     qemuBinary,
     labId,
@@ -1239,14 +1264,18 @@ export async function powerOnNode(
     imagePath: effectiveImagePath,
     extraDrives,
     extraArgs: configExtraArgs,
-    machineType: "q35",
+    machineType: boot?.machineType ?? "q35",
+    firmware,
+    uefiFirmwarePath,
+    cpuModel: boot?.cpuModel,
     // CSR1000v (IOS-XE): main disk on IDE so BIOS boots it; virtio config
     // disk is invisible to BIOS but scanned by IOS-XE for day-0 config.
     mainDiskInterface:
-      configInjectMethod === "csr1000v-vfat" ||
+      boot?.diskInterface ??
+      (configInjectMethod === "csr1000v-vfat" ||
       configInjectMethod === "junos-config-disk"
         ? "ide"
-        : undefined,
+        : undefined),
     config: {
       ramMb: node.config.ramMb,
       vcpu: node.config.vcpu,

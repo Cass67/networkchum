@@ -34,6 +34,11 @@ export const TemplateSchema = z.object({
     console: z.enum(["serial", "vnc", "none"]),
     machineType: z.string().min(1).optional(),
     nicModel: z.string().min(1).optional(),
+    // Firmware and main-disk bus. NX-OSv 9000 needs UEFI + SATA (AHCI).
+    firmware: z.enum(["bios", "uefi"]).optional(),
+    diskInterface: z.enum(["virtio", "ide", "sata"]).optional(),
+    // Optional explicit -cpu model; defaults to "max".
+    cpuModel: z.string().min(1).optional(),
     acceleration: z.string().min(1),
     configInjectMethod: z
       .enum([

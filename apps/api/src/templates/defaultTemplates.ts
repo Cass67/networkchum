@@ -47,14 +47,17 @@ export const defaultTemplates: Template[] = [
     deviceRoleIcon: "switch",
     boot: {
       console: "serial",
-      machineType: "q35",
+      // Cisco's NX-OSv 9000 recipe: i440fx + UEFI + SATA, 2 vCPU.
+      machineType: "pc",
       nicModel: "e1000",
       acceleration: "hardware",
+      firmware: "uefi",
+      diskInterface: "sata",
       configInjectMethod: "nxos-cvac",
     },
     configSchema: {
       ramMb: { default: 8192, min: 4096, max: 16384 },
-      vcpu: { default: 4, min: 2, max: 8 },
+      vcpu: { default: 2, min: 2, max: 8 },
       interfaceCount: { default: 8, min: 4, max: 24 },
     },
   },
