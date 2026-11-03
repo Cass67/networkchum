@@ -11,7 +11,7 @@ PKG_MANAGER_OVERRIDE=""
 CONTAINER_RUNTIME=""
 FIREWALL_OVERRIDE="auto"
 FIREWALL_ACTION=""
-NODE_MAJOR=${NETWORKCHUM_NODE_MAJOR:-24}
+NODE_MAJOR=${NETWORKCHUM_NODE_MAJOR:-26}
 
 say() {
   printf '%s\n' "$*"
@@ -63,7 +63,7 @@ Options:
 
 Environment:
   NETWORKCHUM_NODE_MAJOR        Linux only; Node.js release line to install
-                                directly from nodejs.org (default: 24)
+                                directly from nodejs.org (default: 26)
 EOF
 }
 

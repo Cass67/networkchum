@@ -20,7 +20,7 @@ function runInstaller(args) {
 function assertLinuxUsesOfficialNode(output) {
   assert.match(
     output,
-    /curl -fsSL https:\/\/nodejs\.org\/download\/release\/latest-v24\.x\/SHASUMS256\.txt -o/,
+    /curl -fsSL https:\/\/nodejs\.org\/download\/release\/latest-v26\.x\/SHASUMS256\.txt -o/,
   );
   assert.match(output, /sudo ln -sf .*\/bin\/node \/usr\/local\/bin\/node/);
   assert.match(output, /sudo ln -sf .*\/bin\/npm \/usr\/local\/bin\/npm/);

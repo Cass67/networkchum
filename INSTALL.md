@@ -44,7 +44,7 @@ Useful installer modes:
 - on Linux, the installer downloads Node.js directly from `nodejs.org` instead of using distro `nodejs` packages
 - on Linux, if `firewalld` or `ufw` is detected, the installer can prompt to open `4000/tcp` and `5173/tcp` for `./start.sh lan`
 - use `--open-firewall` or `--skip-firewall` to answer that firewall step non-interactively
-- set `NETWORKCHUM_NODE_MAJOR=22` if you want the Node.js 22.x line instead of the default 24.x line
+- set `NETWORKCHUM_NODE_MAJOR=24` if you want the Node.js 24.x line instead of the default 26.x line
 - on `dnf`-based Linux, the installer defaults to `podman` and installs `podman-docker` so the app can keep using the `docker` CLI
 
 Useful start modes:
@@ -107,7 +107,7 @@ the app, continue with the platform-specific setup below.
 Recommended baseline:
 
 - Homebrew
-- Node.js 24 LTS recommended (`npm` included)
+- Node.js 26 LTS recommended (`npm` included)
 - Git
 
 Example:
@@ -296,18 +296,18 @@ Recommended Node.js install on Linux:
 ./install.sh
 ```
 
-That installs the latest Node.js 24.x build from `nodejs.org` by default. If you want the 22.x line instead:
+That installs the latest Node.js 26.x build from `nodejs.org` by default. If you want the 24.x line instead:
 
 ```bash
-NETWORKCHUM_NODE_MAJOR=22 ./install.sh
+NETWORKCHUM_NODE_MAJOR=24 ./install.sh
 ```
 
 If you want to install Node.js manually from the official archive on Linux `x86_64`, the equivalent flow is:
 
 ```bash
-curl -fsSL https://nodejs.org/download/release/latest-v24.x/SHASUMS256.txt -o /tmp/SHASUMS256.txt
+curl -fsSL https://nodejs.org/download/release/latest-v26.x/SHASUMS256.txt -o /tmp/SHASUMS256.txt
 NODE_TAR=$(awk '/linux-x64\.tar\.xz$/ { print $2; exit }' /tmp/SHASUMS256.txt)
-curl -fsSL "https://nodejs.org/download/release/latest-v24.x/${NODE_TAR}" -o "/tmp/${NODE_TAR}"
+curl -fsSL "https://nodejs.org/download/release/latest-v26.x/${NODE_TAR}" -o "/tmp/${NODE_TAR}"
 grep " ${NODE_TAR}$" /tmp/SHASUMS256.txt | sha256sum -c -
 sudo mkdir -p /usr/local/lib/nodejs
 sudo tar -xJf "/tmp/${NODE_TAR}" -C /usr/local/lib/nodejs

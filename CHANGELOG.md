@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Node.js 26 (LTS "Lithium") is now the default runtime: `install.sh`
+  installs the latest 26.x line, `engines` requires `>=26`, and CI tests 26
+  only. Set `NETWORKCHUM_NODE_MAJOR=24` to install the previous line instead.
+
 ## 0.1.1 — 2026-11-03
 
 ### Added
