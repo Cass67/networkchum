@@ -113,13 +113,14 @@
   <h1>NetworkChum — Release Readiness Report</h1>
   <p class="sub">Whether the current repository can be released: the gates, the evidence, and what is still open.</p>
   <div class="meta">Repo: github.com:Cass67/networkchum &nbsp;·&nbsp; Branch: main &nbsp;·&nbsp; Commit: f59f0a8 &nbsp;·&nbsp; Date: Mon Nov 2 2026 &nbsp;·&nbsp; Live host: 192.168.2.1 (ubt26)</div>
+  <div class="meta"><strong>Update 2026-11-03:</strong> released as <code>v0.1.1</code> at <code>030d398</code>; CI green on Node 22 and 24; live host deployed and healthy. The browser walkthrough below is still the only open item.</div>
 </header>
 
 <div class="verdict">
   <span class="badge" style="background: var(--green); color: #06170d;">Ready</span>
   <div>
     <div class="headline">Release-ready on automated gates: CI, tests, audits, build, clean install and the full platform matrix all pass, and the app is live and healthy on the new host.</div>
-    <div class="detail">Only the manual browser walkthrough of the UI flows is outstanding. The <code>v0.1.0</code> tag still points at <code>6adff4c</code>; HEAD is seven commits past it.</div>
+    <div class="detail">Only the manual browser walkthrough of the UI flows is outstanding. Released as <code>v0.1.1</code> at <code>030d398</code> on 2026-11-03.</div>
   </div>
 </div>
 
@@ -262,7 +263,7 @@ Arch/openSUSE a docker daemon that fails to start aborted the whole install
 <h2>Open items / risks</h2>
 <div class="nonblocker">
   <ul>
-    <li><strong>Tag drift:</strong> <code>v0.1.0</code> → <code>6adff4c</code>; HEAD is <code>f59f0a8</code>. Move the tag or cut <code>v0.1.1</code>.</li>
+    <li><strong>Tag drift (resolved 2026-11-03):</strong> <code>v0.1.1</code> cut at <code>030d398</code>; <code>v0.1.0</code> remains on <code>6adff4c</code> as history.</li>
     <li><strong>Immutable Fedora (CoreOS) is not supported</strong> — <code>rpm-ostree</code>, no installer branch.</li>
     <li><strong>npm resolver bug:</strong> npm 10.9.8 crashes (<code>Cannot read properties of null (reading 'edgesOut')</code>) on plain <code>npm install</code> in this workspace; <code>npm ci</code> works and the deploy flow uses it.</li>
     <li><strong>Data dir is repo-local</strong> (<code>apps/api/data</code>, gitignored) — a <code>git clean -xdf</code> on the box would wipe labs and the token.</li>
@@ -275,7 +276,7 @@ Arch/openSUSE a docker daemon that fails to start aborted the whole install
 <h2>Recommended next steps</h2>
 <ol>
   <li>Walk the UI checklist in a real browser at <code>http://192.168.2.1:5173/</code> (token: <code>~/networkchum/apps/api/data/api-token</code> on the box).</li>
-  <li>Decide the tag: move <code>v0.1.0</code> to <code>f59f0a8</code> or cut <code>v0.1.1</code>.</li>
+  <li>Decide the tag: <s>move <code>v0.1.0</code> to <code>f59f0a8</code> or cut <code>v0.1.1</code></s> — done, <code>v0.1.1</code> at <code>030d398</code>.</li>
   <li>Optionally decide whether Fedora CoreOS is a target worth an <code>rpm-ostree</code> branch.</li>
 </ol>
 

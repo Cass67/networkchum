@@ -8,18 +8,18 @@
 
 ## Release gate
 
-| Gate                             | Status                 | Evidence                                                              |
-| -------------------------------- | ---------------------- | --------------------------------------------------------------------- |
-| CI green on main                 | **PASS**               | Run 41527087763, success, 1m15s                                       |
-| Full suite green at HEAD         | **PASS**               | 897 tests, 0 failing (api 282, web 221, shared 46, scripts+bridge 66) |
-| Production build                 | **PASS**               | `npm run build` clean on macOS and on the box                         |
-| Runtime audit clean              | **PASS**               | `npm audit --omit=dev` → 0 vulnerabilities                            |
-| All-deps audit clean             | **PASS**               | `npm audit` → 0 vulnerabilities                                       |
-| Clean install validated          | **PASS**               | Fresh Ubuntu 26.04 on ubt26                                           |
-| Installer validated per platform | **PASS**               | Six cloud images, see matrix below                                    |
-| Live deployment healthy          | **PASS**               | `/health` 200, UI 200, unauth `/labs` 401, authed 200                 |
-| Tagged commit + dated changelog  | **PASS (with caveat)** | `v0.1.0` still points at `6adff4c`; HEAD is 7 commits past it         |
-| Browser flow checklist           | **NOT DONE**           | Skipped by request; partial coverage below                            |
+| Gate                             | Status       | Evidence                                                              |
+| -------------------------------- | ------------ | --------------------------------------------------------------------- |
+| CI green on main                 | **PASS**     | Run 41527087763, success, 1m15s                                       |
+| Full suite green at HEAD         | **PASS**     | 897 tests, 0 failing (api 564, web 221, shared 46, scripts+bridge 66) |
+| Production build                 | **PASS**     | `npm run build` clean on macOS and on the box                         |
+| Runtime audit clean              | **PASS**     | `npm audit --omit=dev` → 0 vulnerabilities                            |
+| All-deps audit clean             | **PASS**     | `npm audit` → 0 vulnerabilities                                       |
+| Clean install validated          | **PASS**     | Fresh Ubuntu 26.04 on ubt26                                           |
+| Installer validated per platform | **PASS**     | Six cloud images, see matrix below                                    |
+| Live deployment healthy          | **PASS**     | `/health` 200, UI 200, unauth `/labs` 401, authed 200                 |
+| Tagged commit + dated changelog  | **PASS**     | `v0.1.1` at `030d398`, dated changelog (2026-11-03)                   |
+| Browser flow checklist           | **NOT DONE** | Skipped by request; partial coverage below                            |
 
 ## Platform matrix (VM-tested today)
 
@@ -68,17 +68,17 @@ Reproduce with `scripts/vm-install-test.sh <image-url> <name>` on a KVM host; im
 
 ## Open items / risks
 
-- **Tag drift:** `v0.1.0` → `6adff4c`; HEAD is `f60d54c`. Move the tag or cut `v0.1.1`.
+- ~~**Tag drift:** `v0.1.0` → `6adff4c`; HEAD is `f60d54c`. Move the tag or cut `v0.1.1`.~~ Resolved 2026-11-03: `v0.1.1` cut at `030d398`.
 - **Immutable Fedora (CoreOS) is not supported.** The tested Fedora image is mutable Fedora Cloud Base (btrfs, `dnf`). Fedora CoreOS uses `rpm-ostree` and has no installer branch.
 - **npm resolver bug:** npm 10.9.8 crashes (`Cannot read properties of null (reading 'edgesOut')`) on plain `npm install` in this workspace; `npm ci` works and the deploy flow uses it.
 - **Data dir is repo-local** (`apps/api/data`, gitignored) — a `git clean -xdf` on the box would wipe labs and the token.
 - **systemd warns** `KillMode=none` is deprecated (intentional, so labs survive restarts).
 - **Test harness flakiness:** the Fedora VM occasionally dies during the final steps; `-no-reboot -no-shutdown` mostly fixes it, but it needed several attempts.
 - **Pre-commit hooks** are not wired into any npm script.
-- **Stale doc:** `docs/release-readiness.html` still describes the old 192.168.2.57 box and pre-fix state.
+- ~~**Stale doc:** `docs/release-readiness.html` still describes the old 192.168.2.57 box and pre-fix state.~~ Refreshed in `12289cf`; the only remaining `.57` mentions are historical.
 
 ## Recommended next steps
 
 1. Walk the UI checklist in a real browser at `http://192.168.2.1:5173/`.
-2. Decide the tag: move `v0.1.0` to `f60d54c` or cut `v0.1.1`.
+2. ~~Decide the tag: move `v0.1.0` to `f60d54c` or cut `v0.1.1`.~~ Done: `v0.1.1` at `030d398`.
 3. Optionally decide whether Fedora CoreOS is a target worth an `rpm-ostree` branch.
