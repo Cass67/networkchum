@@ -323,7 +323,7 @@ export const defaultTemplates: Template[] = [
       acceleration: "hardware",
     },
     configSchema: {
-      ramMb: { default: 8192, min: 4096, max: 16384 },
+      ramMb: { default: 16384, min: 8192, max: 32768 },
       vcpu: { default: 4, min: 2, max: 8 },
       interfaceCount: { default: 1, min: 1, max: 4 },
     },
@@ -433,6 +433,8 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "virtio-net-pci",
       acceleration: "hardware",
+      // EVE-NG mounts both vQFX halves as hda (IDE).
+      diskInterface: "ide",
     },
     configSchema: {
       ramMb: { default: 3072, min: 2048, max: 8192 },
@@ -451,6 +453,8 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "e1000",
       acceleration: "hardware",
+      // EVE-NG mounts both vQFX halves as hda (IDE).
+      diskInterface: "ide",
     },
     configSchema: {
       ramMb: { default: 2048, min: 1024, max: 8192 },

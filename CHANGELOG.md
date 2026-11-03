@@ -17,6 +17,8 @@
   SATA disk on an AHCI controller, 2 vCPU. SeaBIOS and virtio/IDE do not boot
   this image.
 - **Cisco Catalyst 8000v** defaults to the 8 GB image size (8192 MB, 2 vCPU).
+- **Cisco ISE** defaults to 16 GB, the ISE 3.x minimum.
+- **Juniper vQFX** halves use IDE disks, matching EVE-NG's `hda` convention.
 
 ## 0.1.3 — 2026-11-03
 
