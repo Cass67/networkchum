@@ -508,7 +508,7 @@ describe("ai routes", () => {
     expect(response.json()).toEqual({ provider: null });
   });
 
-  it("requires a key the first time the provider is saved", async () => {
+  it("allows a key-less self-hosted endpoint", async () => {
     const response = await app.inject({
       method: "PUT",
       url: "/ai/provider",
@@ -516,6 +516,20 @@ describe("ai routes", () => {
         provider: "openai-compatible",
         baseUrl: "http://127.0.0.1:9999/v1",
         model: "test-model",
+        apiKey: null,
+      },
+    });
+    expect(response.statusCode).toBe(200);
+  });
+
+  it("requires a sign-in for a subscription provider without a credential", async () => {
+    const response = await app.inject({
+      method: "PUT",
+      url: "/ai/provider",
+      payload: {
+        provider: "chatgpt",
+        baseUrl: "https://chatgpt.com/backend-api/codex",
+        model: "gpt-5.3-codex",
         apiKey: null,
       },
     });

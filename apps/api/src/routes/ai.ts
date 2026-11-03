@@ -94,17 +94,16 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
       // edit the other fields without re-entering the secret.
       if (existing?.apiKey) {
         settings.apiKey = existing.apiKey;
-      } else if (loadOauthRecord(settings.provider) || !def.supportsApiKey) {
-        // A subscription credential is injected at call time; local
-        // providers need no key at all.
-      } else {
+      } else if (
+        def.auth === "oauth-device" &&
+        !loadOauthRecord(settings.provider)
+      ) {
         return reply.code(400).send({
-          message:
-            def.auth === "key"
-              ? "An API key is required the first time you configure a provider"
-              : "Sign in to this provider or enter an API key",
+          message: "Sign in to this provider or enter an API key",
         });
       }
+      // Key-based providers may legitimately need no key: local servers and
+      // self-hosted gateways usually authenticate at the network layer.
     }
     saveAiProviderSettings(settings);
     return {
