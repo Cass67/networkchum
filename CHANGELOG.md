@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.1 — 2026-11-03
+
+### Added
+
+- **Console bridge client bundle**: `networkchum-console-bridge-<version>.tar.gz`
+  on the Releases page (bridge, launchers, README) for native consoles on the
+  machine running the browser.
+- **Windows native console**: the bridge opens a `cmd.exe` window; Windows 10+
+  ships the OpenSSH client used by the remote relay.
+
+### Changed
+
+- Document the remote-client model: the web console needs no client install;
+  the native console runs the bridge on the client and uses an SSH relay to the
+  server.
+
 ## 1.0.0 — 2026-11-03
 
 First public release.

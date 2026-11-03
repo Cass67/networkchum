@@ -163,6 +163,14 @@ export function buildLaunchSpec(command, options = {}) {
     };
   }
 
+  if (platform === "win32") {
+    // Open a new console window with cmd /k so the session stays open.
+    return {
+      command: "cmd.exe",
+      args: ["/c", "start", "", "cmd", "/k", command],
+    };
+  }
+
   if (platform === "linux") {
     const candidates = [
       "x-terminal-emulator",

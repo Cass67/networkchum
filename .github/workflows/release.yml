@@ -33,7 +33,18 @@ jobs:
           git archive --format=tar.gz \
             --prefix="networkchum-${version}/" \
             -o "networkchum-${version}.tar.gz" HEAD
-          sha256sum "networkchum-${version}.tar.gz" > SHA256SUMS
+      - name: Build console bridge bundle
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p bridge
+          cp tools/native-console-bridge/server.js \
+             tools/native-console-bridge/run.sh \
+             tools/native-console-bridge/run.cmd \
+             tools/native-console-bridge/README.md bridge/
+          chmod +x bridge/run.sh
+          tar -czf "networkchum-console-bridge-${version}.tar.gz" -C bridge .
+          sha256sum "networkchum-${version}.tar.gz" \
+            "networkchum-console-bridge-${version}.tar.gz" > SHA256SUMS
       - name: Extract release notes
         run: |
           node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > release-notes.md

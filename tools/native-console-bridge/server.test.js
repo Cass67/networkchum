@@ -184,7 +184,7 @@ test("buildLaunchSpec rejects unsupported platforms", () => {
   assert.throws(
     () =>
       buildLaunchSpec("/usr/local/bin/telnet 127.0.0.1 5004", {
-        platform: "win32",
+        platform: "freebsd",
       }),
     /Unsupported platform/,
   );
@@ -336,4 +336,12 @@ test("bridge exposes a health endpoint", async () => {
   await new Promise((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
   );
+});
+
+test("buildLaunchSpec opens a console window on Windows", () => {
+  const command = "ssh -t cass@server 'socat STDIO TCP:127.0.0.1:5000'";
+  const spec = buildLaunchSpec(command, { platform: "win32" });
+
+  assert.equal(spec.command, "cmd.exe");
+  assert.deepEqual(spec.args, ["/c", "start", "", "cmd", "/k", command]);
 });

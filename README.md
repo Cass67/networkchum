@@ -191,6 +191,21 @@ For Linux TAP labs without repeated password prompts, use:
 ./start.sh lan --sudo-api --data-dir ~/networkchum-data
 ```
 
+## Remote Clients And Native Consoles
+
+- **Web console** (serial and VNC) works from any browser on the LAN with no
+  client install. This is the supported path for remote users.
+- **Native console** opens a real terminal on the machine running the browser.
+  That needs the small console bridge on that machine:
+  `networkchum-console-bridge-<version>.tar.gz` from the Releases page. It
+  requires Node.js 22+; run `./run.sh` (macOS/Linux) or `run.cmd` (Windows).
+- When the app runs on another host, the bridge opens
+  `ssh -t <user>@<server> 'socat ... TCP:127.0.0.1:<port>'`; you need SSH access
+  to the server and `socat`/`nc` there. Windows uses its built-in OpenSSH client
+  and a `cmd.exe` window.
+- On a single machine, `./start.sh` starts the bridge automatically and the
+  header shows `Bridge: Online`.
+
 ## Authentication
 
 The API is token-gated. Every route except `GET /health` requires the
