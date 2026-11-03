@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **VNC consoles** for templates that boot with a graphical console (FTD,
+  ISE, PAN-OS, vQFX-PFE): QEMU gets `-vnc 127.0.0.1:5900+n`, the API proxies
+  RFB over the same authenticated WebSocket pattern as the serial console, and
+  the UI opens a noVNC viewer automatically when a node reports a VNC port.
+- **Extra data disks** per template (`boot.dataDisks`), attached on the main
+  disk bus. F5 BIG-IP now gets its 100 GB datastore disk.
+
+### Changed
+
+- **Cisco NX-OSv 9000** boots with Cisco's recipe: i440fx, UEFI (OVMF) and a
+  SATA disk on an AHCI controller, 2 vCPU. SeaBIOS and virtio/IDE do not boot
+  this image.
+- **Cisco Catalyst 8000v** defaults to the 8 GB image size (8192 MB, 2 vCPU).
+
 ## 0.1.3 — 2026-11-03
 
 ### Added

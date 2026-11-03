@@ -312,11 +312,24 @@ There are two console paths.
 
 #### Embedded web console
 
-- `NodeConsole.tsx` opens the full-screen xterm terminal.
-- It creates a WebSocket connection to the API console route.
-- `routes/console.ts` looks up the node runtime state, finds the serial TCP port, and proxies bytes between browser WebSocket frames and the QEMU serial socket.
+- `NodeConsole.tsx` opens the full-screen xterm terminal and creates a
+  WebSocket connection to the API console route.
+- `routes/console.ts` looks up the node runtime state, finds the serial TCP
+  port, and proxies bytes between browser WebSocket frames and the QEMU serial
+  socket.
 
-This path is only valid for running QEMU nodes with an active serial console port.
+This path is only valid for running QEMU nodes with an active serial console
+port.
+
+#### Embedded VNC console
+
+- Templates with `boot.console: "vnc"` (FTD, ISE, PAN-OS, vQFX-PFE) get
+  `-vnc 127.0.0.1:5900+n` from the runtime, and the state stores `vncPort`.
+- `VncConsole.tsx` runs noVNC and connects to
+  `/labs/:labId/nodes/:nodeId/vnc`; `routes/console.ts` proxies raw RFB bytes
+  to the loopback VNC port, so only the authenticated API port is exposed.
+- `App.tsx` picks the VNC viewer when the node reports a `vncPort`, otherwise
+  the serial terminal.
 
 #### Native console launch
 

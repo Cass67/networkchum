@@ -599,6 +599,8 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "e1000",
       acceleration: "hardware",
+      // CHR boots from an IDE disk (EVE's hda convention).
+      diskInterface: "ide",
     },
     configSchema: {
       ramMb: { default: 256, min: 128, max: 2048 },
