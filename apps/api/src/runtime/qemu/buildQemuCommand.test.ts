@@ -166,6 +166,47 @@ describe("buildQemuCommand", () => {
     expect(result).toContain("host");
   });
 
+  it("attaches data disks on the main disk bus", () => {
+    const result = buildQemuCommand({
+      labId: "lab-1",
+      nodeId: "node-1",
+      imagePath: "/images/bigip.qcow2",
+      config: {
+        ramMb: 4096,
+        vcpu: 2,
+        interfaceCount: 4,
+        nicModel: "e1000",
+        accelerationMode: "kvm",
+      },
+      machineType: "q35",
+      dataDiskPaths: ["/images/data-0.qcow2"],
+    });
+
+    expect(result.join(" ")).toContain("file=/images/data-0.qcow2,if=virtio");
+  });
+
+  it("attaches data disks to the AHCI controller with SATA", () => {
+    const result = buildQemuCommand({
+      labId: "lab-1",
+      nodeId: "node-1",
+      imagePath: "/images/main.qcow2",
+      config: {
+        ramMb: 4096,
+        vcpu: 2,
+        interfaceCount: 2,
+        nicModel: "e1000",
+        accelerationMode: "kvm",
+      },
+      machineType: "pc",
+      mainDiskInterface: "sata",
+      dataDiskPaths: ["/images/data-0.qcow2"],
+    });
+
+    const commandLine = result.join(" ");
+    expect(commandLine).toContain("file=/images/data-0.qcow2,if=none");
+    expect(commandLine).toContain("ide-hd,bus=ahci0.1,drive=datadisk0");
+  });
+
   it("fails clearly when UEFI is requested without firmware", () => {
     expect(() =>
       buildQemuCommand({

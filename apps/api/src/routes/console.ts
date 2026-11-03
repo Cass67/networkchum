@@ -71,4 +71,68 @@ export const consoleRoutes: FastifyPluginAsync = async (app) => {
       });
     },
   );
+
+  // VNC templates (FTD, ISE, PAN-OS): raw RFB over the same WebSocket proxy.
+  app.get(
+    "/labs/:labId/nodes/:nodeId/vnc",
+    { websocket: true },
+    async (socket, request) => {
+      const params = z
+        .object({ labId: z.string().min(1), nodeId: z.string().min(1) })
+        .parse(request.params);
+
+      const states = await listRuntimeStates(params.labId);
+      const state = states.find((s) => s.nodeId === params.nodeId);
+
+      if (
+        !state ||
+        state.status !== "running" ||
+        state.runtime !== "qemu" ||
+        !state.vncPort
+      ) {
+        socket.close(4000, "Node has no active VNC console");
+        return;
+      }
+
+      const tcp = createConnection({ host: "127.0.0.1", port: state.vncPort });
+
+      tcp.on("connect", () => {
+        console.log(
+          `[console] connected to VNC port ${state.vncPort} for node ${params.nodeId}`,
+        );
+      });
+
+      tcp.on("data", (chunk: Buffer) => {
+        if (socket.readyState === socket.OPEN) {
+          socket.send(chunk);
+        }
+      });
+
+      socket.on("message", (data: Buffer) => {
+        if (!tcp.destroyed) {
+          tcp.write(data);
+        }
+      });
+
+      socket.on("close", () => {
+        tcp.destroy();
+      });
+
+      tcp.on("close", () => {
+        if (socket.readyState === socket.OPEN) {
+          socket.close(1000, "VNC port closed");
+        }
+      });
+
+      tcp.on("error", (err) => {
+        console.error(
+          `[console] VNC TCP error for node ${params.nodeId}:`,
+          err.message,
+        );
+        if (socket.readyState === socket.OPEN) {
+          socket.close(4001, "VNC connection failed");
+        }
+      });
+    },
+  );
 };

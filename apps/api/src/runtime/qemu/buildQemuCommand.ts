@@ -29,6 +29,8 @@ type BuildQemuCommandInput = {
   extraArgs?: string[]; // raw QEMU args appended after all drives (for config injectors)
   mainDiskInterface?: "virtio" | "ide" | "sata"; // default: virtio
   machineType: string;
+  // Blank data disks attached after the main disk, on the same bus.
+  dataDiskPaths?: string[];
   // UEFI firmware image (OVMF). Required when firmware is "uefi".
   firmware?: "bios" | "uefi";
   uefiFirmwarePath?: string;
@@ -89,6 +91,22 @@ export function buildQemuCommand(input: BuildQemuCommandInput): string[] {
       "-drive",
       `file=${input.imagePath},if=${diskInterface},format=qcow2`,
     );
+  }
+
+  for (const [index, diskPath] of (input.dataDiskPaths ?? []).entries()) {
+    if (diskInterface === "sata") {
+      command.push(
+        "-drive",
+        `file=${diskPath},if=none,id=datadisk${index},format=qcow2`,
+        "-device",
+        `ide-hd,bus=ahci0.${index + 1},drive=datadisk${index}`,
+      );
+    } else {
+      command.push(
+        "-drive",
+        `file=${diskPath},if=${diskInterface},format=qcow2`,
+      );
+    }
   }
 
   for (const extraPath of input.extraDrives ?? []) {

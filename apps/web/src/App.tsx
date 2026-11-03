@@ -55,6 +55,10 @@ const NodeConsole = lazy(async () => {
   const module = await import("./components/NodeConsole.js");
   return { default: module.NodeConsole };
 });
+const VncConsole = lazy(async () => {
+  const module = await import("./components/VncConsole.js");
+  return { default: module.VncConsole };
+});
 
 type LabSummary = {
   id: string;
@@ -370,6 +374,7 @@ type ApiClient = {
     status: string;
     connectCommand?: string[];
     message?: string | null;
+    vncPort?: number | null;
   }>;
   powerOffNode?: (
     labId: string,
@@ -379,6 +384,7 @@ type ApiClient = {
     status: string;
     connectCommand?: string[];
     message?: string | null;
+    vncPort?: number | null;
   }>;
   listRuntimeStates?: (labId: string) => Promise<
     Array<{
@@ -386,6 +392,7 @@ type ApiClient = {
       status: string;
       connectCommand?: string[];
       message?: string | null;
+      vncPort?: number | null;
     }>
   >;
   listRunningConfigBackups?: (
@@ -1311,6 +1318,7 @@ export function App({
     Array<{ id: string; name: string }>
   >(deriveImageBindableTemplates(demoCatalog));
   const [nodeStatuses, setNodeStatuses] = useState<Record<string, string>>({});
+  const [nodeVncPorts, setNodeVncPorts] = useState<Record<string, number>>({});
   const [nodeConnectCommands, setNodeConnectCommands] = useState<
     Record<string, string[]>
   >({});
@@ -1632,6 +1640,13 @@ export function App({
           states
             .filter((state) => state.connectCommand?.length)
             .map((state) => [state.nodeId, state.connectCommand ?? []]),
+        ),
+      );
+      setNodeVncPorts(
+        Object.fromEntries(
+          states
+            .filter((state) => state.vncPort)
+            .map((state) => [state.nodeId, state.vncPort as number]),
         ),
       );
     };
@@ -2113,6 +2128,13 @@ export function App({
           states
             .filter((state) => state.connectCommand?.length)
             .map((state) => [state.nodeId, state.connectCommand ?? []]),
+        ),
+      );
+      setNodeVncPorts(
+        Object.fromEntries(
+          states
+            .filter((state) => state.vncPort)
+            .map((state) => [state.nodeId, state.vncPort as number]),
         ),
       );
     }
@@ -3336,12 +3358,21 @@ export function App({
       ) : null}
       {consoleNode && selectedLabId ? (
         <Suspense fallback={null}>
-          <NodeConsole
-            labId={selectedLabId}
-            nodeId={consoleNode.nodeId}
-            nodeName={consoleNode.nodeName}
-            onClose={() => setConsoleNode(null)}
-          />
+          {nodeVncPorts[consoleNode.nodeId] ? (
+            <VncConsole
+              labId={selectedLabId}
+              nodeId={consoleNode.nodeId}
+              nodeName={consoleNode.nodeName}
+              onClose={() => setConsoleNode(null)}
+            />
+          ) : (
+            <NodeConsole
+              labId={selectedLabId}
+              nodeId={consoleNode.nodeId}
+              nodeName={consoleNode.nodeName}
+              onClose={() => setConsoleNode(null)}
+            />
+          )}
         </Suspense>
       ) : null}
       {showApiTokenDialog ? (

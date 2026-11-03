@@ -634,6 +634,8 @@ export const defaultTemplates: Template[] = [
       machineType: "q35",
       nicModel: "e1000",
       acceleration: "hardware",
+      // BIG-IP keeps its application data on a second disk.
+      dataDisks: [{ sizeGb: 100 }],
     },
     configSchema: {
       ramMb: { default: 4096, min: 2048, max: 16384 },

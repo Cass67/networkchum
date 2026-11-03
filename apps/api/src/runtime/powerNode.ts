@@ -411,6 +411,7 @@ export async function findConsecutivePorts(
 async function launchQemu(
   command: string[],
   serialPort: number,
+  vncDisplay?: number,
 ): Promise<{ ok: boolean; pid: number | null; stderr: string }> {
   return new Promise((resolve) => {
     const fullCommand = [
@@ -421,6 +422,7 @@ async function launchQemu(
       `tcp:127.0.0.1:${serialPort + 1},server,nowait`,
       "-display",
       "none",
+      ...(vncDisplay !== undefined ? ["-vnc", `127.0.0.1:${vncDisplay}`] : []),
     ];
     console.log("[powerNode] launching QEMU:", fullCommand.join(" "));
 
@@ -1083,6 +1085,22 @@ export async function powerOnNode(
   const probe = async (port: number) => (await findPort(port)) === port;
   const serialPort = await findAvailableQemuPortBase(5000, probe);
 
+  // VNC-console templates (FTD, ISE, PAN-OS) get a graphical console on
+  // 5900+display. The web UI proxies RFB over its own WebSocket.
+  const wantsVnc = template?.boot.console === "vnc";
+  let vncDisplay: number | undefined;
+  if (wantsVnc) {
+    for (let display = 1; display < 200; display += 1) {
+      if (await probe(5900 + display)) {
+        vncDisplay = display;
+        break;
+      }
+    }
+    if (vncDisplay === undefined) {
+      throw new Error("No free VNC display found");
+    }
+  }
+
   // On Linux with TAP networking, bridges and TAP devices must exist before
   // QEMU tries to open them. Reconcile now; ignore "already exists" errors.
   if (networkBackend === "tap") {
@@ -1257,6 +1275,28 @@ export async function powerOnNode(
     );
   }
 
+  const dataDiskPaths: string[] = [];
+  for (const [index, disk] of (boot?.dataDisks ?? []).entries()) {
+    const diskPath = path.join(
+      path.dirname(overlayPath),
+      `${nodeId}-data-${index}.qcow2`,
+    );
+    try {
+      await access(diskPath);
+    } catch {
+      await execFileAsync("qemu-img", [
+        "create",
+        "-q",
+        "-f",
+        "qcow2",
+        diskPath,
+        `${disk.sizeGb}G`,
+      ]);
+      console.log(`[powerNode] created data disk ${diskPath}`);
+    }
+    dataDiskPaths.push(diskPath);
+  }
+
   const qemuCommand = buildQemuCommand({
     qemuBinary,
     labId,
@@ -1264,6 +1304,7 @@ export async function powerOnNode(
     imagePath: effectiveImagePath,
     extraDrives,
     extraArgs: configExtraArgs,
+    dataDiskPaths,
     machineType: boot?.machineType ?? "q35",
     firmware,
     uefiFirmwarePath,
@@ -1291,7 +1332,7 @@ export async function powerOnNode(
   const commandPreview = [...qemuCommand];
   console.log(`[powerNode] QEMU command preview: ${commandPreview.join(" ")}`);
 
-  const result = await doLaunch(qemuCommand, serialPort);
+  const result = await doLaunch(qemuCommand, serialPort, vncDisplay);
 
   const state = {
     labId,
@@ -1304,6 +1345,7 @@ export async function powerOnNode(
       ? ["telnet", "127.0.0.1", String(serialPort)]
       : undefined,
     consolePort: result.ok ? serialPort : null,
+    vncPort: result.ok && vncDisplay !== undefined ? 5900 + vncDisplay : null,
     nicPorts: result.ok ? nicPorts : undefined,
     nicBackends: result.ok ? nicBackendKinds : undefined,
     message: result.ok ? null : result.stderr,

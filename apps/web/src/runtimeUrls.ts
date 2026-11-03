@@ -43,3 +43,11 @@ export function resolveConsoleWebSocketUrl(
 ): string {
   return `${resolveWsProtocol(locationLike.protocol)}//${normalizePageHost(locationLike.hostname)}:${API_PORT}/labs/${labId}/nodes/${nodeId}/console`;
 }
+
+export function resolveVncWebSocketUrl(
+  locationLike: BrowserLocationLike,
+  labId: string,
+  nodeId: string,
+): string {
+  return `${resolveWsProtocol(locationLike.protocol)}//${normalizePageHost(locationLike.hostname)}:${API_PORT}/labs/${labId}/nodes/${nodeId}/vnc`;
+}

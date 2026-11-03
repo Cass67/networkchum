@@ -39,6 +39,8 @@ export const TemplateSchema = z.object({
     diskInterface: z.enum(["virtio", "ide", "sata"]).optional(),
     // Optional explicit -cpu model; defaults to "max".
     cpuModel: z.string().min(1).optional(),
+    // Extra blank data disks (for example the F5 BIG-IP datastore disk).
+    dataDisks: z.array(z.object({ sizeGb: z.number().positive() })).optional(),
     acceleration: z.string().min(1),
     configInjectMethod: z
       .enum([

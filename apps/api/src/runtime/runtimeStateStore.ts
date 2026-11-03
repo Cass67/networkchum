@@ -18,6 +18,8 @@ export type RuntimeState = {
   cloudBackend?: "tap" | "container-nat" | "macos-management";
   connectCommand?: string[];
   consolePort?: number | null;
+  // VNC display port for templates with a graphical console.
+  vncPort?: number | null;
   nicPorts?: number[];
   // Per-NIC backend hints for socket topology rebuild. On macOS, management NICs
   // use vmnet-host and should not be registered as socket ports.

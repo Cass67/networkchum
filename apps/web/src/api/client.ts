@@ -193,6 +193,7 @@ type RuntimeState = {
   status: string;
   connectCommand?: string[];
   message?: string | null;
+  vncPort?: number | null;
 };
 
 type Fetcher = typeof fetch;
