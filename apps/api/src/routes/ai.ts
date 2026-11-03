@@ -224,7 +224,7 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
       });
     }
     const providerDef = aiProviderDef(settings.provider);
-    if (providerDef.auth !== "none" && !settings.apiKey) {
+    if (providerDef.auth === "oauth-device" && !settings.apiKey) {
       return reply.code(400).send({
         message: `Sign in to ${providerDef.label} or enter an API key`,
       });
@@ -318,7 +318,7 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
       });
     }
     const providerDef = aiProviderDef(settings.provider);
-    if (providerDef.auth !== "none" && !settings.apiKey) {
+    if (providerDef.auth === "oauth-device" && !settings.apiKey) {
       return reply.code(400).send({
         message: `Sign in to ${providerDef.label} or enter an API key`,
       });
