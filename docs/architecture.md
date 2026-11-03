@@ -514,6 +514,15 @@ sequenceDiagram
   set; only platforms with a working injector apply them at boot (see
   `docs/agent-builder.md` for the matrix).
 
+### Paired appliances (vMX, vQFX)
+
+vMX and vQFX are two-VM appliances. NetworkChum models each half as its own
+node (`juniper-vmx-vcp`/`-vfp`, `juniper-vqfx-re`/`-pfe`), so they appear as two
+canvas objects. Cable the internal interfaces between the halves before
+powering on: the VCP/VFP and RE/PFE pairs only forward traffic once those links
+exist. The vQFX halves need IDE disks (set in their templates); the vMX halves
+boot independently but are not a working router until paired.
+
 ## Known Gaps and Likely Evolution
 
 These are not theoretical issues; they follow directly from the current implementation.
