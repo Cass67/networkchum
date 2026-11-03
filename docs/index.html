@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NetworkChum — network labs in your browser</title>
+<meta name="description" content="NetworkChum is a browser-based network lab workbench: build topologies with QEMU devices and containers, wire them, console in, and generate labs from a prompt." />
+<style>
+  :root {
+    --bg: #070b11;
+    --bg-soft: #0d131c;
+    --card: #101823;
+    --line: #1e2a3a;
+    --text: #e8eef7;
+    --muted: #93a2b8;
+    --cyan: #22d3ee;
+    --magenta: #e879f9;
+    --green: #4ade80;
+    --violet: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 600px at 15% -10%, rgba(34, 211, 238, 0.13), transparent 60%),
+      radial-gradient(900px 500px at 90% 0%, rgba(232, 121, 249, 0.10), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--cyan); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 0; font-size: 14px;
+  }
+  .brand { font-weight: 800; letter-spacing: 0.16em; font-size: 13px; text-transform: uppercase; }
+  .brand span { color: var(--cyan); }
+  nav .links { display: flex; gap: 22px; }
+  nav .links a { color: var(--muted); }
+  nav .links a:hover { color: var(--text); text-decoration: none; }
+
+  header.hero { padding: 48px 0 24px; }
+  .eyebrow {
+    display: inline-block; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--cyan); border: 1px solid rgba(34, 211, 238, 0.35);
+    background: rgba(34, 211, 238, 0.08); border-radius: 999px; padding: 5px 12px;
+  }
+  h1 {
+    font-size: clamp(38px, 6vw, 68px); line-height: 1.04; letter-spacing: -0.03em;
+    margin: 18px 0 16px; max-width: 900px;
+  }
+  h1 .grad {
+    background: linear-gradient(100deg, var(--cyan), var(--violet) 55%, var(--magenta));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede { font-size: clamp(17px, 2.2vw, 21px); color: var(--muted); max-width: 760px; margin: 0 0 28px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 40px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px;
+    border-radius: 10px; font-weight: 600; font-size: 15px; border: 1px solid transparent;
+  }
+  .btn.primary { background: linear-gradient(100deg, #06b6d4, #8b5cf6); color: #041018; }
+  .btn.primary:hover { text-decoration: none; filter: brightness(1.08); }
+  .btn.ghost { border-color: var(--line); color: var(--text); background: rgba(255,255,255,0.02); }
+  .btn.ghost:hover { text-decoration: none; border-color: #33475f; }
+
+  .shot {
+    border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    background: var(--bg-soft); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  }
+  .shot img, .shot video { display: block; width: 100%; height: auto; }
+  .caption { color: var(--muted); font-size: 13px; margin: 10px 2px 0; }
+
+  section { padding: 72px 0; border-top: 1px solid rgba(30, 42, 58, 0.6); }
+  section:first-of-type { border-top: 0; }
+  h2 { font-size: clamp(26px, 3.4vw, 38px); letter-spacing: -0.02em; margin: 0 0 12px; }
+  .section-lede { color: var(--muted); max-width: 720px; margin: 0 0 32px; font-size: 17px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01));
+    border: 1px solid var(--line); border-radius: 12px; padding: 20px 20px 18px;
+  }
+  .card h3 { margin: 0 0 6px; font-size: 16px; letter-spacing: -0.01em; }
+  .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+
+  .split { display: grid; grid-template-columns: 1.05fr 1fr; gap: 36px; align-items: center; }
+  .split .shot { order: 2; }
+  .split .copy { order: 1; }
+  @media (max-width: 880px) {
+    .split { grid-template-columns: 1fr; }
+    .split .shot { order: 1; }
+    .split .copy { order: 2; }
+  }
+  .checks { list-style: none; padding: 0; margin: 18px 0 0; }
+  .checks li { margin: 9px 0; color: var(--muted); }
+  .checks li strong { color: var(--text); font-weight: 600; }
+  .checks li::before { content: "▸"; color: var(--cyan); margin-right: 10px; }
+
+  pre {
+    background: #0a1119; border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; overflow: auto; font-size: 14px; line-height: 1.6;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #cfe3f5;
+  }
+  pre .c { color: #5b7186; }
+  pre .k { color: var(--cyan); }
+
+  footer { padding: 40px 0 64px; color: var(--muted); font-size: 14px; border-top: 1px solid rgba(30,42,58,0.6); }
+  footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <div class="brand">Network<span>Chum</span></div>
+  <div class="links">
+    <a href="#features">Features</a>
+    <a href="#ai">AI builder</a>
+    <a href="#demo">Demo</a>
+    <a href="https://github.com/Cass67/networkchum">GitHub</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <span class="eyebrow">Local-first · QEMU + containers</span>
+  <h1>Build a network.<br /><span class="grad">Break it. Rebuild it.</span></h1>
+  <p class="lede">
+    NetworkChum is a browser-based lab workbench for routers, switches, firewalls and
+    hosts. Drag out a topology, wire it up, console into every device, and keep the
+    whole lab as a JSON document you can back up, share, or regenerate.
+  </p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/Cass67/networkchum#quick-start">Get started</a>
+    <a class="btn ghost" href="https://github.com/Cass67/networkchum">View source</a>
+  </div>
+  <div class="shot">
+    <img src="screenshots/hero.png" alt="NetworkChum topology canvas showing two ASR routers, two Arista switches, an Internet cloud and two Ubuntu hosts" />
+  </div>
+  <p class="caption">A branch-office topology: edge routers, access switches, hosts, and an external cloud — all live objects on one canvas.</p>
+</header>
+
+<section id="features">
+  <h2>Everything a lab needs, in one tab</h2>
+  <p class="section-lede">No spreadsheets of ports, no external controller. The API owns topology, runtime state and images; the UI is just the operator console.</p>
+  <div class="grid">
+    <div class="card"><h3><span class="dot" style="background:var(--cyan)"></span>Topology canvas</h3><p>Nodes, Ethernet links, interface labels and freeform annotations. Labs are JSON documents, validated end to end.</p></div>
+    <div class="card"><h3><span class="dot" style="background:var(--magenta)"></span>QEMU + containers</h3><p>Boot vendor images with per-node CPU, RAM and NIC counts, or spin up Docker/Podman container nodes in the same lab.</p></div>
+    <div class="card"><h3><span class="dot" style="background:var(--green)"></span>Real consoles</h3><p>Open a serial console in the browser or hand it to your native terminal. Running labs survive UI and service restarts.</p></div>
+    <div class="card"><h3><span class="dot" style="background:var(--violet)"></span>Day-0 configs</h3><p>Ship startup configs for IOSv/IOS-XE, IOS-XR, NX-OS, vEOS, Juniper, FortiGate and VyOS so devices boot ready to log into.</p></div>
+    <div class="card"><h3><span class="dot" style="background:var(--cyan)"></span>AI lab builder</h3><p>Describe the lab in plain English. The model emits a constrained spec; the API resolves devices, links and configs.</p></div>
+    <div class="card"><h3><span class="dot" style="background:var(--magenta)"></span>Lab interconnect</h3><p>Bridge labs together with a Lab Bridge node and get one broadcast domain across separate topologies.</p></div>
+  </div>
+</section>
+
+<section id="ai">
+  <div class="split">
+    <div class="copy">
+      <h2>Describe the lab. Get the topology.</h2>
+      <p class="section-lede">
+        The builder sends your prompt plus the live device catalog to an LLM, then
+        validates what comes back against the same schema the import pipeline uses.
+      </p>
+      <ul class="checks">
+        <li><strong>Your provider, your key.</strong> ChatGPT, OpenCode Go, OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, xAI, Moonshot, Mistral, Together, Ollama, LM Studio, or any OpenAI-compatible endpoint.</li>
+        <li><strong>Subscriptions or API keys.</strong> Device-code sign-in for ChatGPT and OpenCode Go; keys stay server-side, mode 0600.</li>
+        <li><strong>Deterministic guardrails.</strong> The model only writes a small spec — ids, resource clamps, links and final validation stay in the API.</li>
+      </ul>
+    </div>
+    <div class="shot">
+      <img src="screenshots/ai-builder.png" alt="AI Lab Builder preview listing generated routers, switches and hosts with config injection and link list" />
+    </div>
+  </div>
+</section>
+
+<section id="demo">
+  <h2>See it in motion</h2>
+  <p class="section-lede">Open a lab, describe a branch office, watch the preview resolve every device and link, then create the lab.</p>
+  <div class="shot">
+    <video src="screenshots/demo.mp4" poster="screenshots/hero.png" autoplay muted loop playsinline></video>
+  </div>
+  <p class="caption">Recorded against a local install; the generation step is sped up.</p>
+  <div class="grid" style="margin-top:28px">
+    <div class="shot"><img src="screenshots/devices.png" alt="Device catalog panel with Cisco ASR, Arista vEOS and container templates" /></div>
+    <div class="shot"><img src="screenshots/hero.png" alt="Topology canvas with a branch office lab" /></div>
+  </div>
+</section>
+
+<section id="start">
+  <h2>Up and running</h2>
+  <p class="section-lede">Node.js 26, git, and either Docker or Podman. The installer handles QEMU, networking tools and the service.</p>
+<pre><span class="c"># clone and start on this machine</span>
+git clone https://github.com/Cass67/networkchum.git
+<span class="k">cd</span> networkchum
+./install.sh
+
+<span class="c"># or run it for the whole LAN</span>
+./start.sh lan
+
+<span class="c"># verify the host before you start</span>
+./start.sh doctor</pre>
+  <p class="caption">Full instructions: <a href="https://github.com/Cass67/networkchum/blob/main/INSTALL.md">INSTALL.md</a>. Architecture notes: <a href="https://github.com/Cass67/networkchum/blob/main/docs/architecture.md">docs/architecture.md</a>.</p>
+</section>
+
+<footer>
+  <div class="row">
+    <span>NetworkChum · MIT licensed</span>
+    <span><a href="https://github.com/Cass67/networkchum">github.com/Cass67/networkchum</a></span>
+  </div>
+</footer>
+
+</div>
+</body>
+</html>

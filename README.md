@@ -1,8 +1,27 @@
 # NetworkChum
 
+![NetworkChum topology canvas](docs/screenshots/hero.png)
+
 NetworkChum is a browser-based network lab workbench for building and operating small topologies with QEMU-backed virtual devices and container nodes.
 
 The project is aimed at an EVE-NG / PNETLab style workflow, but with a JSON-native lab model, a simple local API, and a cleaner split between topology state, image management, and runtime orchestration.
+
+## Screenshots and demo
+
+![AI Lab Builder preview](docs/screenshots/ai-builder.png)
+
+The AI builder turns a prompt into a validated lab: routers, switches, hosts and
+links, with day-0 configs for the platforms that support them.
+
+![Device catalog](docs/screenshots/devices.png)
+
+Device catalog with image bindings and per-template resource limits.
+
+[![Demo: open a lab, generate a branch office, create it](docs/screenshots/demo.gif)](docs/screenshots/demo.mp4)
+
+A short demo (generation sped up) — click the GIF for the MP4.
+
+There is also a standalone landing page: [`docs/index.html`](docs/index.html).
 
 ## What It Does Today
 
