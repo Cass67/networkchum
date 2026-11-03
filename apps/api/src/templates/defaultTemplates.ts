@@ -285,8 +285,9 @@ export const defaultTemplates: Template[] = [
       configInjectMethod: "csr1000v-vfat",
     },
     configSchema: {
-      ramMb: { default: 4096, min: 2048, max: 16384 },
-      vcpu: { default: 1, min: 1, max: 4 },
+      // The KVM image is the 8 GB variant.
+      ramMb: { default: 8192, min: 4096, max: 16384 },
+      vcpu: { default: 2, min: 1, max: 4 },
       interfaceCount: { default: 4, min: 1, max: 16 },
     },
   },
