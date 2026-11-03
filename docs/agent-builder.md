@@ -70,25 +70,39 @@ Design rules:
 - **The catalog is injected into the prompt**, so the model can only choose
   template ids that actually exist in this installation. Fuzzy matches are
   resolved deterministically and reported as preview issues.
-- **Three provider flavors**:
-  - `openai-compatible` — generic `POST {baseUrl}/chat/completions`. Works with
-    OpenAI, OpenRouter, Groq, LM Studio, Ollama, LiteLLM, vLLM, etc. The user
-    supplies a base URL that includes the version path (e.g.
-    `https://api.openai.com/v1`).
-  - `anthropic` — native `POST {baseUrl}/v1/messages` with `x-api-key` and
-    `anthropic-version` headers. Base URL without version path (e.g.
-    `https://api.anthropic.com`).
-  - `opencode-go` — OpenCode's Go subscription gateway
-    (`https://opencode.ai/inference/go/openai/v1`, OpenAI-compatible wire
-    format). Auth is either an `oc_sk_…` API key or the Console OAuth
-    device-code flow: `POST https://opencode.ai/console/auth/device/code`
-    with the public `opencode-cli` client, then
-    `POST /auth/device/token` polling. The resulting access token is a Bearer
-    token for inference, refreshed five minutes before expiry and persisted in
-    `opencode-auth.json` (mode 0600) separately from the provider settings.
-    Requests send `user-agent: networkchum`, `x-opencode-session` and, when
-    present, `x-org-id`, as OpenCode asks of third-party clients. The model
-    catalog is public at `https://opencode.ai/inference/go/v1/models`.
+- **Provider registry** (`packages/shared/src/aiProviders.ts`): the dialog
+  lists every provider in three groups — subscriptions, API keys, local — and
+  each entry declares its wire protocol, default base URL and auth method.
+  Adding a provider is a data change, not a branch in the API. Current set:
+  ChatGPT, OpenCode Go, OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, xAI,
+  Moonshot, Mistral, Together, Ollama, LM Studio, and a custom
+  OpenAI-compatible endpoint.
+- **Wire protocols**:
+  - `openai-chat` — `POST {baseUrl}/chat/completions` with a Bearer token
+    (all API-key providers, OpenCode Go, local servers).
+  - `anthropic-messages` — `POST {baseUrl}/v1/messages` with `x-api-key` and
+    `anthropic-version`. API key only; Claude subscriptions are deliberately
+    not supported (Anthropic's subscription flow requires impersonating
+    Claude Code).
+  - `codex-responses` — ChatGPT subscriptions. `POST {baseUrl}/responses`
+    against `https://chatgpt.com/backend-api/codex` with the ChatGPT OAuth
+    token, `chatgpt-account-id`, `originator: networkchum`,
+    `OpenAI-Beta: responses=experimental`, `store: false`, and SSE parsing of
+    `response.output_text.delta` / `response.completed`.
+- **Subscription sign-in** uses RFC 8628 device codes, which work when the API
+  runs on another machine (no localhost callback):
+  - ChatGPT: `POST https://auth.openai.com/api/accounts/deviceauth/usercode`
+    with the public Codex client id, poll `.../deviceauth/token`, exchange the
+    returned code at `https://auth.openai.com/oauth/token`. The account id is
+    read from the JWT (`https://api.openai.com/auth`).
+  - OpenCode Go: `POST https://opencode.ai/console/auth/device/code` with the
+    public `opencode-cli` client, poll `/auth/device/token`. Requests send
+    `user-agent: networkchum`, `x-opencode-session` and `x-org-id`.
+- **OAuth credentials** live in `ai-oauth.json` (mode 0600) keyed by provider
+  id, are refreshed five minutes before expiry, and are injected as the Bearer
+  token at call time — never written into the provider settings or returned to
+  the browser. The provider settings view reports `hasApiKey`, `authMode` and
+  the account label.
 - **Credentials are stored server-side** in the API data dir (user decision),
   same file-store pattern as every other store, with mode 0600. The API key is
   never returned to the browser; the GET endpoint returns `hasApiKey`,

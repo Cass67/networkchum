@@ -4,6 +4,7 @@ import type {
   AiProviderSettings,
   AiProviderSettingsView,
 } from "@networkchum/shared";
+import { AI_PROVIDERS, aiProviderDef } from "@networkchum/shared";
 
 export type AiDeviceOption = {
   id: string;
@@ -25,19 +26,19 @@ type AiLabBuilderDialogProps = {
     baseUrl: string;
     apiKey?: string | null;
   }) => Promise<{ models: Array<string> }>;
-  onStartOpencodeLogin: () => Promise<{
+  onStartLogin: (provider: AiProviderSettings["provider"]) => Promise<{
+    mode: "device";
     deviceCode: string;
+    verifyUrl: string;
     userCode: string;
-    verificationUrl: string;
-    expiresIn: number;
     interval: number;
+    expiresIn: number;
   }>;
-  onPollOpencodeLogin: (deviceCode: string) => Promise<{
+  onPollLogin: (deviceCode: string) => Promise<{
     status: "pending" | "slow_down" | "expired" | "denied" | "connected";
     account?: string | null;
-    orgId?: string | null;
   }>;
-  onDisconnectOpencode: () => Promise<void>;
+  onDisconnect: (provider: AiProviderSettings["provider"]) => Promise<void>;
   onPreview: (prompt: string, devices: Array<string>) => Promise<AiLabPreview>;
   onCommit: (input: {
     name: string;
@@ -46,24 +47,11 @@ type AiLabBuilderDialogProps = {
   }) => Promise<void>;
 };
 
-const PROVIDER_BASE_URL_HINTS: Record<AiProviderSettings["provider"], string> =
-  {
-    "openai-compatible":
-      "https://api.openai.com/v1 — include the version path; also works with LM Studio, Ollama, OpenRouter, LiteLLM",
-    anthropic:
-      "https://api.anthropic.com — no version path; the API appends /v1/messages",
-    "opencode-go":
-      "https://opencode.ai/inference/go/openai/v1 — sign in below to use your OpenCode Go plan",
-  };
-
-const PROVIDER_DEFAULT_BASE_URL: Record<
-  AiProviderSettings["provider"],
-  string
-> = {
-  "openai-compatible": "",
-  anthropic: "",
-  "opencode-go": "https://opencode.ai/inference/go/openai/v1",
-};
+const PROVIDER_GROUPS = [
+  { id: "subscription", label: "Subscriptions" },
+  { id: "api-key", label: "API keys" },
+  { id: "local", label: "Local" },
+] as const;
 
 export function AiLabBuilderDialog({
   open,
@@ -72,9 +60,9 @@ export function AiLabBuilderDialog({
   onLoadProvider,
   onSaveProvider,
   onProbeModels,
-  onStartOpencodeLogin,
-  onPollOpencodeLogin,
-  onDisconnectOpencode,
+  onStartLogin,
+  onPollLogin,
+  onDisconnect,
   onPreview,
   onCommit,
 }: AiLabBuilderDialogProps) {
@@ -89,8 +77,7 @@ export function AiLabBuilderDialog({
   const [deviceLogin, setDeviceLogin] = useState<{
     deviceCode: string;
     userCode: string;
-    verificationUrl: string;
-    expiresIn: number;
+    verifyUrl: string;
     interval: number;
   } | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -114,12 +101,12 @@ export function AiLabBuilderDialog({
   const providerTouchedRef = useRef(false);
   const probeModelsRef = useRef(onProbeModels);
   probeModelsRef.current = onProbeModels;
-  const startLoginRef = useRef(onStartOpencodeLogin);
-  startLoginRef.current = onStartOpencodeLogin;
-  const pollLoginRef = useRef(onPollOpencodeLogin);
-  pollLoginRef.current = onPollOpencodeLogin;
-  const disconnectRef = useRef(onDisconnectOpencode);
-  disconnectRef.current = onDisconnectOpencode;
+  const startLoginRef = useRef(onStartLogin);
+  startLoginRef.current = onStartLogin;
+  const pollLoginRef = useRef(onPollLogin);
+  pollLoginRef.current = onPollLogin;
+  const disconnectRef = useRef(onDisconnect);
+  disconnectRef.current = onDisconnect;
 
   useEffect(() => {
     if (!open) {
@@ -182,6 +169,13 @@ export function AiLabBuilderDialog({
           setAuthAccount(result.account ?? null);
           setHasStoredKey(true);
           setAuthError(null);
+          void detectModels(
+            {
+              provider,
+              baseUrl: baseUrl.trim() || aiProviderDef(provider).baseUrl,
+            },
+            true,
+          );
           return;
         }
         if (result.status === "expired") {
@@ -191,7 +185,7 @@ export function AiLabBuilderDialog({
         }
         if (result.status === "denied") {
           setDeviceLogin(null);
-          setAuthError("OpenCode sign-in was denied.");
+          setAuthError("Sign-in was denied.");
           return;
         }
         const wait =
@@ -203,9 +197,7 @@ export function AiLabBuilderDialog({
         if (!cancelled) {
           setDeviceLogin(null);
           setAuthError(
-            nextError instanceof Error
-              ? nextError.message
-              : "OpenCode sign-in failed",
+            nextError instanceof Error ? nextError.message : "Sign-in failed",
           );
         }
       }
@@ -267,46 +259,46 @@ export function AiLabBuilderDialog({
   function handleProviderChange(next: AiProviderSettings["provider"]) {
     providerTouchedRef.current = true;
     const current = baseUrl.trim();
-    const previousDefault = PROVIDER_DEFAULT_BASE_URL[provider];
+    const previousDefault = aiProviderDef(provider).baseUrl;
+    const nextDefault = aiProviderDef(next).baseUrl;
     setProvider(next);
     setModelOptions([]);
     setDetectError(null);
     setAuthError(null);
-    const switchingToOpencode =
-      next === "opencode-go" && !current.startsWith("https://opencode.ai");
-    if (!current || current === previousDefault || switchingToOpencode) {
-      setBaseUrl(PROVIDER_DEFAULT_BASE_URL[next]);
+    setDeviceLogin(null);
+    const switchingProvider =
+      Boolean(nextDefault) && (!current || current === previousDefault);
+    if (switchingProvider) {
+      setBaseUrl(nextDefault);
     }
   }
 
-  async function handleStartOpencodeLogin() {
+  async function handleStartLogin() {
     setSigningIn(true);
     setAuthError(null);
     try {
-      setDeviceLogin(await startLoginRef.current());
+      setDeviceLogin(await startLoginRef.current(provider));
     } catch (nextError) {
       setAuthError(
         nextError instanceof Error
           ? nextError.message
-          : "OpenCode sign-in could not start",
+          : "Sign-in could not start",
       );
     } finally {
       setSigningIn(false);
     }
   }
 
-  async function handleDisconnectOpencode() {
+  async function handleDisconnect() {
     setAuthError(null);
     try {
-      await disconnectRef.current();
+      await disconnectRef.current(provider);
       setAuthMode("key");
       setAuthAccount(null);
       setHasStoredKey(false);
     } catch (nextError) {
       setAuthError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Could not sign out of OpenCode",
+        nextError instanceof Error ? nextError.message : "Could not sign out",
       );
     }
   }
@@ -422,11 +414,17 @@ export function AiLabBuilderDialog({
                 )
               }
             >
-              <option value="openai-compatible">
-                OpenAI-compatible endpoint
-              </option>
-              <option value="anthropic">Anthropic</option>
-              <option value="opencode-go">OpenCode Go (subscription)</option>
+              {PROVIDER_GROUPS.map((group) => (
+                <optgroup key={group.id} label={group.label}>
+                  {AI_PROVIDERS.filter((entry) => entry.group === group.id).map(
+                    (entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.label}
+                      </option>
+                    ),
+                  )}
+                </optgroup>
+              ))}
             </select>
           </label>
           <label className="field">
@@ -434,10 +432,13 @@ export function AiLabBuilderDialog({
             <input
               className="field-input"
               aria-label="LLM Base URL"
-              placeholder={PROVIDER_BASE_URL_HINTS[provider]}
+              placeholder={
+                aiProviderDef(provider).baseUrl || "https://your-endpoint/v1"
+              }
               value={baseUrl}
               onChange={(event) => setBaseUrl(event.target.value)}
             />
+            <span className="field-hint">{aiProviderDef(provider).hint}</span>
           </label>
           <label className="field">
             <span className="field-label">Model</span>
@@ -448,7 +449,7 @@ export function AiLabBuilderDialog({
               placeholder={
                 modelOptions.length > 0
                   ? `${modelOptions.length} models detected — pick or type one`
-                  : "e.g. gpt-4o, claude-sonnet-4-5, llama3"
+                  : "e.g. gpt-5.3-codex, claude-sonnet-4-5, llama3"
               }
               value={model}
               onChange={(event) => setModel(event.target.value)}
@@ -479,41 +480,46 @@ export function AiLabBuilderDialog({
               <span className="form-error">{detectError}</span>
             ) : null}
           </div>
-          <label className="field">
-            <span className="field-label">API Key</span>
-            <input
-              className="field-input"
-              aria-label="LLM API Key"
-              type="password"
-              placeholder={
-                hasStoredKey || authMode === "oauth"
-                  ? "•••• (saved)"
-                  : provider === "opencode-go"
-                    ? "Optional when signed in"
-                    : "Required"
-              }
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-            />
-            <span className="field-hint">
-              Stored in the API data dir; never sent back to the browser.
-            </span>
-          </label>
-          {provider === "opencode-go" ? (
+          {aiProviderDef(provider).supportsApiKey ? (
+            <label className="field">
+              <span className="field-label">API Key</span>
+              <input
+                className="field-input"
+                aria-label="LLM API Key"
+                type="password"
+                placeholder={
+                  hasStoredKey || authMode === "oauth"
+                    ? "•••• (saved)"
+                    : aiProviderDef(provider).auth === "key"
+                      ? "Required"
+                      : "Optional when signed in"
+                }
+                value={apiKey}
+                onChange={(event) => setApiKey(event.target.value)}
+              />
+              <span className="field-hint">
+                Stored in the API data dir; never sent back to the browser.
+              </span>
+            </label>
+          ) : null}
+          {aiProviderDef(provider).auth === "oauth-device" ? (
             <div className="field">
-              <span className="field-label">OpenCode Go</span>
+              <span className="field-label">
+                {aiProviderDef(provider).label}
+              </span>
               {authMode === "oauth" ? (
                 <>
                   <span className="field-hint" role="status">
                     Signed in{authAccount ? ` as ${authAccount}` : ""} —
-                    requests are billed to your OpenCode Go plan.
+                    requests are billed to your {aiProviderDef(provider).label}{" "}
+                    plan.
                   </span>
                   <div className="dialog-actions">
                     <button
                       type="button"
                       className="btn btn-secondary"
                       disabled={busy}
-                      onClick={() => void handleDisconnectOpencode()}
+                      onClick={() => void handleDisconnect()}
                     >
                       Sign out
                     </button>
@@ -524,18 +530,18 @@ export function AiLabBuilderDialog({
                   <span className="field-hint" role="status">
                     Enter code <strong>{deviceLogin.userCode}</strong> at{" "}
                     <a
-                      href={deviceLogin.verificationUrl}
+                      href={deviceLogin.verifyUrl}
                       target="_blank"
                       rel="noreferrer"
                     >
-                      opencode.ai/console/device
+                      {deviceLogin.verifyUrl}
                     </a>{" "}
                     — waiting for approval…
                   </span>
                   <div className="dialog-actions">
                     <a
                       className="btn btn-secondary"
-                      href={deviceLogin.verificationUrl}
+                      href={deviceLogin.verifyUrl}
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -553,17 +559,17 @@ export function AiLabBuilderDialog({
               ) : (
                 <>
                   <span className="field-hint">
-                    Sign in with your OpenCode Console account to bill Go models
-                    to your plan, or paste an API key below.
+                    Sign in with your {aiProviderDef(provider).label} account to
+                    use it without an API key.
                   </span>
                   <div className="dialog-actions">
                     <button
                       type="button"
                       className="btn btn-secondary"
                       disabled={signingIn}
-                      onClick={() => void handleStartOpencodeLogin()}
+                      onClick={() => void handleStartLogin()}
                     >
-                      {signingIn ? "Starting…" : "Sign in with OpenCode"}
+                      {signingIn ? "Starting…" : "Sign in"}
                     </button>
                   </div>
                 </>

@@ -1,8 +1,15 @@
 import type { AiProviderKind, AiProviderSettings } from "@networkchum/shared";
+import { aiProviderDef, aiProviderProtocol } from "@networkchum/shared";
 
 export type LlmMessage = {
   role: "system" | "user" | "assistant";
   content: string;
+};
+
+export type LlmOauthContext = {
+  accountId?: string;
+  orgId?: string;
+  sessionId?: string;
 };
 
 function joinUrl(baseUrl: string, path: string): string {
@@ -35,19 +42,34 @@ export function authHeadersFor(
     : { authorization: `Bearer ${apiKey}` };
 }
 
-/**
- * OpenCode asks clients to identify themselves and to send a stable session id
- * per conversation so it can route requests and reuse prompt caches.
- */
-export function opencodeHeaders(input?: {
-  sessionId?: string;
-  orgId?: string;
-}): Record<string, string> {
-  return {
-    "user-agent": "networkchum",
-    ...(input?.sessionId ? { "x-opencode-session": input.sessionId } : {}),
-    ...(input?.orgId ? { "x-org-id": input.orgId } : {}),
-  };
+function providerHeaders(
+  settings: AiProviderSettings,
+  oauth?: LlmOauthContext,
+): Record<string, string> {
+  const headers = authHeadersFor(settings.provider, settings.apiKey);
+  if (settings.provider === "opencode-go") {
+    // OpenCode asks clients to identify themselves and to send a stable
+    // session id per conversation so it can route and cache prompts.
+    headers["user-agent"] = "networkchum";
+    if (oauth?.sessionId) {
+      headers["x-opencode-session"] = oauth.sessionId;
+    }
+    if (oauth?.orgId) {
+      headers["x-org-id"] = oauth.orgId;
+    }
+  }
+  if (settings.provider === "chatgpt") {
+    headers["user-agent"] = "networkchum";
+    headers.originator = "networkchum";
+    headers["OpenAI-Beta"] = "responses=experimental";
+    if (oauth?.accountId) {
+      headers["chatgpt-account-id"] = oauth.accountId;
+    }
+    if (oauth?.sessionId) {
+      headers.session_id = oauth.sessionId;
+    }
+  }
+  return headers;
 }
 
 function truncate(text: string, maxLength = 300): string {
@@ -66,6 +88,13 @@ type AnthropicMessagesResponse = {
   content?: Array<{ type?: string; text?: string }>;
 };
 
+type ResponsesPayload = {
+  output?: Array<{
+    content?: Array<{ type?: string; text?: string }>;
+  }>;
+  error?: { message?: string };
+};
+
 async function readResponseJson(response: Response): Promise<unknown> {
   const text = await response.text();
   try {
@@ -77,22 +106,149 @@ async function readResponseJson(response: Response): Promise<unknown> {
   }
 }
 
+function extractResponsesText(payload: ResponsesPayload): string {
+  const parts: Array<string> = [];
+  for (const item of payload.output ?? []) {
+    for (const block of item.content ?? []) {
+      if (block.type === "output_text" && typeof block.text === "string") {
+        parts.push(block.text);
+      }
+    }
+  }
+  return parts.join("");
+}
+
 /**
- * Call the configured LLM and return its text output. Both provider flavors
- * use the plain messages shape; the system message is sent in the position
- * each protocol expects.
+ * Codex streams Server-Sent Events; the text arrives as `output_text.delta`
+ * events and the completed response carries the full output as a fallback.
+ */
+export function parseCodexStream(raw: string): string {
+  let text = "";
+  let completedText = "";
+
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) {
+      continue;
+    }
+    const data = trimmed.slice(5).trim();
+    if (!data || data === "[DONE]") {
+      continue;
+    }
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(data) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const type = event.type;
+    if (
+      type === "response.output_text.delta" &&
+      typeof event.delta === "string"
+    ) {
+      text += event.delta;
+    } else if (type === "response.completed") {
+      const response = event.response as ResponsesPayload | undefined;
+      completedText = response ? extractResponsesText(response) : "";
+    } else if (type === "response.failed" || type === "error") {
+      const response = event.response as ResponsesPayload | undefined;
+      throw new Error(
+        `ChatGPT request failed: ${
+          response?.error?.message ??
+          (typeof event.message === "string" ? event.message : "unknown error")
+        }`,
+      );
+    }
+  }
+
+  const output = text || completedText;
+  if (!output) {
+    throw new Error("ChatGPT response did not contain any text output");
+  }
+  return output;
+}
+
+async function callCodexResponses(input: {
+  settings: AiProviderSettings;
+  messages: LlmMessage[];
+  fetcher: typeof fetch;
+  oauth?: LlmOauthContext;
+}): Promise<string> {
+  const { settings, messages, fetcher } = input;
+  const system = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n\n");
+  const turns = messages.filter((message) => message.role !== "system");
+
+  const response = await fetcher(joinUrl(settings.baseUrl, "responses"), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "text/event-stream",
+      ...providerHeaders(settings, input.oauth),
+    },
+    body: JSON.stringify({
+      model: settings.model,
+      instructions: system,
+      input: turns.map((message) => ({
+        type: "message",
+        role: message.role === "assistant" ? "assistant" : "user",
+        content: [
+          {
+            type: message.role === "assistant" ? "output_text" : "input_text",
+            text: message.content,
+          },
+        ],
+      })),
+      store: false,
+      stream: true,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `LLM provider responded ${response.status}: ${truncate(
+        await response.text(),
+      )}`,
+    );
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const payload = (await response.json()) as ResponsesPayload;
+    if (payload.error?.message) {
+      throw new Error(`ChatGPT request failed: ${payload.error.message}`);
+    }
+    const text = extractResponsesText(payload);
+    if (!text) {
+      throw new Error("ChatGPT response did not contain any text output");
+    }
+    return text;
+  }
+
+  return parseCodexStream(await response.text());
+}
+
+/**
+ * Call the configured LLM and return its text output. The system message is
+ * sent in the position each protocol expects.
  */
 export async function callLlm(input: {
   settings: AiProviderSettings;
   messages: LlmMessage[];
   fetcher: typeof fetch;
   maxTokens?: number;
-  opencode?: { sessionId?: string; orgId?: string };
+  oauth?: LlmOauthContext;
 }): Promise<string> {
   const { settings, messages, fetcher } = input;
+  const protocol = aiProviderProtocol(settings.provider);
+
+  if (protocol === "codex-responses") {
+    return callCodexResponses(input);
+  }
+
   const maxTokens = input.maxTokens ?? 8192;
-  const extraHeaders =
-    settings.provider === "opencode-go" ? opencodeHeaders(input.opencode) : {};
   const system = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
@@ -100,13 +256,12 @@ export async function callLlm(input: {
   const turns = messages.filter((message) => message.role !== "system");
 
   let response: Response;
-  if (settings.provider === "anthropic") {
+  if (protocol === "anthropic-messages") {
     response = await fetcher(joinUrl(settings.baseUrl, "v1/messages"), {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        ...authHeadersFor(settings.provider, settings.apiKey),
-        ...extraHeaders,
+        ...providerHeaders(settings, input.oauth),
       },
       body: JSON.stringify({
         model: settings.model,
@@ -126,8 +281,7 @@ export async function callLlm(input: {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        ...authHeadersFor(settings.provider, settings.apiKey),
-        ...extraHeaders,
+        ...providerHeaders(settings, input.oauth),
       },
       body: JSON.stringify({
         model: settings.model,
@@ -149,7 +303,7 @@ export async function callLlm(input: {
 
   const payload = await readResponseJson(response);
 
-  if (settings.provider === "anthropic") {
+  if (protocol === "anthropic-messages") {
     const data = payload as AnthropicMessagesResponse;
     const text = (data.content ?? [])
       .filter(
@@ -190,34 +344,43 @@ function extractModelIds(payload: unknown): Array<string> {
 }
 
 /**
- * Detect the models an endpoint serves. OpenAI-compatible servers list them
- * at `{baseUrl}/models` (some deployments only at `/v1/models`, so try both);
- * Anthropic lists them at `{baseUrl}/v1/models`. Throws with the reason when
- * the endpoint cannot be probed.
+ * Detect the models an endpoint serves. Subscription providers have no public
+ * catalog, so they report their known model ids. OpenAI-compatible servers list
+ * them at `{baseUrl}/models` (some deployments only at `/v1/models`);
+ * Anthropic lists them at `{baseUrl}/v1/models`.
  */
 export async function probeModels(input: {
   provider: AiProviderKind;
   baseUrl: string;
   apiKey: string | null;
   fetcher: typeof fetch;
-  opencode?: { sessionId?: string; orgId?: string };
+  oauth?: LlmOauthContext;
 }): Promise<Array<string>> {
+  const def = aiProviderDef(input.provider);
+  if (def.defaultModels) {
+    return def.defaultModels;
+  }
+
   const paths =
     input.provider === "anthropic"
       ? ["v1/models"]
       : input.provider === "opencode-go"
         ? [openCodeModelsUrl(input.baseUrl)]
         : ["models", "v1/models"];
-  const extraHeaders =
-    input.provider === "opencode-go" ? opencodeHeaders(input.opencode) : {};
+  const headers = providerHeaders(
+    {
+      provider: input.provider,
+      baseUrl: input.baseUrl,
+      model: "",
+      apiKey: input.apiKey,
+    },
+    input.oauth,
+  );
   let emptyList = false;
 
   for (const path of paths) {
     const response = await input.fetcher(joinUrl(input.baseUrl, path), {
-      headers: {
-        ...authHeadersFor(input.provider, input.apiKey),
-        ...extraHeaders,
-      },
+      headers,
     });
     if (response.status === 404 || response.status === 405) {
       continue;

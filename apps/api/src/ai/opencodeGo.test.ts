@@ -32,7 +32,7 @@ describe("OpenCode Go provider", () => {
       settings: opencodeSettings,
       messages: [{ role: "user", content: "hi" }],
       fetcher: fetcher as unknown as typeof fetch,
-      opencode: { sessionId: "session-1", orgId: "org-1" },
+      oauth: { sessionId: "session-1", orgId: "org-1" },
     });
 
     const [url, init] = fetcher.mock.calls[0] as unknown as [

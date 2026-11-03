@@ -1,4 +1,5 @@
 export * from "./aiLabBuilder.js";
+export * from "./aiProviders.js";
 export * from "./catalog.js";
 export * from "./imageRepos.js";
 export * from "./imageSuggestions.js";

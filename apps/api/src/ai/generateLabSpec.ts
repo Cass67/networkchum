@@ -136,7 +136,7 @@ export async function generateLabSpec(input: {
   images: ImageRecord[];
   devices?: Array<string>;
   fetcher: typeof fetch;
-  opencode?: { sessionId?: string; orgId?: string };
+  oauth?: { accountId?: string; orgId?: string; sessionId?: string };
 }): Promise<{ spec: AiLabSpec; rounds: number }> {
   const system = buildSystemPrompt({
     templates: input.templates,
@@ -152,7 +152,7 @@ export async function generateLabSpec(input: {
     settings: input.settings,
     messages,
     fetcher: input.fetcher,
-    opencode: input.opencode,
+    oauth: input.oauth,
   });
   let result = parseSpecJson(text);
   if (result.ok) {
@@ -172,7 +172,7 @@ export async function generateLabSpec(input: {
     settings: input.settings,
     messages: repairMessages,
     fetcher: input.fetcher,
-    opencode: input.opencode,
+    oauth: input.oauth,
   });
   result = parseSpecJson(repairedText);
   if (result.ok) {

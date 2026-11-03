@@ -123,9 +123,9 @@ function renderDialog(
       onProbeModels={vi
         .fn()
         .mockResolvedValue({ models: ["gpt-4o", "llama3"] })}
-      onStartOpencodeLogin={vi.fn()}
-      onPollOpencodeLogin={vi.fn()}
-      onDisconnectOpencode={vi.fn().mockResolvedValue(undefined)}
+      onStartLogin={vi.fn()}
+      onPollLogin={vi.fn()}
+      onDisconnect={vi.fn().mockResolvedValue(undefined)}
       onPreview={vi.fn().mockResolvedValue(matchedPreview)}
       onCommit={vi.fn().mockResolvedValue(undefined)}
       {...props}
@@ -136,18 +136,17 @@ function renderDialog(
 describe("AiLabBuilderDialog", () => {
   afterEach(() => cleanup());
 
-  it("starts an OpenCode device sign-in and shows the code", async () => {
-    const onStartOpencodeLogin = vi.fn().mockResolvedValue({
+  it("starts a device sign-in and shows the code", async () => {
+    const onStartLogin = vi.fn().mockResolvedValue({
+      mode: "device",
       deviceCode: "device-1",
       userCode: "ABCD-EFGH",
-      verificationUrl: "https://opencode.ai/console/device?user_code=ABCD-EFGH",
+      verifyUrl: "https://opencode.ai/console/device?user_code=ABCD-EFGH",
       expiresIn: 600,
       interval: 5,
     });
-    const onPollOpencodeLogin = vi
-      .fn()
-      .mockResolvedValue({ status: "pending" });
-    renderDialog({ onStartOpencodeLogin, onPollOpencodeLogin });
+    const onPollLogin = vi.fn().mockResolvedValue({ status: "pending" });
+    renderDialog({ onStartLogin, onPollLogin });
 
     fireEvent.change(screen.getByLabelText("LLM Provider"), {
       target: { value: "opencode-go" },
@@ -156,11 +155,9 @@ describe("AiLabBuilderDialog", () => {
       (screen.getByLabelText("LLM Base URL") as HTMLInputElement).value,
     ).toBe("https://opencode.ai/inference/go/openai/v1");
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Sign in with OpenCode" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-    await waitFor(() => expect(onStartOpencodeLogin).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onStartLogin).toHaveBeenCalledTimes(1));
     await screen.findByText("ABCD-EFGH");
   });
 

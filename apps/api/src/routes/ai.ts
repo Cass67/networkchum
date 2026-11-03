@@ -6,6 +6,7 @@ import {
   AiProviderKindSchema,
   AiLabCommitRequestSchema,
   AiProviderSettingsSchema,
+  aiProviderDef,
 } from "@networkchum/shared";
 import type { AiProviderSettings } from "@networkchum/shared";
 
@@ -14,17 +15,12 @@ import { buildLabDocumentFromSpec } from "../ai/buildLabDocumentFromSpec.js";
 import { classifyImages } from "../ai/classifyImages.js";
 import { generateLabSpec } from "../ai/generateLabSpec.js";
 import { probeModels } from "../ai/llmClient.js";
+import { pollOauth, resolveOauth, startOauth } from "../ai/oauthFlows.js";
 import {
-  OPENCODE_GO_BASE_URL,
-  pollOpenCodeDeviceLogin,
-  resolveOpenCodeAuth,
-  startOpenCodeDeviceLogin,
-} from "../ai/opencodeAuth.js";
-import {
-  clearOpenCodeAuth,
-  loadOpenCodeAuth,
-  type OpenCodeAuth,
-} from "../ai/opencodeAuthStore.js";
+  clearOauthRecord,
+  loadOauthRecord,
+  type OauthRecord,
+} from "../ai/oauthStore.js";
 import {
   loadAiProviderSettings,
   saveAiProviderSettings,
@@ -55,20 +51,21 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
 ) => {
   const fetcher = options.runtime?.fetcher ?? fetch;
 
-  // Settings as the LLM callers need them: an OpenCode OAuth credential is
+  // Settings as the LLM callers need them: a subscription credential is
   // injected as the Bearer token and refreshed when it is close to expiry.
   async function resolveProviderSettings(): Promise<{
     settings: AiProviderSettings;
-    oauth: OpenCodeAuth | null;
+    oauth: OauthRecord | null;
   } | null> {
     const settings = loadAiProviderSettings();
     if (!settings) {
       return null;
     }
-    if (settings.provider !== "opencode-go") {
+    const def = aiProviderDef(settings.provider);
+    if (def.auth === "key" || def.auth === "none") {
       return { settings, oauth: null };
     }
-    const oauth = await resolveOpenCodeAuth(fetcher);
+    const oauth = await resolveOauth(settings.provider, fetcher);
     if (!oauth) {
       return { settings, oauth: null };
     }
@@ -80,8 +77,7 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
     if (!settings) {
       return { provider: null };
     }
-    const oauth =
-      settings.provider === "opencode-go" ? loadOpenCodeAuth() : null;
+    const oauth = loadOauthRecord(settings.provider);
     return { provider: toProviderSettingsView(settings, oauth) };
   });
 
@@ -91,41 +87,53 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
       return reply.code(400).send({ message: body.message });
     }
     const settings = body.data;
+    const def = aiProviderDef(settings.provider);
     const existing = loadAiProviderSettings();
     if (!settings.apiKey) {
       // Null key on save means "keep the previously stored key" so the UI can
       // edit the other fields without re-entering the secret.
       if (existing?.apiKey) {
         settings.apiKey = existing.apiKey;
-      } else if (settings.provider === "opencode-go" && loadOpenCodeAuth()) {
-        // The OAuth credential is injected at call time.
+      } else if (loadOauthRecord(settings.provider) || !def.supportsApiKey) {
+        // A subscription credential is injected at call time; local
+        // providers need no key at all.
       } else {
         return reply.code(400).send({
           message:
-            settings.provider === "opencode-go"
-              ? "Sign in to OpenCode Go or enter an API key"
-              : "An API key is required the first time you configure a provider",
+            def.auth === "key"
+              ? "An API key is required the first time you configure a provider"
+              : "Sign in to this provider or enter an API key",
         });
       }
     }
     saveAiProviderSettings(settings);
-    const oauth =
-      settings.provider === "opencode-go" ? loadOpenCodeAuth() : null;
-    return { provider: toProviderSettingsView(settings, oauth) };
+    return {
+      provider: toProviderSettingsView(
+        settings,
+        loadOauthRecord(settings.provider),
+      ),
+    };
   });
 
-  app.post("/ai/provider/opencode/device", async (_request, reply) => {
+  app.post("/ai/provider/oauth/start", async (request, reply) => {
+    const body = parseBody(
+      z.object({ provider: AiProviderKindSchema }),
+      request.body,
+    );
+    if (!body.ok) {
+      return reply.code(400).send({ message: body.message });
+    }
     try {
-      return await startOpenCodeDeviceLogin(fetcher);
+      return await startOauth(body.data.provider, fetcher);
     } catch (error) {
       return reply.code(502).send({
         message:
-          error instanceof Error ? error.message : "OpenCode sign-in failed",
+          error instanceof Error ? error.message : "Sign-in could not start",
       });
     }
   });
 
-  app.post("/ai/provider/opencode/poll", async (request, reply) => {
+  app.post("/ai/provider/oauth/poll", async (request, reply) => {
     const body = parseBody(
       z.object({ deviceCode: z.string().min(1) }),
       request.body,
@@ -133,42 +141,22 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
     if (!body.ok) {
       return reply.code(400).send({ message: body.message });
     }
-
     try {
-      const result = await pollOpenCodeDeviceLogin({
-        deviceCode: body.data.deviceCode,
-        fetcher,
-      });
-      if (result.status !== "connected") {
-        return result;
-      }
-
-      // Keep the endpoint and any already-chosen model, but make sure the
-      // provider is selected so the next dialog open shows the account.
-      const existing = loadAiProviderSettings();
-      if (existing?.provider !== "opencode-go") {
-        saveAiProviderSettings({
-          provider: "opencode-go",
-          baseUrl: OPENCODE_GO_BASE_URL,
-          model: existing?.model ?? "",
-          apiKey: null,
-        });
-      }
-      return {
-        status: result.status,
-        account: result.auth.account ?? null,
-        orgId: result.auth.orgId ?? null,
-      };
+      return await pollOauth(body.data.deviceCode, fetcher);
     } catch (error) {
       return reply.code(502).send({
-        message:
-          error instanceof Error ? error.message : "OpenCode sign-in failed",
+        message: error instanceof Error ? error.message : "Sign-in failed",
       });
     }
   });
 
-  app.delete("/ai/provider/opencode/auth", async () => {
-    clearOpenCodeAuth();
+  app.delete("/ai/provider/oauth/:provider", async (request, reply) => {
+    const params = request.params as { provider?: string };
+    const parsed = AiProviderKindSchema.safeParse(params.provider);
+    if (!parsed.success) {
+      return reply.code(400).send({ message: "Unknown provider" });
+    }
+    clearOauthRecord(parsed.data);
     return { ok: true };
   });
 
@@ -187,8 +175,7 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
       return reply.code(400).send({ message: body.message });
     }
     const stored = loadAiProviderSettings();
-    const oauth =
-      body.data.provider === "opencode-go" ? loadOpenCodeAuth() : null;
+    const oauth = loadOauthRecord(body.data.provider);
     const apiKey =
       body.data.apiKey ?? stored?.apiKey ?? oauth?.accessToken ?? null;
 
@@ -198,8 +185,12 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
         baseUrl: body.data.baseUrl,
         apiKey,
         fetcher,
-        opencode: oauth
-          ? { orgId: oauth.orgId, sessionId: randomUUID() }
+        oauth: oauth
+          ? {
+              accountId: oauth.accountId,
+              orgId: oauth.orgId,
+              sessionId: randomUUID(),
+            }
           : undefined,
       });
       return { models };
@@ -233,18 +224,18 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
         message: "Choose a model for the configured provider first",
       });
     }
-    if (settings.provider === "anthropic" && !settings.apiKey) {
+    const providerDef = aiProviderDef(settings.provider);
+    if (providerDef.auth !== "none" && !settings.apiKey) {
       return reply.code(400).send({
-        message: "The Anthropic provider requires an API key",
+        message: `Sign in to ${providerDef.label} or enter an API key`,
       });
     }
-    if (settings.provider === "opencode-go" && !settings.apiKey) {
-      return reply.code(400).send({
-        message: "Sign in to OpenCode Go in the AI Lab Builder first",
-      });
-    }
-    const opencode = resolved.oauth
-      ? { orgId: resolved.oauth.orgId, sessionId: randomUUID() }
+    const oauth = resolved.oauth
+      ? {
+          accountId: resolved.oauth.accountId,
+          orgId: resolved.oauth.orgId,
+          sessionId: randomUUID(),
+        }
       : undefined;
 
     const allImages = await listImages();
@@ -264,7 +255,7 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
         images: targets,
         templates,
         fetcher,
-        opencode,
+        oauth,
       });
     } catch (error) {
       return reply.code(502).send({
@@ -327,18 +318,18 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
         message: "Choose a model for the configured provider first",
       });
     }
-    if (settings.provider === "anthropic" && !settings.apiKey) {
+    const providerDef = aiProviderDef(settings.provider);
+    if (providerDef.auth !== "none" && !settings.apiKey) {
       return reply.code(400).send({
-        message: "The Anthropic provider requires an API key",
+        message: `Sign in to ${providerDef.label} or enter an API key`,
       });
     }
-    if (settings.provider === "opencode-go" && !settings.apiKey) {
-      return reply.code(400).send({
-        message: "Sign in to OpenCode Go in the AI Lab Builder first",
-      });
-    }
-    const opencode = resolved.oauth
-      ? { orgId: resolved.oauth.orgId, sessionId: randomUUID() }
+    const oauth = resolved.oauth
+      ? {
+          accountId: resolved.oauth.accountId,
+          orgId: resolved.oauth.orgId,
+          sessionId: randomUUID(),
+        }
       : undefined;
 
     const registry = new TemplateRegistry();
@@ -354,7 +345,7 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
         images,
         devices: body.data.devices,
         fetcher,
-        opencode,
+        oauth,
       });
       const preview = buildLabDocumentFromSpec({
         labId: "lab-ai-preview",

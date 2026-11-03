@@ -546,31 +546,34 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
       return payload.provider;
     },
 
-    async startOpencodeLogin(): Promise<{
+    async startProviderLogin(provider: AiProviderKind): Promise<{
+      mode: "device";
       deviceCode: string;
+      verifyUrl: string;
       userCode: string;
-      verificationUrl: string;
-      expiresIn: number;
       interval: number;
+      expiresIn: number;
     }> {
-      const response = await fetcher(`${baseUrl}/ai/provider/opencode/device`, {
+      const response = await fetcher(`${baseUrl}/ai/provider/oauth/start`, {
         method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider }),
       });
       return parseResponse<{
+        mode: "device";
         deviceCode: string;
+        verifyUrl: string;
         userCode: string;
-        verificationUrl: string;
-        expiresIn: number;
         interval: number;
+        expiresIn: number;
       }>(response as Response);
     },
 
-    async pollOpencodeLogin(deviceCode: string): Promise<{
+    async pollProviderLogin(deviceCode: string): Promise<{
       status: "pending" | "slow_down" | "expired" | "denied" | "connected";
       account?: string | null;
-      orgId?: string | null;
     }> {
-      const response = await fetcher(`${baseUrl}/ai/provider/opencode/poll`, {
+      const response = await fetcher(`${baseUrl}/ai/provider/oauth/poll`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ deviceCode }),
@@ -578,14 +581,14 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
       return parseResponse<{
         status: "pending" | "slow_down" | "expired" | "denied" | "connected";
         account?: string | null;
-        orgId?: string | null;
       }>(response as Response);
     },
 
-    async disconnectOpencode(): Promise<void> {
-      const response = await fetcher(`${baseUrl}/ai/provider/opencode/auth`, {
-        method: "DELETE",
-      });
+    async disconnectProvider(provider: AiProviderKind): Promise<void> {
+      const response = await fetcher(
+        `${baseUrl}/ai/provider/oauth/${encodeURIComponent(provider)}`,
+        { method: "DELETE" },
+      );
       await parseResponse<{ ok: boolean }>(response as Response);
     },
 

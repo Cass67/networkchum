@@ -4,16 +4,21 @@
 
 ### Added
 
-- **OpenCode Go provider** for the AI Lab Builder:
-  `https://opencode.ai/inference/go/openai/v1` (OpenAI-compatible), with the
-  public Go model catalog at `https://opencode.ai/inference/go/v1/models`.
-  Works with an `oc_sk_…` API key or an OpenCode Console sign-in.
-- **OAuth device-code sign-in** for OpenCode
-  (`POST /ai/provider/opencode/device` and `/poll`): the dialog shows the user
-  code and verification link, stores the access/refresh tokens in
-  `opencode-auth.json` (mode 0600), and refreshes them five minutes before
-  expiry. Requests send `user-agent`, `x-opencode-session` and `x-org-id` as
-  OpenCode asks of third-party clients.
+- **Provider registry with a grouped picker**: subscriptions (ChatGPT,
+  OpenCode Go), API keys (OpenAI, Anthropic, OpenRouter, Groq, DeepSeek, xAI,
+  Moonshot, Mistral, Together, custom OpenAI-compatible) and local servers
+  (Ollama, LM Studio). Each entry declares its wire protocol and default base
+  URL, so adding a provider is a data change.
+- **ChatGPT (Plus/Pro) sign-in**: OpenAI's device-code flow, the Codex
+  `responses` protocol, `chatgpt-account-id` from the JWT, and SSE parsing of
+  `response.output_text.delta` / `response.completed`.
+- **OpenCode Go provider**: `https://opencode.ai/inference/go/openai/v1`
+  (OpenAI-compatible), with the public Go model catalog at
+  `https://opencode.ai/inference/go/v1/models`. Works with an `oc_sk_…` API key
+  or an OpenCode Console sign-in.
+- **Subscription credentials** live in `ai-oauth.json` (mode 0600), refresh
+  five minutes before expiry, and are injected as the Bearer token at call
+  time; the dialog shows the signed-in account and can sign out.
 
 ### Fixed
 

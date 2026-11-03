@@ -264,19 +264,19 @@ type ApiClient = {
     baseUrl: string;
     apiKey?: string | null;
   }) => Promise<{ models: Array<string> }>;
-  startOpencodeLogin?: () => Promise<{
+  startProviderLogin?: (provider: AiProviderKind) => Promise<{
+    mode: "device";
     deviceCode: string;
+    verifyUrl: string;
     userCode: string;
-    verificationUrl: string;
-    expiresIn: number;
     interval: number;
+    expiresIn: number;
   }>;
-  pollOpencodeLogin?: (deviceCode: string) => Promise<{
+  pollProviderLogin?: (deviceCode: string) => Promise<{
     status: "pending" | "slow_down" | "expired" | "denied" | "connected";
     account?: string | null;
-    orgId?: string | null;
   }>;
-  disconnectOpencode?: () => Promise<void>;
+  disconnectProvider?: (provider: AiProviderKind) => Promise<void>;
   commitAiLab?: (input: AiLabCommitRequest) => Promise<{
     id: string;
     name: string;
@@ -3464,23 +3464,23 @@ export function App({
           }
           return api.probeAiModels(input);
         }}
-        onStartOpencodeLogin={async () => {
-          if (!api.startOpencodeLogin) {
-            throw new Error("OpenCode sign-in is unavailable");
+        onStartLogin={async (provider) => {
+          if (!api.startProviderLogin) {
+            throw new Error("Provider sign-in is unavailable");
           }
-          return api.startOpencodeLogin();
+          return api.startProviderLogin(provider);
         }}
-        onPollOpencodeLogin={async (deviceCode) => {
-          if (!api.pollOpencodeLogin) {
-            throw new Error("OpenCode sign-in is unavailable");
+        onPollLogin={async (deviceCode) => {
+          if (!api.pollProviderLogin) {
+            throw new Error("Provider sign-in is unavailable");
           }
-          return api.pollOpencodeLogin(deviceCode);
+          return api.pollProviderLogin(deviceCode);
         }}
-        onDisconnectOpencode={async () => {
-          if (!api.disconnectOpencode) {
-            throw new Error("OpenCode sign-in is unavailable");
+        onDisconnect={async (provider) => {
+          if (!api.disconnectProvider) {
+            throw new Error("Provider sign-in is unavailable");
           }
-          await api.disconnectOpencode();
+          await api.disconnectProvider(provider);
         }}
         onPreview={async (prompt, devices) => {
           if (!api.previewAiLab) {

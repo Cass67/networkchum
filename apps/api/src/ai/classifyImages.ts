@@ -70,7 +70,7 @@ export async function classifyImages(input: {
   images: ImageRecord[];
   templates: Template[];
   fetcher: typeof fetch;
-  opencode?: { sessionId?: string; orgId?: string };
+  oauth?: { accountId?: string; orgId?: string; sessionId?: string };
 }): Promise<ImageClassification[]> {
   const { settings, images, templates, fetcher } = input;
   const knownImageIds = new Set(images.map((image) => image.id));
@@ -106,7 +106,7 @@ export async function classifyImages(input: {
     ],
     fetcher,
     maxTokens: 2048,
-    opencode: input.opencode,
+    oauth: input.oauth,
   });
 
   const raw = extractJsonObject(text);

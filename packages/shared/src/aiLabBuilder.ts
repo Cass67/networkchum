@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { AiProviderKindSchema } from "./aiProviders.js";
 import { ImportIssueSchema } from "./importTopology.js";
 import { LabDocumentSchema } from "./topology.js";
 
@@ -9,12 +10,8 @@ import { LabDocumentSchema } from "./topology.js";
  * validates the final `LabDocument` itself. See docs/agent-builder.md.
  */
 
-export const AiProviderKindSchema = z.enum([
-  "openai-compatible",
-  "anthropic",
-  "opencode-go",
-]);
-export type AiProviderKind = z.infer<typeof AiProviderKindSchema>;
+export { AiProviderKindSchema };
+export type { AiProviderKind } from "./aiProviders.js";
 
 export const AiProviderSettingsSchema = z.object({
   provider: AiProviderKindSchema,
