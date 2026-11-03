@@ -113,7 +113,7 @@
   <h1>NetworkChum — Release Readiness Report</h1>
   <p class="sub">Whether the current repository can be released: the gates, the evidence, and what is still open.</p>
   <div class="meta">Repo: github.com:Cass67/networkchum &nbsp;·&nbsp; Branch: main &nbsp;·&nbsp; Commit: f59f0a8 &nbsp;·&nbsp; Date: Mon Nov 2 2026 &nbsp;·&nbsp; Live host: 192.168.2.1 (ubt26)</div>
-  <div class="meta"><strong>Update 2026-11-03:</strong> released as <code>v0.1.1</code> at <code>030d398</code>; CI green on Node 22 and 24; live host deployed and healthy. The browser walkthrough below is still the only open item.</div>
+  <div class="meta"><strong>Update 2026-11-03:</strong> released as <code>v0.1.1</code> at <code>030d398</code>, then migrated to Node.js 26 LTS (26.13.0) with the full six-distro installer matrix re-run green. The browser walkthrough below is still the only open item.</div>
 </header>
 
 <div class="verdict">
@@ -182,7 +182,7 @@
 </table>
 
 <h2>Platform matrix — VM-tested 2026-11-02</h2>
-<p class="sub">Each run boots a cloud image in QEMU/KVM, runs <code>install.sh --yes</code> for real (including the Node 24 download from nodejs.org), builds, installs the systemd service, checks <code>/health</code>, then uninstalls.</p>
+<p class="sub">Each run boots a cloud image in QEMU/KVM, runs <code>install.sh --yes</code> for real (including the Node.js download from nodejs.org), builds, installs the systemd service, checks <code>/health</code>, then uninstalls.</p>
 <table>
   <thead><tr><th>Distro</th><th>Package family</th><th>install.sh</th><th>Build</th><th>Service</th><th>/health</th><th>Uninstall</th></tr></thead>
   <tbody>

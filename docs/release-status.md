@@ -23,7 +23,7 @@
 
 ## Platform matrix (VM-tested today)
 
-Each run boots a cloud image in QEMU/KVM, runs `install.sh --yes` for real (including the Node 24 download from nodejs.org), builds, installs the systemd service, checks `/health`, then uninstalls.
+Each run boots a cloud image in QEMU/KVM, runs `install.sh --yes` for real (including the Node.js download from nodejs.org), builds, installs the systemd service, checks `/health`, then uninstalls.
 
 | Distro                          | Package family | install.sh | build | service | /health | uninstall |
 | ------------------------------- | -------------- | ---------- | ----- | ------- | ------- | --------- |
@@ -82,3 +82,25 @@ Reproduce with `scripts/vm-install-test.sh <image-url> <name>` on a KVM host; im
 1. Walk the UI checklist in a real browser at `http://192.168.2.1:5173/`.
 2. ~~Decide the tag: move `v0.1.0` to `f60d54c` or cut `v0.1.1`.~~ Done: `v0.1.1` at `030d398`.
 3. Optionally decide whether Fedora CoreOS is a target worth an `rpm-ostree` branch.
+
+## Addendum — 2026-11-03: Node.js 26 migration
+
+- `install.sh` installs the latest Node.js 26.x line (LTS "Lithium"),
+  `engines` requires `>=26`, CI runs 26 only, and `NETWORKCHUM_NODE_MAJOR=24`
+  opts back into the previous line.
+- Live host upgraded to 26.13.0; the API and web processes were confirmed
+  running from `/usr/local/lib/nodejs/node-v26.13.0-linux-x64/bin/node`, with
+  `/health` 200, UI 200, unauth `/labs` 401 and authed 200.
+- Full matrix re-run on Node 26.13.0 — Ubuntu 24.04, Debian 12, Fedora 42,
+  Rocky 9, Arch, openSUSE Leap 15.6: all PASS (`install.sh` exit 0,
+  `node -v` 26.13.0, build, service, `/health` 200, UI 200, uninstall).
+- The first matrix run caught a real regression: the Node 26 x64 archive links
+  `libatomic.so.1`, which minimal cloud images omit, so `install.sh` died at
+  its first `npm` call. Fixed by installing `libatomic1`/`libatomic`/`gcc-libs`
+  per package family and verifying the extracted binary with `node --version`.
+- `scripts/vm-install-test.sh` had a stale Debian image URL (`debian12-…` →
+  404); corrected to `debian-12-…`.
+- Startup measured on the live host: restart-to-`/health` ≈1.40 s on both 24
+  and 26; cold `node -e ""` ≈50 ms on both. **No startup speedup observed** —
+  the gains are V8 14.6 (throughput) and staying on the active LTS line.
+- Not verified: the in-browser UI flows listed above (unchanged).
