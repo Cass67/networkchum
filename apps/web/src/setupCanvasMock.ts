@@ -1,3 +1,32 @@
+// Node >= 25 defines a global `localStorage` that is unavailable unless the
+// process runs with `--localstorage-file`, and vitest aliases `window` to
+// `globalThis`, so the unavailable getter shadows jsdom's implementation.
+if (
+  typeof window !== "undefined" &&
+  typeof window.localStorage === "undefined"
+) {
+  const store = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, String(value));
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => {
+        store.clear();
+      },
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      get length() {
+        return store.size;
+      },
+    } as Storage,
+  });
+}
+
 const mockCanvasContext = {
   direction: "ltr",
   fillStyle: "",
