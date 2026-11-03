@@ -26,3 +26,17 @@ jobs:
         run: npm run build
       - name: Test
         run: npm test
+
+  bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/native-console-bridge-go/go.mod
+      - name: Vet and test the console bridge
+        run: |
+          cd tools/native-console-bridge-go
+          go vet ./...
+          go test ./...

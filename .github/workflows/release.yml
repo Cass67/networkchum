@@ -21,6 +21,9 @@ jobs:
         with:
           node-version: 26
           cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/native-console-bridge-go/go.mod
       - name: Install dependencies
         run: npm ci
       - name: Build
@@ -43,8 +46,28 @@ jobs:
              tools/native-console-bridge/README.md bridge/
           chmod +x bridge/run.sh
           tar -czf "networkchum-console-bridge-${version}.tar.gz" -C bridge .
-          sha256sum "networkchum-${version}.tar.gz" \
-            "networkchum-console-bridge-${version}.tar.gz" > SHA256SUMS
+      - name: Test console bridge
+        run: |
+          cd tools/native-console-bridge-go
+          go vet ./...
+          go test ./...
+      - name: Build console bridge binaries
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p bin
+          cd tools/native-console-bridge-go
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            out="../../bin/networkchum-console-bridge-${version}-${os}-${arch}"
+            if [ "$os" = "windows" ]; then out="${out}.exe"; fi
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 \
+              go build -trimpath -ldflags "-s -w -X main.version=${version}" -o "$out" .
+          done
+          chmod +x ../../bin/networkchum-console-bridge-* 2>/dev/null || true
+          cd ../..
+          sha256sum networkchum-*.tar.gz bin/* > SHA256SUMS
+          ls -lh bin
       - name: Extract release notes
         run: |
           node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > release-notes.md
@@ -54,4 +77,5 @@ jobs:
           body_path: release-notes.md
           files: |
             networkchum-*.tar.gz
+            bin/*
             SHA256SUMS

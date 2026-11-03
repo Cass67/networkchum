@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2 — 2026-11-03
+
+### Added
+
+- **Standalone console bridge binaries**: `networkchum-console-bridge-<version>-
+<os>-<arch>` for Linux (x64/arm64), macOS (x64/arm64) and Windows (x64) on
+  the Releases page: static Go binaries of roughly 6–7 MB, no runtime install
+  needed. The Node tarball remains as a fallback.
+
 ## 1.0.1 — 2026-11-03
 
 ### Added

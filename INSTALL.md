@@ -35,8 +35,9 @@ cd "networkchum-${VERSION}"
 
 The web UI (serial and VNC consoles) works from any browser on the LAN with no
 client install. The optional native console needs the console bridge on the
-client machine: download `networkchum-console-bridge-<version>.tar.gz` from the
-Releases page and run `./run.sh` or `run.cmd` (Node.js 22+). On a remote server
+client machine: download the standalone binary for your OS from the Releases
+page (`networkchum-console-bridge-<version>-<os>-<arch>`, a ~7 MB static binary)
+and run it — no Node.js needed. A Node-based tarball is published as a fallback. On a remote server
 the bridge uses an SSH relay, so the client needs an SSH client and the server
 needs `socat` or `nc`.
 

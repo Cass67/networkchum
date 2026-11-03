@@ -196,9 +196,14 @@ For Linux TAP labs without repeated password prompts, use:
 - **Web console** (serial and VNC) works from any browser on the LAN with no
   client install. This is the supported path for remote users.
 - **Native console** opens a real terminal on the machine running the browser.
-  That needs the small console bridge on that machine:
-  `networkchum-console-bridge-<version>.tar.gz` from the Releases page. It
-  requires Node.js 22+; run `./run.sh` (macOS/Linux) or `run.cmd` (Windows).
+  That needs the small console bridge on that machine: download the standalone
+  binary for your OS from the Releases page
+  (`networkchum-console-bridge-<version>-<os>-<arch>`, a ~7 MB static binary),
+  then run it. No Node.js install is needed. A Node-based tarball is published
+  as a fallback.
+  macOS may ask you to allow the unsigned binary (right-click → Open, or
+  `xattr -d com.apple.quarantine <file>`); Windows SmartScreen: More info →
+  Run anyway.
 - When the app runs on another host, the bridge opens
   `ssh -t <user>@<server> 'socat ... TCP:127.0.0.1:<port>'`; you need SSH access
   to the server and `socat`/`nc` there. Windows uses its built-in OpenSSH client
