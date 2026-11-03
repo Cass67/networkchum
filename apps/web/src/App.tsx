@@ -2497,14 +2497,26 @@ export function App({
   const themeToggleLabel =
     themeMode === "dark" ? "Switch to day mode" : "Switch to night mode";
   const themeToggleText = themeMode === "dark" ? "Day Mode" : "Night Mode";
+  const clientPlatform = (() => {
+    const userAgent =
+      typeof navigator === "undefined" ? "" : navigator.userAgent;
+    if (/Macintosh|Mac OS X/i.test(userAgent)) return "darwin";
+    if (/Windows/i.test(userAgent)) return "win32";
+    return "linux";
+  })();
+
   const nativeConsoleModeLabel =
     nativeConsolePreference === "web-console"
       ? "Web Console"
       : nativeConsolePreference === "copy-command"
         ? "Copy Native Command"
-        : macOsTerminalPreference === "terminal-app"
-          ? "Open in Terminal.app"
-          : "Open in iTerm";
+        : clientPlatform === "darwin"
+          ? macOsTerminalPreference === "terminal-app"
+            ? "Open in Terminal.app"
+            : "Open in iTerm"
+          : clientPlatform === "win32"
+            ? "Open Console Window"
+            : "Open in Terminal";
 
   const macOsTerminalOptions = [
     { value: "iterm", label: "iTerm" },
@@ -2706,29 +2718,31 @@ export function App({
             <option value="iterm-helper">Open in Terminal</option>
           </select>
         </label>
-        <label className="compact-field">
-          <span className="sr-only">macOS Terminal</span>
-          <select
-            className="field-input"
-            aria-label="macOS Terminal"
-            value={macOsTerminalPreference}
-            onChange={(event) => {
-              if (event.target.value === "add-terminal") {
-                openAddTerminalDialog();
-                return;
-              }
-              setMacOsTerminalPreference(
-                event.target.value as MacOsTerminalPreference,
-              );
-            }}
-          >
-            {macOsTerminalOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {clientPlatform === "darwin" ? (
+          <label className="compact-field">
+            <span className="sr-only">macOS Terminal</span>
+            <select
+              className="field-input"
+              aria-label="macOS Terminal"
+              value={macOsTerminalPreference}
+              onChange={(event) => {
+                if (event.target.value === "add-terminal") {
+                  openAddTerminalDialog();
+                  return;
+                }
+                setMacOsTerminalPreference(
+                  event.target.value as MacOsTerminalPreference,
+                );
+              }}
+            >
+              {macOsTerminalOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {!isLocalPageHost(locationLike.hostname) ? (
           <label className="compact-field">
             <span className="sr-only">SSH Relay User</span>

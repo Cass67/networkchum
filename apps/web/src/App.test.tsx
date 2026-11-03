@@ -26,6 +26,11 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  Object.defineProperty(navigator, "userAgent", {
+    configurable: true,
+    value:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko)",
+  });
   const store = new Map<string, string>();
   Object.defineProperty(window, "localStorage", {
     configurable: true,
@@ -2717,6 +2722,39 @@ describe("App", () => {
     expect(screen.getByLabelText("macOS Terminal")).toHaveTextContent(
       "Add Terminal...",
     );
+  });
+
+  it("hides the macOS terminal picker on Windows", () => {
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    });
+    const api = {
+      listLabs: async () => [],
+      listCatalog: async () => [],
+      listImages: async () => [],
+      createLab: async () => ({ id: "lab-1", name: "New Lab" }),
+      getLab: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      listRuntimeStates: async () => [],
+      addNode: async () => ({
+        id: "lab-1",
+        name: "New Lab",
+        document: { nodes: [], networks: [], attachments: [] },
+      }),
+      powerOnNode: async () => ({
+        nodeId: "node-1",
+        status: "running",
+        connectCommand: ["docker", "exec", "-it", "container-id", "sh"],
+      }),
+    };
+
+    render(<App api={api} />);
+
+    expect(screen.queryByLabelText("macOS Terminal")).toBeNull();
   });
 
   it("adds a custom terminal and persists it across remounts", async () => {

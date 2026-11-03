@@ -33,13 +33,23 @@ cd "networkchum-${VERSION}"
 
 ## Remote Clients
 
-The web UI (serial and VNC consoles) works from any browser on the LAN with no
-client install. The optional native console needs the console bridge on the
-client machine: download the standalone binary for your OS from the Releases
-page (`networkchum-console-bridge-<version>-<os>-<arch>`, a ~7 MB static binary)
-and run it — no Node.js needed. A Node-based tarball is published as a fallback. On a remote server
-the bridge uses an SSH relay, so the client needs an SSH client and the server
-needs `socat` or `nc`.
+The browser is the client. Serial and VNC consoles work from any browser on the
+LAN with no install. The optional native console opens a terminal on the machine
+running the browser and needs the console bridge there:
+
+1. Download `networkchum-console-bridge-<version>-<os>-<arch>` from the Releases
+   page (`linux-amd64`, `linux-arm64`, `darwin-amd64`, `darwin-arm64`,
+   `windows-amd64.exe`). It is a ~5 MB static binary; no Node.js is needed.
+2. Run it and leave it running. The app header shows `Bridge: Online`.
+3. Set the native console preference (and the SSH user, if it differs from your
+   local user) in the UI.
+4. The bridge SSHes to the server (`ssh -t <user>@<server> 'socat ...'`), so the
+   server needs `socat` or `nc`, and the client needs an SSH client.
+
+On the same machine as the app, `./start.sh` runs the bridge for you. A
+Node-based tarball (`networkchum-console-bridge-<version>.tar.gz`) is published
+as a fallback. macOS may require allowing the unsigned binary (right-click →
+Open); Windows SmartScreen: More info → Run anyway.
 
 ## Quick Start
 

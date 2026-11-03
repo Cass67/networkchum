@@ -193,23 +193,31 @@ For Linux TAP labs without repeated password prompts, use:
 
 ## Remote Clients And Native Consoles
 
-- **Web console** (serial and VNC) works from any browser on the LAN with no
-  client install. This is the supported path for remote users.
-- **Native console** opens a real terminal on the machine running the browser.
-  That needs the small console bridge on that machine: download the standalone
-  binary for your OS from the Releases page
-  (`networkchum-console-bridge-<version>-<os>-<arch>`, a ~7 MB static binary),
-  then run it. No Node.js install is needed. A Node-based tarball is published
-  as a fallback.
-  macOS may ask you to allow the unsigned binary (right-click → Open, or
-  `xattr -d com.apple.quarantine <file>`); Windows SmartScreen: More info →
-  Run anyway.
-- When the app runs on another host, the bridge opens
-  `ssh -t <user>@<server> 'socat ... TCP:127.0.0.1:<port>'`; you need SSH access
-  to the server and `socat`/`nc` there. Windows uses its built-in OpenSSH client
-  and a `cmd.exe` window.
-- On a single machine, `./start.sh` starts the bridge automatically and the
-  header shows `Bridge: Online`.
+The browser is the client. The **web console** (serial xterm and VNC) works from
+any browser on the LAN with no install — use it unless you specifically want a
+real terminal window on your own machine.
+
+The **native console** opens iTerm/Terminal.app, a Linux terminal emulator, or a
+Windows console on the machine running the browser. It needs the console bridge
+on that machine:
+
+- **Same machine as the app**: `./start.sh` starts the bridge automatically;
+  nothing to install. The header shows `Bridge: Online`.
+- **Any other machine** (the usual case when the app is in a VM or on a LAN
+  server): download `networkchum-console-bridge-<version>-<os>-<arch>` from the
+  Releases page (a ~5 MB static binary, no Node.js needed), run it, and leave it
+  running. Choose `linux-amd64`, `linux-arm64`, `darwin-amd64`,
+  `darwin-arm64` or `windows-amd64.exe`.
+- **Node fallback**: `networkchum-console-bridge-<version>.tar.gz` (Node.js 22+).
+
+When the app runs on another host, the bridge opens
+`ssh -t <user>@<server> 'socat ... TCP:127.0.0.1:<port>'`. Set the SSH user in
+the native console preference; the client needs an SSH client (built into
+Windows 10+, macOS and Linux) and the server needs `socat` (or `nc`).
+
+Unsigned binaries: macOS may require right-click → Open (or
+`xattr -d com.apple.quarantine <file>`); Windows SmartScreen needs
+More info → Run anyway.
 
 ## Authentication
 
