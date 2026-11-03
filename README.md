@@ -109,6 +109,27 @@ Platform notes:
 
 ## Getting Started
 
+### Download a release
+
+Every tagged release publishes a source bundle and checksums on the Releases
+page:
+
+```bash
+VERSION=1.0.0
+curl -LO "https://github.com/Cass67/networkchum/releases/download/v${VERSION}/networkchum-${VERSION}.tar.gz"
+curl -LO "https://github.com/Cass67/networkchum/releases/download/v${VERSION}/SHA256SUMS"
+sha256sum -c SHA256SUMS
+tar -xzf "networkchum-${VERSION}.tar.gz"
+cd "networkchum-${VERSION}"
+./install.sh
+```
+
+The bundle contains the source and lockfile; `install.sh` installs the runtime
+dependencies and builds the app. On macOS use `brew install node` first, then
+`./start.sh`.
+
+### From a clone
+
 Install dependencies from the repo root:
 
 ```bash

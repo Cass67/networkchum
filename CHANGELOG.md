@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0 — 2026-11-03
+
+First public release.
+
+- Browser lab workbench: QEMU network devices and container nodes on one
+  topology canvas, with serial and VNC consoles.
+- JSON-native labs, image catalog and template bindings, lab backups.
+- Day-0 startup configs for IOSv/IOS-XE, IOS-XR, NX-OS, vEOS, Juniper,
+  FortiGate and VyOS.
+- AI lab builder with a provider registry, API keys and ChatGPT/OpenCode
+  device sign-in.
+- Token-gated API, LAN mode, systemd service, and an installer validated on
+  six distributions.
+- Release bundles: `networkchum-<version>.tar.gz` plus `SHA256SUMS`.
+
 ## 0.1.4 — 2026-11-03
 
 ### Added

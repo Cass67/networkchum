@@ -16,6 +16,21 @@ NetworkChum runs best on Linux. macOS works well for the UI, API, image manageme
 | Better native console transport   | `socat` preferred, `nc` fallback                                    |
 | macOS URL-scheme helper           | AppleScript helper install                                          |
 
+## Download A Release
+
+Tagged releases publish `networkchum-<version>.tar.gz` and `SHA256SUMS` on the
+GitHub Releases page:
+
+```bash
+VERSION=1.0.0
+curl -LO "https://github.com/Cass67/networkchum/releases/download/v${VERSION}/networkchum-${VERSION}.tar.gz"
+curl -LO "https://github.com/Cass67/networkchum/releases/download/v${VERSION}/SHA256SUMS"
+sha256sum -c SHA256SUMS
+tar -xzf "networkchum-${VERSION}.tar.gz"
+cd "networkchum-${VERSION}"
+./install.sh
+```
+
 ## Quick Start
 
 If you only want the app running first:
