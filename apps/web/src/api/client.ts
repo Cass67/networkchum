@@ -546,6 +546,49 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
       return payload.provider;
     },
 
+    async startOpencodeLogin(): Promise<{
+      deviceCode: string;
+      userCode: string;
+      verificationUrl: string;
+      expiresIn: number;
+      interval: number;
+    }> {
+      const response = await fetcher(`${baseUrl}/ai/provider/opencode/device`, {
+        method: "POST",
+      });
+      return parseResponse<{
+        deviceCode: string;
+        userCode: string;
+        verificationUrl: string;
+        expiresIn: number;
+        interval: number;
+      }>(response as Response);
+    },
+
+    async pollOpencodeLogin(deviceCode: string): Promise<{
+      status: "pending" | "slow_down" | "expired" | "denied" | "connected";
+      account?: string | null;
+      orgId?: string | null;
+    }> {
+      const response = await fetcher(`${baseUrl}/ai/provider/opencode/poll`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ deviceCode }),
+      });
+      return parseResponse<{
+        status: "pending" | "slow_down" | "expired" | "denied" | "connected";
+        account?: string | null;
+        orgId?: string | null;
+      }>(response as Response);
+    },
+
+    async disconnectOpencode(): Promise<void> {
+      const response = await fetcher(`${baseUrl}/ai/provider/opencode/auth`, {
+        method: "DELETE",
+      });
+      await parseResponse<{ ok: boolean }>(response as Response);
+    },
+
     async probeAiModels(input: {
       provider: AiProviderKind;
       baseUrl: string;

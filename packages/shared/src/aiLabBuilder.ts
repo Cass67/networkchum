@@ -9,7 +9,11 @@ import { LabDocumentSchema } from "./topology.js";
  * validates the final `LabDocument` itself. See docs/agent-builder.md.
  */
 
-export const AiProviderKindSchema = z.enum(["openai-compatible", "anthropic"]);
+export const AiProviderKindSchema = z.enum([
+  "openai-compatible",
+  "anthropic",
+  "opencode-go",
+]);
 export type AiProviderKind = z.infer<typeof AiProviderKindSchema>;
 
 export const AiProviderSettingsSchema = z.object({
@@ -17,8 +21,11 @@ export const AiProviderSettingsSchema = z.object({
   // openai-compatible: base URL including the version path, e.g.
   //   https://api.openai.com/v1  or  http://127.0.0.1:11434/v1
   // anthropic: base URL without the version path, e.g. https://api.anthropic.com
+  // opencode-go: https://opencode.ai/inference/go/openai/v1
   baseUrl: z.string().min(1),
-  model: z.string().min(1),
+  // Empty is allowed so an OpenCode OAuth sign-in can be stored before the
+  // user picks a model; call paths reject an empty model with a clear message.
+  model: z.string(),
   // Stored server-side in the API data dir; never returned to the browser.
   // null on save means "keep the previously stored key".
   apiKey: z.string().min(1).nullable(),
@@ -26,11 +33,14 @@ export const AiProviderSettingsSchema = z.object({
 });
 export type AiProviderSettings = z.infer<typeof AiProviderSettingsSchema>;
 
-// What GET/PUT return: settings with the key omitted, plus whether one exists.
+// What GET/PUT return: settings with the key omitted, plus whether one exists
+// and which auth method the stored credential uses.
 export const AiProviderSettingsViewSchema = AiProviderSettingsSchema.omit({
   apiKey: true,
 }).extend({
   hasApiKey: z.boolean(),
+  authMode: z.enum(["key", "oauth"]),
+  account: z.string().nullable(),
 });
 export type AiProviderSettingsView = z.infer<
   typeof AiProviderSettingsViewSchema

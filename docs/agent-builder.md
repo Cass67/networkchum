@@ -70,7 +70,7 @@ Design rules:
 - **The catalog is injected into the prompt**, so the model can only choose
   template ids that actually exist in this installation. Fuzzy matches are
   resolved deterministically and reported as preview issues.
-- **Two provider flavors**, per user decision:
+- **Three provider flavors**:
   - `openai-compatible` — generic `POST {baseUrl}/chat/completions`. Works with
     OpenAI, OpenRouter, Groq, LM Studio, Ollama, LiteLLM, vLLM, etc. The user
     supplies a base URL that includes the version path (e.g.
@@ -78,9 +78,21 @@ Design rules:
   - `anthropic` — native `POST {baseUrl}/v1/messages` with `x-api-key` and
     `anthropic-version` headers. Base URL without version path (e.g.
     `https://api.anthropic.com`).
-- **The API key is stored server-side** in the API data dir (user decision),
-  same file-store pattern as every other store. It is never returned to the
-  browser; the GET endpoint returns `hasApiKey: true/false` and a masked hint.
+  - `opencode-go` — OpenCode's Go subscription gateway
+    (`https://opencode.ai/inference/go/openai/v1`, OpenAI-compatible wire
+    format). Auth is either an `oc_sk_…` API key or the Console OAuth
+    device-code flow: `POST https://opencode.ai/console/auth/device/code`
+    with the public `opencode-cli` client, then
+    `POST /auth/device/token` polling. The resulting access token is a Bearer
+    token for inference, refreshed five minutes before expiry and persisted in
+    `opencode-auth.json` (mode 0600) separately from the provider settings.
+    Requests send `user-agent: networkchum`, `x-opencode-session` and, when
+    present, `x-org-id`, as OpenCode asks of third-party clients. The model
+    catalog is public at `https://opencode.ai/inference/go/v1/models`.
+- **Credentials are stored server-side** in the API data dir (user decision),
+  same file-store pattern as every other store, with mode 0600. The API key is
+  never returned to the browser; the GET endpoint returns `hasApiKey`,
+  `authMode` and the account label.
 
 ---
 

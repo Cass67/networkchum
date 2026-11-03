@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **OpenCode Go provider** for the AI Lab Builder:
+  `https://opencode.ai/inference/go/openai/v1` (OpenAI-compatible), with the
+  public Go model catalog at `https://opencode.ai/inference/go/v1/models`.
+  Works with an `oc_sk_…` API key or an OpenCode Console sign-in.
+- **OAuth device-code sign-in** for OpenCode
+  (`POST /ai/provider/opencode/device` and `/poll`): the dialog shows the user
+  code and verification link, stores the access/refresh tokens in
+  `opencode-auth.json` (mode 0600), and refreshes them five minutes before
+  expiry. Requests send `user-agent`, `x-opencode-session` and `x-org-id` as
+  OpenCode asks of third-party clients.
+
+### Fixed
+
+- **Provider credentials are no longer world-readable**: `ai-provider.json` is
+  written with mode `0600` (and chmod'ed on save), matching the API token.
+- A slow provider-settings load no longer overwrites a provider the user
+  already switched while the request was in flight.
+
 ## 0.1.2 — 2026-11-03
 
 ### Fixed

@@ -109,11 +109,23 @@ function renderDialog(
         baseUrl: "http://127.0.0.1:9999/v1",
         model: "test-model",
         hasApiKey: true,
+        authMode: "key",
+        account: null,
       })}
-      onSaveProvider={vi.fn().mockResolvedValue({ hasApiKey: true })}
+      onSaveProvider={vi.fn().mockResolvedValue({
+        provider: "openai-compatible",
+        baseUrl: "http://127.0.0.1:9999/v1",
+        model: "test-model",
+        hasApiKey: true,
+        authMode: "key",
+        account: null,
+      })}
       onProbeModels={vi
         .fn()
         .mockResolvedValue({ models: ["gpt-4o", "llama3"] })}
+      onStartOpencodeLogin={vi.fn()}
+      onPollOpencodeLogin={vi.fn()}
+      onDisconnectOpencode={vi.fn().mockResolvedValue(undefined)}
       onPreview={vi.fn().mockResolvedValue(matchedPreview)}
       onCommit={vi.fn().mockResolvedValue(undefined)}
       {...props}
@@ -123,6 +135,34 @@ function renderDialog(
 
 describe("AiLabBuilderDialog", () => {
   afterEach(() => cleanup());
+
+  it("starts an OpenCode device sign-in and shows the code", async () => {
+    const onStartOpencodeLogin = vi.fn().mockResolvedValue({
+      deviceCode: "device-1",
+      userCode: "ABCD-EFGH",
+      verificationUrl: "https://opencode.ai/console/device?user_code=ABCD-EFGH",
+      expiresIn: 600,
+      interval: 5,
+    });
+    const onPollOpencodeLogin = vi
+      .fn()
+      .mockResolvedValue({ status: "pending" });
+    renderDialog({ onStartOpencodeLogin, onPollOpencodeLogin });
+
+    fireEvent.change(screen.getByLabelText("LLM Provider"), {
+      target: { value: "opencode-go" },
+    });
+    expect(
+      (screen.getByLabelText("LLM Base URL") as HTMLInputElement).value,
+    ).toBe("https://opencode.ai/inference/go/openai/v1");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sign in with OpenCode" }),
+    );
+
+    await waitFor(() => expect(onStartOpencodeLogin).toHaveBeenCalledTimes(1));
+    await screen.findByText("ABCD-EFGH");
+  });
 
   it("loads provider settings and generates a preview", async () => {
     const onPreview = vi.fn().mockResolvedValue(matchedPreview);

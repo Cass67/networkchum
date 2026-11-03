@@ -25,6 +25,19 @@ type AiLabBuilderDialogProps = {
     baseUrl: string;
     apiKey?: string | null;
   }) => Promise<{ models: Array<string> }>;
+  onStartOpencodeLogin: () => Promise<{
+    deviceCode: string;
+    userCode: string;
+    verificationUrl: string;
+    expiresIn: number;
+    interval: number;
+  }>;
+  onPollOpencodeLogin: (deviceCode: string) => Promise<{
+    status: "pending" | "slow_down" | "expired" | "denied" | "connected";
+    account?: string | null;
+    orgId?: string | null;
+  }>;
+  onDisconnectOpencode: () => Promise<void>;
   onPreview: (prompt: string, devices: Array<string>) => Promise<AiLabPreview>;
   onCommit: (input: {
     name: string;
@@ -39,7 +52,18 @@ const PROVIDER_BASE_URL_HINTS: Record<AiProviderSettings["provider"], string> =
       "https://api.openai.com/v1 — include the version path; also works with LM Studio, Ollama, OpenRouter, LiteLLM",
     anthropic:
       "https://api.anthropic.com — no version path; the API appends /v1/messages",
+    "opencode-go":
+      "https://opencode.ai/inference/go/openai/v1 — sign in below to use your OpenCode Go plan",
   };
+
+const PROVIDER_DEFAULT_BASE_URL: Record<
+  AiProviderSettings["provider"],
+  string
+> = {
+  "openai-compatible": "",
+  anthropic: "",
+  "opencode-go": "https://opencode.ai/inference/go/openai/v1",
+};
 
 export function AiLabBuilderDialog({
   open,
@@ -48,6 +72,9 @@ export function AiLabBuilderDialog({
   onLoadProvider,
   onSaveProvider,
   onProbeModels,
+  onStartOpencodeLogin,
+  onPollOpencodeLogin,
+  onDisconnectOpencode,
   onPreview,
   onCommit,
 }: AiLabBuilderDialogProps) {
@@ -57,6 +84,17 @@ export function AiLabBuilderDialog({
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [hasStoredKey, setHasStoredKey] = useState(false);
+  const [authMode, setAuthMode] = useState<"key" | "oauth">("key");
+  const [authAccount, setAuthAccount] = useState<string | null>(null);
+  const [deviceLogin, setDeviceLogin] = useState<{
+    deviceCode: string;
+    userCode: string;
+    verificationUrl: string;
+    expiresIn: number;
+    interval: number;
+  } | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
   const [modelOptions, setModelOptions] = useState<Array<string>>([]);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<Set<string>>(
     () => new Set(),
@@ -72,8 +110,16 @@ export function AiLabBuilderDialog({
   // though App re-creates the callback on every render.
   const loadProviderRef = useRef(onLoadProvider);
   loadProviderRef.current = onLoadProvider;
+  // A slow settings load must not overwrite edits the user already started.
+  const providerTouchedRef = useRef(false);
   const probeModelsRef = useRef(onProbeModels);
   probeModelsRef.current = onProbeModels;
+  const startLoginRef = useRef(onStartOpencodeLogin);
+  startLoginRef.current = onStartOpencodeLogin;
+  const pollLoginRef = useRef(onPollOpencodeLogin);
+  pollLoginRef.current = onPollOpencodeLogin;
+  const disconnectRef = useRef(onDisconnectOpencode);
+  disconnectRef.current = onDisconnectOpencode;
 
   useEffect(() => {
     if (!open) {
@@ -84,6 +130,10 @@ export function AiLabBuilderDialog({
     setSavedNotice(false);
     setModelOptions([]);
     setDetectError(null);
+    setDeviceLogin(null);
+    setAuthError(null);
+    setSigningIn(false);
+    providerTouchedRef.current = false;
     loadProviderRef
       .current()
       .then((settings) => {
@@ -91,10 +141,15 @@ export function AiLabBuilderDialog({
           setHasStoredKey(false);
           return;
         }
+        if (providerTouchedRef.current) {
+          return;
+        }
         setProvider(settings.provider);
         setBaseUrl(settings.baseUrl);
         setModel(settings.model);
         setHasStoredKey(settings.hasApiKey);
+        setAuthMode(settings.authMode);
+        setAuthAccount(settings.account);
         // Saved endpoint: detect the model list automatically; the key stays
         // server-side, so probe with the stored key.
         if (settings.baseUrl) {
@@ -108,6 +163,61 @@ export function AiLabBuilderDialog({
         setHasStoredKey(false);
       });
   }, [open]);
+
+  useEffect(() => {
+    if (!deviceLogin) {
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      try {
+        const result = await pollLoginRef.current(deviceLogin.deviceCode);
+        if (cancelled) {
+          return;
+        }
+        if (result.status === "connected") {
+          setDeviceLogin(null);
+          setAuthMode("oauth");
+          setAuthAccount(result.account ?? null);
+          setHasStoredKey(true);
+          setAuthError(null);
+          return;
+        }
+        if (result.status === "expired") {
+          setDeviceLogin(null);
+          setAuthError("The sign-in code expired — try again.");
+          return;
+        }
+        if (result.status === "denied") {
+          setDeviceLogin(null);
+          setAuthError("OpenCode sign-in was denied.");
+          return;
+        }
+        const wait =
+          result.status === "slow_down"
+            ? deviceLogin.interval + 5
+            : deviceLogin.interval;
+        timer = setTimeout(() => void tick(), wait * 1000);
+      } catch (nextError) {
+        if (!cancelled) {
+          setDeviceLogin(null);
+          setAuthError(
+            nextError instanceof Error
+              ? nextError.message
+              : "OpenCode sign-in failed",
+          );
+        }
+      }
+    };
+    timer = setTimeout(() => void tick(), deviceLogin.interval * 1000);
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [deviceLogin]);
 
   if (!open) {
     return null;
@@ -154,6 +264,53 @@ export function AiLabBuilderDialog({
     }
   }
 
+  function handleProviderChange(next: AiProviderSettings["provider"]) {
+    providerTouchedRef.current = true;
+    const current = baseUrl.trim();
+    const previousDefault = PROVIDER_DEFAULT_BASE_URL[provider];
+    setProvider(next);
+    setModelOptions([]);
+    setDetectError(null);
+    setAuthError(null);
+    const switchingToOpencode =
+      next === "opencode-go" && !current.startsWith("https://opencode.ai");
+    if (!current || current === previousDefault || switchingToOpencode) {
+      setBaseUrl(PROVIDER_DEFAULT_BASE_URL[next]);
+    }
+  }
+
+  async function handleStartOpencodeLogin() {
+    setSigningIn(true);
+    setAuthError(null);
+    try {
+      setDeviceLogin(await startLoginRef.current());
+    } catch (nextError) {
+      setAuthError(
+        nextError instanceof Error
+          ? nextError.message
+          : "OpenCode sign-in could not start",
+      );
+    } finally {
+      setSigningIn(false);
+    }
+  }
+
+  async function handleDisconnectOpencode() {
+    setAuthError(null);
+    try {
+      await disconnectRef.current();
+      setAuthMode("key");
+      setAuthAccount(null);
+      setHasStoredKey(false);
+    } catch (nextError) {
+      setAuthError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Could not sign out of OpenCode",
+      );
+    }
+  }
+
   async function handleSaveProvider() {
     setBusy(true);
     setError(null);
@@ -161,6 +318,8 @@ export function AiLabBuilderDialog({
       const settings = currentSettings();
       const view = await onSaveProvider(settings);
       setHasStoredKey(view.hasApiKey);
+      setAuthMode(view.authMode);
+      setAuthAccount(view.account);
       setApiKey("");
       setSavedNotice(true);
     } catch (nextError) {
@@ -258,7 +417,7 @@ export function AiLabBuilderDialog({
               aria-label="LLM Provider"
               value={provider}
               onChange={(event) =>
-                setProvider(
+                handleProviderChange(
                   event.target.value as AiProviderSettings["provider"],
                 )
               }
@@ -267,6 +426,7 @@ export function AiLabBuilderDialog({
                 OpenAI-compatible endpoint
               </option>
               <option value="anthropic">Anthropic</option>
+              <option value="opencode-go">OpenCode Go (subscription)</option>
             </select>
           </label>
           <label className="field">
@@ -325,7 +485,13 @@ export function AiLabBuilderDialog({
               className="field-input"
               aria-label="LLM API Key"
               type="password"
-              placeholder={hasStoredKey ? "•••• (saved)" : "Required"}
+              placeholder={
+                hasStoredKey || authMode === "oauth"
+                  ? "•••• (saved)"
+                  : provider === "opencode-go"
+                    ? "Optional when signed in"
+                    : "Required"
+              }
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
             />
@@ -333,6 +499,80 @@ export function AiLabBuilderDialog({
               Stored in the API data dir; never sent back to the browser.
             </span>
           </label>
+          {provider === "opencode-go" ? (
+            <div className="field">
+              <span className="field-label">OpenCode Go</span>
+              {authMode === "oauth" ? (
+                <>
+                  <span className="field-hint" role="status">
+                    Signed in{authAccount ? ` as ${authAccount}` : ""} —
+                    requests are billed to your OpenCode Go plan.
+                  </span>
+                  <div className="dialog-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={busy}
+                      onClick={() => void handleDisconnectOpencode()}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              ) : deviceLogin ? (
+                <>
+                  <span className="field-hint" role="status">
+                    Enter code <strong>{deviceLogin.userCode}</strong> at{" "}
+                    <a
+                      href={deviceLogin.verificationUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      opencode.ai/console/device
+                    </a>{" "}
+                    — waiting for approval…
+                  </span>
+                  <div className="dialog-actions">
+                    <a
+                      className="btn btn-secondary"
+                      href={deviceLogin.verificationUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open sign-in page
+                    </a>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setDeviceLogin(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="field-hint">
+                    Sign in with your OpenCode Console account to bill Go models
+                    to your plan, or paste an API key below.
+                  </span>
+                  <div className="dialog-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={signingIn}
+                      onClick={() => void handleStartOpencodeLogin()}
+                    >
+                      {signingIn ? "Starting…" : "Sign in with OpenCode"}
+                    </button>
+                  </div>
+                </>
+              )}
+              {authError ? (
+                <span className="form-error">{authError}</span>
+              ) : null}
+            </div>
+          ) : null}
           <div className="dialog-actions">
             <button
               type="button"

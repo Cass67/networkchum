@@ -6,7 +6,21 @@ export type LlmMessage = {
 };
 
 function joinUrl(baseUrl: string, path: string): string {
+  if (/^https?:\/\//.test(path)) {
+    return path;
+  }
   return `${baseUrl.replace(/\/+$/, "")}/${path}`;
+}
+
+/**
+ * The Go gateway serves chat completions under `/openai/v1` but publishes its
+ * model catalog at `/v1/models`, so derive the catalog URL from the base.
+ */
+export function openCodeModelsUrl(baseUrl: string): string {
+  const root = baseUrl
+    .replace(/\/+$/, "")
+    .replace(/\/(openai|anthropic)\/v1$/, "");
+  return `${root}/v1/models`;
 }
 
 export function authHeadersFor(
@@ -19,6 +33,21 @@ export function authHeadersFor(
   return provider === "anthropic"
     ? { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
     : { authorization: `Bearer ${apiKey}` };
+}
+
+/**
+ * OpenCode asks clients to identify themselves and to send a stable session id
+ * per conversation so it can route requests and reuse prompt caches.
+ */
+export function opencodeHeaders(input?: {
+  sessionId?: string;
+  orgId?: string;
+}): Record<string, string> {
+  return {
+    "user-agent": "networkchum",
+    ...(input?.sessionId ? { "x-opencode-session": input.sessionId } : {}),
+    ...(input?.orgId ? { "x-org-id": input.orgId } : {}),
+  };
 }
 
 function truncate(text: string, maxLength = 300): string {
@@ -58,9 +87,12 @@ export async function callLlm(input: {
   messages: LlmMessage[];
   fetcher: typeof fetch;
   maxTokens?: number;
+  opencode?: { sessionId?: string; orgId?: string };
 }): Promise<string> {
   const { settings, messages, fetcher } = input;
   const maxTokens = input.maxTokens ?? 8192;
+  const extraHeaders =
+    settings.provider === "opencode-go" ? opencodeHeaders(input.opencode) : {};
   const system = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
@@ -74,6 +106,7 @@ export async function callLlm(input: {
       headers: {
         "content-type": "application/json",
         ...authHeadersFor(settings.provider, settings.apiKey),
+        ...extraHeaders,
       },
       body: JSON.stringify({
         model: settings.model,
@@ -94,6 +127,7 @@ export async function callLlm(input: {
       headers: {
         "content-type": "application/json",
         ...authHeadersFor(settings.provider, settings.apiKey),
+        ...extraHeaders,
       },
       body: JSON.stringify({
         model: settings.model,
@@ -166,14 +200,24 @@ export async function probeModels(input: {
   baseUrl: string;
   apiKey: string | null;
   fetcher: typeof fetch;
+  opencode?: { sessionId?: string; orgId?: string };
 }): Promise<Array<string>> {
   const paths =
-    input.provider === "anthropic" ? ["v1/models"] : ["models", "v1/models"];
+    input.provider === "anthropic"
+      ? ["v1/models"]
+      : input.provider === "opencode-go"
+        ? [openCodeModelsUrl(input.baseUrl)]
+        : ["models", "v1/models"];
+  const extraHeaders =
+    input.provider === "opencode-go" ? opencodeHeaders(input.opencode) : {};
   let emptyList = false;
 
   for (const path of paths) {
     const response = await input.fetcher(joinUrl(input.baseUrl, path), {
-      headers: authHeadersFor(input.provider, input.apiKey),
+      headers: {
+        ...authHeadersFor(input.provider, input.apiKey),
+        ...extraHeaders,
+      },
     });
     if (response.status === 404 || response.status === 405) {
       continue;
