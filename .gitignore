@@ -89,3 +89,7 @@ $RECYCLE.BIN/
 *.swo
 *~
 deploy.local.md
+
+# Internal release reports: regenerated locally, never tracked.
+docs/release-status.md
+docs/release-readiness.html
