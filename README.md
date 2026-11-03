@@ -21,9 +21,9 @@ Device catalog with image bindings and per-template resource limits.
 
 A short demo (generation sped up) — click the GIF for the MP4.
 
-There is also a standalone landing page: [`docs/index.html`](docs/index.html),
-published at <https://cass67.github.io/networkchum/> when GitHub Pages is enabled
-for the repository (Settings → Pages → Source: GitHub Actions).
+There is also a standalone landing page: [`docs/index.html`](docs/index.html).
+(GitHub Pages is not available for this private repo on the current plan, so the
+page is served locally or by any static host.)
 
 ## What It Does Today
 
