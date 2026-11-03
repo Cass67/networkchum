@@ -1,6 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-11-03
+
+### Added
+
+- openSUSE Leap and SLES support in `install.sh` (`zypper` branch:
+  `qemu-x86`, `qemu-tools`, podman/docker) plus `--package-manager=zypper`
+- `scripts/vm-install-test.sh`: boot a cloud image in QEMU/KVM, run the
+  installer end to end, and verify build, service, `/health`, and uninstall,
+  so the platform matrix is repeatable
+
+### Fixed
+
+- **RHEL family:** prefer `docker-ce`, fall back to `moby-engine`, then the
+  `podman-docker` shim, because `moby-engine`/`docker-cli` do not exist on
+  Rocky/Alma; install `qemu-system-x86_64` from `qemu-kvm-core`; skip
+  `systemctl enable docker` and the `docker` group when only the shim is
+  installed
+- **dnf:** probe available packages with `dnf list --available` instead of
+  `dnf info`, which only reports installed ones and always picked `qemu-kvm`
+- **Arch:** pass `--noconfirm` to `pacman` so the non-interactive install no
+  longer aborts on a prompt
+- **Arch/openSUSE:** a docker daemon that fails to start no longer aborts the
+  whole install under `set -e`
+- **Web tests:** fall back to an in-memory `localStorage` when Node's global
+  shadows jsdom's, so the token test passes on Node >= 25
 
 ### Changed
 
@@ -9,6 +33,7 @@
   critical advisories and the `@vitest/mocker` moderate ones), tsx → 4.23.15
   and the web Vite → 7.3.7 (esbuild 0.28.2), with `@testing-library/dom`
   declared explicitly because vitest 4 no longer hoists it.
+- CI runs the suite on Node 22 and 24
 
 ## 0.1.0 — 2026-10-24
 
