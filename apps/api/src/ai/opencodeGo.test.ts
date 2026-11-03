@@ -50,6 +50,24 @@ describe("OpenCode Go provider", () => {
     });
   });
 
+  it("accepts a models map from a gateway", async () => {
+    const fetcher = vi.fn(async () =>
+      json({
+        object: "list",
+        models: { router: { max_tokens: 1 }, "maya-x": { name: "Maya" } },
+      }),
+    );
+
+    const models = await probeModels({
+      provider: "openai-compatible",
+      baseUrl: "http://127.0.0.1:3200/v1",
+      apiKey: null,
+      fetcher: fetcher as unknown as typeof fetch,
+    });
+
+    expect(models).toEqual(["maya-x", "router"]);
+  });
+
   it("probes the Go catalog endpoint", async () => {
     const fetcher = vi.fn(async () =>
       json({ object: "list", data: [{ id: "glm-5.3" }, { id: "kimi-k3" }] }),

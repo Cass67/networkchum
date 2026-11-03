@@ -327,17 +327,31 @@ export async function callLlm(input: {
 
 type ModelsListResponse = {
   data?: Array<{ id?: string; display_name?: string }>;
-  models?: Array<{ id?: string; name?: string }>;
+  // Some gateways return a map of id -> metadata instead of an array.
+  models?:
+    | Array<{ id?: string; name?: string }>
+    | Record<string, { id?: string; name?: string } | unknown>;
 };
 
 function extractModelIds(payload: unknown): Array<string> {
   const models = payload as ModelsListResponse;
-  const fromOpenAiShape = (models.data ?? [])
+  const fromOpenAiShape = (Array.isArray(models.data) ? models.data : [])
     .map((entry) => entry.id)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
-  const fromAltShape = (models.models ?? [])
+
+  const alt = models.models;
+  const altEntries: Array<{ id?: string; name?: string }> = Array.isArray(alt)
+    ? alt
+    : alt && typeof alt === "object"
+      ? Object.entries(alt).map(([id, value]) => ({
+          id,
+          ...(value && typeof value === "object" ? value : {}),
+        }))
+      : [];
+  const fromAltShape = altEntries
     .map((entry) => entry.id ?? entry.name)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
+
   return [...new Set([...fromOpenAiShape, ...fromAltShape])].sort((a, b) =>
     a.toLowerCase().localeCompare(b.toLowerCase()),
   );
