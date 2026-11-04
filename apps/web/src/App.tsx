@@ -1,4 +1,12 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   AiLabCommitRequest,
   AiLabPreview,
@@ -1349,6 +1357,13 @@ export function App({
     useState(false);
   const [showAiLabBuilderDialog, setShowAiLabBuilderDialog] = useState(false);
   const [dialogTemplateId, setDialogTemplateId] = useState<string | null>(null);
+  const viewportCenterRef = useRef({ x: 320, y: 240 });
+  const handleViewportCenterChange = useCallback(
+    (center: { x: number; y: number }) => {
+      viewportCenterRef.current = center;
+    },
+    [],
+  );
   const [consoleNode, setConsoleNode] = useState<{
     nodeId: string;
     nodeName: string;
@@ -1812,7 +1827,7 @@ export function App({
     const nextLab = await api.addNode(selectedLabId, {
       templateId: "linux-ubuntu-container",
       name: `ubuntu-${(selectedLab?.document.nodes.length ?? 0) + 1}`,
-      position: { x: 120, y: 80 },
+      position: nextNodePosition(),
     });
     applyLabUpdate(nextLab);
     setLeftTab("inspector");
@@ -1826,10 +1841,20 @@ export function App({
     const nextLab = await api.addNode(selectedLabId, {
       templateId: "linux-alpine-container",
       name: `alpine-${(selectedLab?.document.nodes.length ?? 0) + 1}`,
-      position: { x: 180, y: 140 },
+      position: nextNodePosition(),
     });
     applyLabUpdate(nextLab);
     setLeftTab("inspector");
+  }
+
+  function nextNodePosition(): { x: number; y: number } {
+    const center = viewportCenterRef.current;
+    const count = selectedLab?.document.nodes.length ?? 0;
+    const step = (count % 5) * 26;
+    return {
+      x: Math.round(center.x - 110 + step),
+      y: Math.round(center.y - 55 + step),
+    };
   }
 
   async function handleAddNode(input: {
@@ -1845,7 +1870,10 @@ export function App({
       return;
     }
 
-    const nextLab = await api.addNode(selectedLabId, input);
+    const nextLab = await api.addNode(selectedLabId, {
+      ...input,
+      position: nextNodePosition(),
+    });
     applyLabUpdate(nextLab);
     setLeftTab("inspector");
     setShowAddNodeDialog(false);
@@ -2581,7 +2609,9 @@ export function App({
 
   return (
     <div
-      className="app-shell"
+      className={
+        effectiveLeftTab ? "app-shell app-shell--panel-open" : "app-shell"
+      }
       style={{ position: "relative", overflow: "hidden" }}
     >
       <DeviceGlyphGradientDefs />
@@ -3068,6 +3098,7 @@ export function App({
         <TopologyCanvas
           labName={selectedLab?.name ?? null}
           labId={selectedLabId}
+          onViewportCenterChange={handleViewportCenterChange}
           nodes={canvasNodes}
           networks={selectedLab?.document.networks ?? []}
           attachments={selectedLab?.document.attachments ?? []}

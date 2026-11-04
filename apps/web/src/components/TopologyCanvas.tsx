@@ -60,6 +60,7 @@ type TopologyCanvasProps = {
   ) => Promise<unknown>;
   onDetachInterface?: (labId: string, interfaceId: string) => Promise<unknown>;
   onRefreshLab?: () => void;
+  onViewportCenterChange?: (center: { x: number; y: number }) => void;
   selectedCableId?: string | null;
   onSelectCable?: (networkId: string | null) => void;
   onDeleteCable?: (networkId: string) => void;
@@ -644,6 +645,7 @@ export function TopologyCanvas({
   onAttachInterfaces,
   onDetachInterface,
   onRefreshLab,
+  onViewportCenterChange,
   onSelectCable,
   onDeleteCable,
   onDeleteNode,
@@ -707,6 +709,7 @@ export function TopologyCanvas({
   );
   const [viewportOffset, setViewportOffset] = useState({ x: 0, y: 0 });
   const [viewportScale, setViewportScale] = useState(1);
+  const centeredLabRef = useRef<string | null>(null);
   const [nodeGlyphSize, setNodeGlyphSize] = useState(NODE_GLYPH_SIZE);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [panState, setPanState] = useState<PanState | null>(null);
@@ -723,6 +726,49 @@ export function TopologyCanvas({
     y: number;
     items: Array<{ label: string; onSelect: () => void }>;
   } | null>(null);
+
+  // Center the lab in the visible canvas the first time it loads, so it is
+  // not hidden behind the workspace panel or the floating header.
+  useEffect(() => {
+    if (!labId || centeredLabRef.current === labId) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const width = svg.clientWidth;
+    const height = svg.clientHeight;
+    if (!width || !height || nodes.length === 0) return;
+
+    const xs = nodes.map((node) => node.position?.x ?? 32);
+    const ys = nodes.map((node) => node.position?.y ?? 32);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs) + NODE_WIDTH;
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys) + NODE_HEIGHT;
+    setViewportOffset({
+      x: Math.round(width / 2 - (minX + maxX) / 2),
+      y: Math.round(height / 2 - (minY + maxY) / 2),
+    });
+    centeredLabRef.current = labId;
+  }, [labId, nodes]);
+
+  // Report the visible center so new nodes land where the user is looking.
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || !onViewportCenterChange) return;
+    const report = () => {
+      const width = svg.clientWidth;
+      const height = svg.clientHeight;
+      if (!width || !height) return;
+      onViewportCenterChange({
+        x: (width / 2 - viewportOffset.x) / viewportScale,
+        y: (height / 2 - viewportOffset.y) / viewportScale,
+      });
+    };
+    report();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(report);
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, [onViewportCenterChange, viewportOffset, viewportScale]);
 
   const resolvedNodes = nodes.map((n) => {
     const pending = pendingPositions[n.id];

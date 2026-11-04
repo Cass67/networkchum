@@ -166,6 +166,8 @@ body {
   min-height: 100vh;
   overflow: hidden;
   background: var(--shell-bg);
+  --workspace-panel-left: 1rem;
+  --workspace-panel-width: min(32rem, calc(100vw - 30rem));
 }
 
 .floating-brandbar,
@@ -289,8 +291,8 @@ body {
 
 .floating-workspace-panel {
   top: 7.55rem;
-  left: 1rem;
-  width: min(32rem, calc(100vw - 30rem));
+  left: var(--workspace-panel-left);
+  width: var(--workspace-panel-width);
   min-width: 27rem;
   max-height: calc(100vh - 9rem);
   overflow-y: auto;
@@ -934,6 +936,14 @@ body {
   min-width: 0;
   min-height: 0;
   padding: 0;
+  transition: left 160ms ease;
+}
+
+/* Keep the lab canvas clear of the open workspace panel. */
+.app-shell--panel-open .canvas-area {
+  left: calc(
+    var(--workspace-panel-left) + var(--workspace-panel-width) + 1rem
+  );
 }
 
 .canvas-panel {
@@ -1553,11 +1563,18 @@ body {
     overflow: hidden;
   }
 
+  .app-shell {
+    --workspace-panel-left: 0.75rem;
+    --workspace-panel-width: min(21rem, calc(100vw - 1.5rem));
+  }
+
+  .app-shell--panel-open .canvas-area {
+    left: 0;
+  }
+
   .floating-workspace-panel {
     top: 7.5rem;
-    left: 0.75rem;
     min-width: 0;
-    width: min(21rem, calc(100vw - 1.5rem));
     max-height: 18rem;
   }
 
