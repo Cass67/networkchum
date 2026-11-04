@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef } from "react";
 
+import { getStoredApiToken } from "../api/client.js";
 import { resolveConsoleWebSocketUrl } from "../runtimeUrls.js";
 
 type NodeConsoleProps = {
@@ -35,7 +36,10 @@ export function NodeConsole({
     }
 
     const wsUrl = resolveConsoleWebSocketUrl(window.location, labId, nodeId);
-    const ws = new WebSocket(wsUrl);
+    const token = getStoredApiToken();
+    // Browsers cannot set headers on a WebSocket; the API accepts the token as
+    // a subprotocol so the token-gated console works in LAN mode.
+    const ws = new WebSocket(wsUrl, token ? ["networkchum", token] : undefined);
     ws.binaryType = "arraybuffer";
 
     ws.onopen = () => {
@@ -50,8 +54,9 @@ export function NodeConsole({
       }
     };
 
-    ws.onclose = () => {
-      term.write("\r\n\x1b[31m[Connection closed]\x1b[0m\r\n");
+    ws.onclose = (event) => {
+      const detail = event.reason ? `: ${event.reason}` : "";
+      term.write(`\r\n\x1b[31m[Connection closed${detail}]\x1b[0m\r\n`);
     };
 
     ws.onerror = () => {

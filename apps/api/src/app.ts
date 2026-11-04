@@ -37,14 +37,31 @@ const OPEN_ROUTES = new Set(["/health"]);
 function requestProvidesToken(request: FastifyRequest, token: string) {
   const header = request.headers[API_TOKEN_HEADER];
   const authorization = request.headers.authorization;
-  const provided = Array.isArray(header)
-    ? header[0]
-    : (header ??
-      (authorization ? authorization.replace(/^Bearer\s+/i, "") : ""));
-  if (typeof provided !== "string" || provided.length !== token.length) {
-    return false;
+  const candidates: string[] = [];
+
+  if (Array.isArray(header)) {
+    candidates.push(...header);
+  } else if (header) {
+    candidates.push(header);
   }
-  return timingSafeEqual(Buffer.from(provided), Buffer.from(token));
+  if (authorization) {
+    candidates.push(authorization.replace(/^Bearer\s+/i, ""));
+  }
+
+  // Browsers cannot set custom headers on a WebSocket handshake, so the web
+  // console passes the token as a subprotocol (the server does not echo it).
+  const protocols = request.headers["sec-websocket-protocol"];
+  if (protocols) {
+    for (const entry of String(protocols).split(",")) {
+      candidates.push(entry.trim());
+    }
+  }
+
+  return candidates.some(
+    (provided) =>
+      provided.length === token.length &&
+      timingSafeEqual(Buffer.from(provided), Buffer.from(token)),
+  );
 }
 
 export function buildApp(dependencies: AppDependencies = {}) {

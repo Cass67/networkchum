@@ -1,6 +1,7 @@
 import RFB from "@novnc/novnc";
 import { useEffect, useRef, useState } from "react";
 
+import { getStoredApiToken } from "../api/client.js";
 import { resolveVncWebSocketUrl } from "../runtimeUrls.js";
 
 type VncConsoleProps = {
@@ -29,9 +30,11 @@ export function VncConsole({
       return;
     }
 
+    const token = getStoredApiToken();
     const rfb = new RFB(
       containerRef.current,
       resolveVncWebSocketUrl(window.location, labId, nodeId),
+      { wsProtocols: token ? ["networkchum", token] : [] },
     );
     rfb.scaleViewport = true;
     rfb.resizeSession = true;

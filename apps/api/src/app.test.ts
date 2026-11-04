@@ -2091,6 +2091,22 @@ describe("api token auth", () => {
         headers: { authorization: "Bearer test-token-1234" },
       });
       expect(bearerToken.statusCode).toBe(200);
+
+      // Browsers cannot set headers on a WebSocket handshake; the console
+      // sends the token as a subprotocol instead.
+      const protocolToken = await guarded.inject({
+        method: "GET",
+        url: "/labs",
+        headers: { "sec-websocket-protocol": "networkchum, test-token-1234" },
+      });
+      expect(protocolToken.statusCode).toBe(200);
+
+      const wrongProtocolToken = await guarded.inject({
+        method: "GET",
+        url: "/labs",
+        headers: { "sec-websocket-protocol": "networkchum, nope" },
+      });
+      expect(wrongProtocolToken.statusCode).toBe(401);
     } finally {
       delete process.env.NETWORKCHUM_API_TOKEN;
       await guarded.close();
