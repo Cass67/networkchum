@@ -161,6 +161,23 @@ describe("AiLabBuilderDialog", () => {
     await screen.findByText("ABCD-EFGH");
   });
 
+  it("resets a custom base URL when switching to a subscription provider", async () => {
+    renderDialog({});
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("LLM Base URL") as HTMLInputElement).value,
+      ).toBe("http://127.0.0.1:9999/v1"),
+    );
+
+    fireEvent.change(screen.getByLabelText("LLM Provider"), {
+      target: { value: "opencode-go" },
+    });
+
+    expect(
+      (screen.getByLabelText("LLM Base URL") as HTMLInputElement).value,
+    ).toBe("https://opencode.ai/inference/go/openai/v1");
+  });
+
   it("loads provider settings and generates a preview", async () => {
     const onPreview = vi.fn().mockResolvedValue(matchedPreview);
     renderDialog({ onPreview });

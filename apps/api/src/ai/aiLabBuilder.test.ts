@@ -714,6 +714,23 @@ describe("ai routes", () => {
     expect(headers.get("authorization")).toBe("Bearer sk-test-key-123");
   });
 
+  it("treats a null probe key as the stored credential", async () => {
+    calls.length = 0;
+    llmResponses = [{ body: { data: [{ id: "maya-dsv41" }] } }];
+    const response = await app.inject({
+      method: "POST",
+      url: "/ai/provider/probe",
+      payload: {
+        provider: "openai-compatible",
+        baseUrl: "http://127.0.0.1:9999/v1",
+        apiKey: null,
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const headers = new Headers(calls[0]?.init?.headers);
+    expect(headers.get("authorization")).toBe("Bearer sk-test-key-123");
+  });
+
   it("falls back to /v1/models when /models 404s", async () => {
     calls.length = 0;
     llmResponses = [

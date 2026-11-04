@@ -164,9 +164,9 @@ export const aiRoutes: FastifyPluginAsync<AppDependencies> = async (
       z.object({
         provider: AiProviderKindSchema,
         baseUrl: z.string().trim().min(1),
-        // Omitted = use the stored key, so the dialog can detect models
-        // without re-entering the secret.
-        apiKey: z.string().min(1).optional(),
+        // Omitted or null = use the stored credential, so the dialog can
+        // detect models without re-entering the secret.
+        apiKey: z.string().min(1).nullable().optional(),
       }),
       request.body,
     );

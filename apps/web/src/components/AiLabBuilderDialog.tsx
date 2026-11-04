@@ -266,9 +266,16 @@ export function AiLabBuilderDialog({
     setDetectError(null);
     setAuthError(null);
     setDeviceLogin(null);
+    // Subscription providers have a fixed endpoint; do not keep probing a
+    // previous custom URL (for example a local LLM) after switching to them.
+    const nextDef = aiProviderDef(next);
+    const switchingToSubscription =
+      nextDef.auth === "oauth-device" &&
+      Boolean(nextDefault) &&
+      !current.startsWith(new URL(nextDefault).origin);
     const switchingProvider =
       Boolean(nextDefault) && (!current || current === previousDefault);
-    if (switchingProvider) {
+    if (switchingProvider || switchingToSubscription) {
       setBaseUrl(nextDefault);
     }
   }
