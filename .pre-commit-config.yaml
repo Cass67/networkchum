@@ -263,8 +263,11 @@ repos:
       - id: tsc-noemit
         name: tsc --noEmit
         entry: >-
-          bash -lc 'if [ -x ./node_modules/.bin/tsc ]; then
-          ./node_modules/.bin/tsc --noEmit; else tsc --noEmit; fi' --
+          bash -lc 'TSC=$([ -x ./node_modules/.bin/tsc ] && echo
+          ./node_modules/.bin/tsc || echo tsc); for cfg in
+          packages/shared/tsconfig.json apps/api/tsconfig.json
+          apps/web/tsconfig.json; do if [ -f "$cfg" ]; then "$TSC" -p "$cfg"
+          --noEmit || exit 1; fi; done' --
         language: system
         files: \.(ts|tsx|mts|cts)$
         pass_filenames: false
