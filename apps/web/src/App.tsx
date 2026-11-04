@@ -1612,6 +1612,9 @@ export function App({
     }
 
     let cancelled = false;
+    // Clear the previous lab so the canvas does not fit the old nodes under
+    // the new lab id while the fetch is in flight.
+    setSelectedLab(null);
 
     void api
       .getLab(selectedLabId)
@@ -3098,6 +3101,7 @@ export function App({
         <TopologyCanvas
           labName={selectedLab?.name ?? null}
           labId={selectedLabId}
+          documentLabId={selectedLab?.id ?? null}
           onViewportCenterChange={handleViewportCenterChange}
           nodes={canvasNodes}
           networks={selectedLab?.document.networks ?? []}

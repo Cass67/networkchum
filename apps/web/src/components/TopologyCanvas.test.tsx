@@ -1325,6 +1325,7 @@ describe("TopologyCanvas", () => {
         <TopologyCanvas
           labName="Lab"
           labId="lab-1"
+          documentLabId="lab-1"
           nodes={nodes}
           drawings={[
             {

@@ -401,6 +401,14 @@ describe("App", () => {
     const svg = await screen.findByTestId("topology-svg");
     mockSvgPoint(svg);
 
+    // The initial fit centres the lab; wait for it before dragging so the
+    // viewport offset is stable for the whole gesture.
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("viewport-layer").getAttribute("transform"),
+      ).not.toContain("translate(0 0)");
+    });
+
     fireEvent.mouseDown(await screen.findByTestId("drawing-shape-1"), {
       clientX: 30,
       clientY: 40,

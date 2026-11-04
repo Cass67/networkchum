@@ -61,6 +61,9 @@ type TopologyCanvasProps = {
   onDetachInterface?: (labId: string, interfaceId: string) => Promise<unknown>;
   onRefreshLab?: () => void;
   onViewportCenterChange?: (center: { x: number; y: number }) => void;
+  // Id of the loaded lab document; guards the initial fit while the fetch is
+  // in flight so the previous lab's nodes are not fitted under the new id.
+  documentLabId?: string | null;
   selectedCableId?: string | null;
   onSelectCable?: (networkId: string | null) => void;
   onDeleteCable?: (networkId: string) => void;
@@ -502,18 +505,17 @@ function getInitialViewport(
     bounds.maxX > svgWidth ||
     bounds.maxY > svgHeight;
 
-  if (!shouldFit) {
-    return { offset: { x: 0, y: 0 }, scale: 1 };
-  }
-
-  const scale = Math.max(
-    MIN_VIEWPORT_SCALE,
-    Math.min(
-      1,
-      (svgWidth - INITIAL_FIT_PADDING_X * 2) / width,
-      (svgHeight - INITIAL_FIT_PADDING_Y * 2) / height,
-    ),
-  );
+  // Always centre the content; only shrink it when it does not fit.
+  const scale = shouldFit
+    ? Math.max(
+        MIN_VIEWPORT_SCALE,
+        Math.min(
+          1,
+          (svgWidth - INITIAL_FIT_PADDING_X * 2) / width,
+          (svgHeight - INITIAL_FIT_PADDING_Y * 2) / height,
+        ),
+      )
+    : 1;
 
   return {
     scale,
@@ -646,6 +648,7 @@ export function TopologyCanvas({
   onDetachInterface,
   onRefreshLab,
   onViewportCenterChange,
+  documentLabId,
   onSelectCable,
   onDeleteCable,
   onDeleteNode,
@@ -762,6 +765,9 @@ export function TopologyCanvas({
     null;
 
   useEffect(() => {
+    if (!labId || documentLabId !== labId) {
+      return;
+    }
     if (fittedViewportLabRef.current === labId) {
       return;
     }
@@ -779,7 +785,7 @@ export function TopologyCanvas({
     fittedViewportLabRef.current = labId;
     setViewportScale(initialViewport.scale);
     setViewportOffset(initialViewport.offset);
-  }, [drawings, labId, nodes, svgHeight, svgWidth]);
+  }, [documentLabId, drawings, labId, nodes, svgHeight, svgWidth]);
 
   useEffect(() => {
     if (!textEdit) return;
