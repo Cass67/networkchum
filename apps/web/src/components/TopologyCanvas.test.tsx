@@ -146,8 +146,8 @@ describe("TopologyCanvas", () => {
     );
 
     const link = screen.getByTestId("link-net-1");
-    expect(link).toHaveAttribute("y1", "140");
-    expect(link).toHaveAttribute("y2", "238");
+    expect(link).toHaveAttribute("y1", "158");
+    expect(link).toHaveAttribute("y2", "220");
   });
 
   it("anchors horizontally dominant diagonal cables to the sides of nodes", () => {
@@ -184,9 +184,9 @@ describe("TopologyCanvas", () => {
     );
 
     const link = screen.getByTestId("link-net-1");
-    expect(link).toHaveAttribute("x1", "136");
+    expect(link).toHaveAttribute("x1", "154");
     expect(link).toHaveAttribute("y1", "74");
-    expect(link).toHaveAttribute("x2", "264");
+    expect(link).toHaveAttribute("x2", "246");
     expect(link).toHaveAttribute("y2", "104");
   });
 
@@ -394,11 +394,11 @@ describe("TopologyCanvas", () => {
     expect(screen.getByTestId("link-net-1-n1")).toBeInTheDocument();
     expect(screen.getByTestId("link-net-1-n2")).toBeInTheDocument();
     expect(screen.getByTestId("link-net-1-n3")).toBeInTheDocument();
-    expect(screen.getByTestId("link-net-1-n1")).toHaveAttribute("x1", "136");
+    expect(screen.getByTestId("link-net-1-n1")).toHaveAttribute("x1", "154");
     expect(screen.getByTestId("link-net-1-n1")).toHaveAttribute("y1", "74");
-    expect(screen.getByTestId("link-net-1-n2")).toHaveAttribute("x1", "264");
+    expect(screen.getByTestId("link-net-1-n2")).toHaveAttribute("x1", "246");
     expect(screen.getByTestId("link-net-1-n2")).toHaveAttribute("y1", "74");
-    expect(screen.getByTestId("link-net-1-n3")).toHaveAttribute("y1", "188");
+    expect(screen.getByTestId("link-net-1-n3")).toHaveAttribute("y1", "170");
   });
 
   it("highlights selected node", () => {
