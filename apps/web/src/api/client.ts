@@ -754,6 +754,20 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
       );
     },
 
+    async powerOffLab(
+      labId: string,
+      staggerMs?: number,
+    ): Promise<{ stopping: string[]; staggerMs: number }> {
+      const response = await fetcher(`${baseUrl}/labs/${labId}/power-off`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(staggerMs === undefined ? {} : { staggerMs }),
+      });
+      return parseResponse<{ stopping: string[]; staggerMs: number }>(
+        response as Response,
+      );
+    },
+
     async powerOffNode(labId: string, nodeId: string): Promise<RuntimeState> {
       const response = await fetcher(
         `${baseUrl}/labs/${labId}/nodes/${nodeId}/power-off`,

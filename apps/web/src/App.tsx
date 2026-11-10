@@ -398,6 +398,9 @@ type ApiClient = {
   powerOnLab?: (
     labId: string,
   ) => Promise<{ queued: string[]; staggerMs: number }>;
+  powerOffLab?: (
+    labId: string,
+  ) => Promise<{ stopping: string[]; staggerMs: number }>;
   listRuntimeStates?: (labId: string) => Promise<
     Array<{
       nodeId: string;
@@ -1095,6 +1098,9 @@ const defaultApi: ApiClient = {
   async powerOnLab() {
     return { queued: [] as string[], staggerMs: 0 };
   },
+  async powerOffLab() {
+    return { stopping: [] as string[], staggerMs: 0 };
+  },
   async listRuntimeStates() {
     return [];
   },
@@ -1340,8 +1346,10 @@ export function App({
   const [nodeMessages, setNodeMessages] = useState<
     Record<string, string | null>
   >({});
-  const [poweringOnLab, setPoweringOnLab] = useState(false);
-  const [pendingPowerOn, setPendingPowerOn] = useState<string[]>([]);
+  const [labPowerOp, setLabPowerOp] = useState<{
+    nodeIds: string[];
+    target: "running" | "stopped";
+  } | null>(null);
 
   const applyRuntimeStates = useCallback((states: RuntimeState[]) => {
     setNodeStatuses(
@@ -1695,7 +1703,7 @@ export function App({
   }, [api.listRuntimeStates, selectedLabId, applyRuntimeStates]);
 
   useEffect(() => {
-    if (!selectedLabId || pendingPowerOn.length === 0) {
+    if (!selectedLabId || !labPowerOp) {
       return;
     }
 
@@ -1704,6 +1712,7 @@ export function App({
       return;
     }
 
+    const { nodeIds, target } = labPowerOp;
     let cancelled = false;
     const tick = async () => {
       const states = await listRuntimeStates(selectedLabId);
@@ -1711,15 +1720,12 @@ export function App({
         return;
       }
       applyRuntimeStates(states);
-      const finished = pendingPowerOn.every((nodeId) => {
+      const finished = nodeIds.every((nodeId) => {
         const state = states.find((entry) => entry.nodeId === nodeId);
-        return (
-          !state || state.status === "running" || state.status === "failed"
-        );
+        return !state || state.status === target || state.status === "failed";
       });
       if (finished) {
-        setPendingPowerOn([]);
-        setPoweringOnLab(false);
+        setLabPowerOp(null);
       }
     };
 
@@ -1727,8 +1733,7 @@ export function App({
     const pollTimer = window.setInterval(() => void tick(), 3000);
     const giveUpTimer = window.setTimeout(
       () => {
-        setPendingPowerOn([]);
-        setPoweringOnLab(false);
+        setLabPowerOp(null);
       },
       15 * 60 * 1000,
     );
@@ -1738,12 +1743,7 @@ export function App({
       window.clearInterval(pollTimer);
       window.clearTimeout(giveUpTimer);
     };
-  }, [
-    api.listRuntimeStates,
-    selectedLabId,
-    pendingPowerOn,
-    applyRuntimeStates,
-  ]);
+  }, [api.listRuntimeStates, selectedLabId, labPowerOp, applyRuntimeStates]);
 
   const listRunningConfigBackups = api.listRunningConfigBackups;
 
@@ -2013,8 +2013,18 @@ export function App({
 
     const result = await api.powerOnLab(selectedLabId);
     if (result.queued.length > 0) {
-      setPendingPowerOn(result.queued);
-      setPoweringOnLab(true);
+      setLabPowerOp({ nodeIds: result.queued, target: "running" });
+    }
+  }
+
+  async function handlePowerOffLab() {
+    if (!selectedLabId || !api.powerOffLab) {
+      return;
+    }
+
+    const result = await api.powerOffLab(selectedLabId);
+    if (result.stopping.length > 0) {
+      setLabPowerOp({ nodeIds: result.stopping, target: "stopped" });
     }
   }
 
@@ -3008,7 +3018,9 @@ export function App({
                 }
                 onPowerOnNode={handlePowerOnNode}
                 onPowerOnLab={() => void handlePowerOnLab()}
-                poweringOnLab={poweringOnLab}
+                onPowerOffLab={() => void handlePowerOffLab()}
+                poweringOnLab={labPowerOp?.target === "running"}
+                poweringOffLab={labPowerOp?.target === "stopped"}
                 nodeConnectCommands={nodeConnectCommands}
                 onConnectNode={handleConnectNode}
                 onCopyNativeCommand={(nodeId) => {

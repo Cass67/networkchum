@@ -15,7 +15,9 @@ type LabDetailsProps = {
   nodeMessages?: Record<string, string | null>;
   onPowerOnNode?: (nodeId: string) => void;
   onPowerOnLab?: () => void;
+  onPowerOffLab?: () => void;
   poweringOnLab?: boolean;
+  poweringOffLab?: boolean;
   nodeConnectCommands?: Record<string, string[]>;
   onConnectNode?: (nodeId: string) => void;
   onCopyNativeCommand?: (nodeId: string) => void;
@@ -53,7 +55,9 @@ export function LabDetails({
   nodeMessages = {},
   onPowerOnNode,
   onPowerOnLab,
+  onPowerOffLab,
   poweringOnLab = false,
+  poweringOffLab = false,
   nodeConnectCommands = {},
   onConnectNode,
   onCopyNativeCommand,
@@ -121,17 +125,30 @@ export function LabDetails({
         <p className="panel-eyebrow">Runtime</p>
         <h2>Lab Details</h2>
         <p className="panel-description">{labName ?? "No lab selected"}</p>
-        {onPowerOnLab ? (
+        {onPowerOnLab || onPowerOffLab ? (
           <div className="panel-actions">
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={onPowerOnLab}
-              disabled={poweringOnLab || nodes.length === 0}
-              title="Powers on every device in stages, one start every 8 seconds"
-            >
-              {poweringOnLab ? "Powering on…" : "Power On Lab"}
-            </button>
+            {onPowerOnLab ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={onPowerOnLab}
+                disabled={poweringOnLab || poweringOffLab || nodes.length === 0}
+                title="Powers on every device in stages, one start every 8 seconds"
+              >
+                {poweringOnLab ? "Powering on…" : "Power On Lab"}
+              </button>
+            ) : null}
+            {onPowerOffLab ? (
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={onPowerOffLab}
+                disabled={poweringOnLab || poweringOffLab || nodes.length === 0}
+                title="Powers off every running device, hosts first and QEMU guests last"
+              >
+                {poweringOffLab ? "Powering off…" : "Power Off Lab"}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
