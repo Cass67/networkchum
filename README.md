@@ -572,6 +572,12 @@ npm run build --workspace @networkchum/web
 - runtime behavior is much more Linux-friendly than macOS-friendly
 - VM usability depends on supplying compatible `qcow2` images and having the required host binaries installed
 
+## Support
+
+If NetworkChum saves you a weekend, you can buy me a coffee:
+
+<a href="https://www.buymeacoffee.com/cass67"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me a Coffee" width="217" height="60"></a>
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
