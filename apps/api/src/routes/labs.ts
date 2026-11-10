@@ -72,6 +72,12 @@ const renameNodeSchema = z.object({
   name: z.string().trim().min(1),
 });
 
+const powerOnStaggerSchema = z.object({
+  staggerMs: z.number().int().min(0).max(60_000).optional(),
+});
+
+const DEFAULT_POWER_ON_STAGGER_MS = 8_000;
+
 const addNodeSchema = z.object({
   templateId: z.string().min(1),
   name: z.string().min(1),
@@ -131,6 +137,7 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
   options,
 ) => {
   const registry = new TemplateRegistry();
+  const powerOnLabsInFlight = new Set<string>();
 
   const consoleBusyMessage = "Serial console already in use by another client.";
 
@@ -765,6 +772,63 @@ export const labRoutes: FastifyPluginAsync<AppDependencies> = async (
   app.get("/labs/:labId/runtime", async (request, reply) => {
     const params = z.object({ labId: z.string().min(1) }).parse(request.params);
     return reply.send({ states: await enrichRuntimeStates(params.labId) });
+  });
+
+  app.post("/labs/:labId/power-on", async (request, reply) => {
+    const params = z.object({ labId: z.string().min(1) }).parse(request.params);
+    const body = powerOnStaggerSchema.parse(request.body ?? {});
+
+    const lab = await getManagedLab(params.labId);
+    if (!lab) {
+      return reply.code(404).send({ message: "Lab not found" });
+    }
+
+    if (powerOnLabsInFlight.has(lab.id)) {
+      return reply.code(409).send({ message: "Lab is already powering on." });
+    }
+
+    const states = await listRuntimeStates(lab.id);
+    const running = new Set(
+      states
+        .filter((state) => state.status === "running")
+        .map((state) => state.nodeId),
+    );
+    const runtimeRank = (runtime: string | undefined) =>
+      runtime === "qemu" ? 0 : runtime === "container" ? 1 : 2;
+    const queued = lab.document.nodes
+      .filter((node) => node.runtime !== "lab-bridge" && !running.has(node.id))
+      .sort((a, b) => runtimeRank(a.runtime) - runtimeRank(b.runtime));
+
+    const staggerMs = body.staggerMs ?? DEFAULT_POWER_ON_STAGGER_MS;
+
+    if (queued.length > 0) {
+      powerOnLabsInFlight.add(lab.id);
+      void (async () => {
+        try {
+          for (const [index, node] of queued.entries()) {
+            void powerOnNode(lab.id, node.id, options.runtime).catch(
+              (error) => {
+                console.error(
+                  "[powerNode] staggered power-on failed for %s:",
+                  node.name,
+                  error,
+                );
+              },
+            );
+            if (index < queued.length - 1 && staggerMs > 0) {
+              await new Promise((resolve) => setTimeout(resolve, staggerMs));
+            }
+          }
+        } finally {
+          powerOnLabsInFlight.delete(lab.id);
+        }
+      })();
+    }
+
+    return reply.code(202).send({
+      queued: queued.map((node) => node.id),
+      staggerMs,
+    });
   });
 
   app.post("/labs/:labId/nodes/:nodeId/power-on", async (request, reply) => {

@@ -51,32 +51,45 @@ async function saveRuntimeStates(states: RuntimeState[]): Promise<void> {
   await writeFile(runtimeFile(), JSON.stringify(states, null, 2));
 }
 
-export async function upsertRuntimeState(
-  nextState: RuntimeState,
-): Promise<void> {
-  const states = await listRuntimeStates();
-  const index = states.findIndex(
-    (state) =>
-      state.labId === nextState.labId && state.nodeId === nextState.nodeId,
-  );
+// Concurrent device starts (staggered power-on, parallel boots) each do a
+// read-modify-write of the whole file; serialize them so one write cannot drop
+// another node's state.
+let storeWriteChain: Promise<unknown> = Promise.resolve();
 
-  if (index >= 0) {
-    states[index] = nextState;
-  } else {
-    states.push(nextState);
-  }
-
-  await saveRuntimeStates(states);
+function withStoreLock<T>(operation: () => Promise<T>): Promise<T> {
+  const run = storeWriteChain.then(operation, operation);
+  storeWriteChain = run.catch(() => undefined);
+  return run;
 }
 
-export async function deleteRuntimeState(
+export function upsertRuntimeState(nextState: RuntimeState): Promise<void> {
+  return withStoreLock(async () => {
+    const states = await listRuntimeStates();
+    const index = states.findIndex(
+      (state) =>
+        state.labId === nextState.labId && state.nodeId === nextState.nodeId,
+    );
+
+    if (index >= 0) {
+      states[index] = nextState;
+    } else {
+      states.push(nextState);
+    }
+
+    await saveRuntimeStates(states);
+  });
+}
+
+export function deleteRuntimeState(
   labId: string,
   nodeId: string,
 ): Promise<void> {
-  const states = await listRuntimeStates();
-  await saveRuntimeStates(
-    states.filter(
-      (state) => !(state.labId === labId && state.nodeId === nodeId),
-    ),
-  );
+  return withStoreLock(async () => {
+    const states = await listRuntimeStates();
+    await saveRuntimeStates(
+      states.filter(
+        (state) => !(state.labId === labId && state.nodeId === nodeId),
+      ),
+    );
+  });
 }

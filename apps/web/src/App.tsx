@@ -35,6 +35,7 @@ import type {
   RepoListingSummary,
   RepoPullSummary,
   RunningConfigBackupRecord,
+  RuntimeState,
 } from "./api/client.js";
 import { AddNodeDialog } from "./components/AddNodeDialog.js";
 import { AiLabBuilderDialog } from "./components/AiLabBuilderDialog.js";
@@ -394,6 +395,9 @@ type ApiClient = {
     message?: string | null;
     vncPort?: number | null;
   }>;
+  powerOnLab?: (
+    labId: string,
+  ) => Promise<{ queued: string[]; staggerMs: number }>;
   listRuntimeStates?: (labId: string) => Promise<
     Array<{
       nodeId: string;
@@ -1088,6 +1092,9 @@ const defaultApi: ApiClient = {
       message: null,
     };
   },
+  async powerOnLab() {
+    return { queued: [] as string[], staggerMs: 0 };
+  },
   async listRuntimeStates() {
     return [];
   },
@@ -1333,6 +1340,33 @@ export function App({
   const [nodeMessages, setNodeMessages] = useState<
     Record<string, string | null>
   >({});
+  const [poweringOnLab, setPoweringOnLab] = useState(false);
+  const [pendingPowerOn, setPendingPowerOn] = useState<string[]>([]);
+
+  const applyRuntimeStates = useCallback((states: RuntimeState[]) => {
+    setNodeStatuses(
+      Object.fromEntries(states.map((state) => [state.nodeId, state.status])),
+    );
+    setNodeMessages(
+      Object.fromEntries(
+        states.map((state) => [state.nodeId, state.message ?? null]),
+      ),
+    );
+    setNodeConnectCommands(
+      Object.fromEntries(
+        states
+          .filter((state) => state.connectCommand?.length)
+          .map((state) => [state.nodeId, state.connectCommand ?? []]),
+      ),
+    );
+    setNodeVncPorts(
+      Object.fromEntries(
+        states
+          .filter((state) => state.vncPort)
+          .map((state) => [state.nodeId, state.vncPort as number]),
+      ),
+    );
+  }, []);
   const [selectedNodeBackups, setSelectedNodeBackups] = useState<
     RunningConfigBackupRecord[]
   >([]);
@@ -1645,28 +1679,7 @@ export function App({
       }
 
       const states = await api.listRuntimeStates(selectedLabId);
-      setNodeStatuses(
-        Object.fromEntries(states.map((state) => [state.nodeId, state.status])),
-      );
-      setNodeMessages(
-        Object.fromEntries(
-          states.map((state) => [state.nodeId, state.message ?? null]),
-        ),
-      );
-      setNodeConnectCommands(
-        Object.fromEntries(
-          states
-            .filter((state) => state.connectCommand?.length)
-            .map((state) => [state.nodeId, state.connectCommand ?? []]),
-        ),
-      );
-      setNodeVncPorts(
-        Object.fromEntries(
-          states
-            .filter((state) => state.vncPort)
-            .map((state) => [state.nodeId, state.vncPort as number]),
-        ),
-      );
+      applyRuntimeStates(states);
     };
 
     void runRefresh();
@@ -1679,7 +1692,58 @@ export function App({
     return () => {
       window.removeEventListener("focus", handleFocus);
     };
-  }, [api.listRuntimeStates, selectedLabId]);
+  }, [api.listRuntimeStates, selectedLabId, applyRuntimeStates]);
+
+  useEffect(() => {
+    if (!selectedLabId || pendingPowerOn.length === 0) {
+      return;
+    }
+
+    const listRuntimeStates = api.listRuntimeStates;
+    if (!listRuntimeStates) {
+      return;
+    }
+
+    let cancelled = false;
+    const tick = async () => {
+      const states = await listRuntimeStates(selectedLabId);
+      if (cancelled) {
+        return;
+      }
+      applyRuntimeStates(states);
+      const finished = pendingPowerOn.every((nodeId) => {
+        const state = states.find((entry) => entry.nodeId === nodeId);
+        return (
+          !state || state.status === "running" || state.status === "failed"
+        );
+      });
+      if (finished) {
+        setPendingPowerOn([]);
+        setPoweringOnLab(false);
+      }
+    };
+
+    void tick();
+    const pollTimer = window.setInterval(() => void tick(), 3000);
+    const giveUpTimer = window.setTimeout(
+      () => {
+        setPendingPowerOn([]);
+        setPoweringOnLab(false);
+      },
+      15 * 60 * 1000,
+    );
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(pollTimer);
+      window.clearTimeout(giveUpTimer);
+    };
+  }, [
+    api.listRuntimeStates,
+    selectedLabId,
+    pendingPowerOn,
+    applyRuntimeStates,
+  ]);
 
   const listRunningConfigBackups = api.listRunningConfigBackups;
 
@@ -1940,6 +2004,18 @@ export function App({
     );
     setRestoreBackupTarget(null);
     setBackupDialog(null);
+  }
+
+  async function handlePowerOnLab() {
+    if (!selectedLabId || !api.powerOnLab) {
+      return;
+    }
+
+    const result = await api.powerOnLab(selectedLabId);
+    if (result.queued.length > 0) {
+      setPendingPowerOn(result.queued);
+      setPoweringOnLab(true);
+    }
   }
 
   async function handlePowerOnNode(nodeId: string) {
@@ -2931,6 +3007,8 @@ export function App({
                     : nodeMessages
                 }
                 onPowerOnNode={handlePowerOnNode}
+                onPowerOnLab={() => void handlePowerOnLab()}
+                poweringOnLab={poweringOnLab}
                 nodeConnectCommands={nodeConnectCommands}
                 onConnectNode={handleConnectNode}
                 onCopyNativeCommand={(nodeId) => {

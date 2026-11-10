@@ -59,6 +59,8 @@ published via GitHub Pages at <https://cass67.github.io/networkchum/>.
 - Drag nodes around a topology canvas
 - Create and remove Ethernet links between interfaces
 - Power nodes on and off
+- Power on a whole lab in stages — one device every 8 seconds, QEMU guests first —
+  so a rack of VMs does not boot at once and starve the host
 - Open serial console sessions for running QEMU nodes
 - Upload VM images, bind them to built-in templates, unbind them, or remove them from the active catalog
 - Browse local container images, search registries, pull images, and turn them into reusable templates or one-off lab nodes
@@ -544,6 +546,7 @@ Key endpoints:
 - `GET /labs/:labId`
 - `DELETE /labs/:labId`
 - `POST /labs/:labId/nodes`
+- `POST /labs/:labId/power-on`
 - `POST /labs/:labId/container-nodes`
 - `DELETE /labs/:labId/nodes/:nodeId`
 - `POST /labs/:labId/networks`

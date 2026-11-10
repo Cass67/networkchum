@@ -1579,6 +1579,79 @@ describe("api", () => {
     expect(powerOffResponse.statusCode).toBe(200);
   });
 
+  it("powers on a lab in stages and skips devices that are already running", async () => {
+    const createLabResponse = await app.inject({
+      method: "POST",
+      url: "/labs",
+      payload: { name: "Staged Lab" },
+    });
+    const labId = (createLabResponse.json() as { lab: { id: string } }).lab.id;
+
+    for (const name of ["toolbox-1", "toolbox-2"]) {
+      await app.inject({
+        method: "POST",
+        url: `/labs/${labId}/nodes`,
+        payload: {
+          templateId: "linux-alpine-container",
+          name,
+          position: { x: 100, y: 100 },
+        },
+      });
+    }
+
+    const bulkResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/power-on`,
+      payload: { staggerMs: 0 },
+    });
+    expect(bulkResponse.statusCode).toBe(202);
+    const bulk = bulkResponse.json() as {
+      queued: string[];
+      staggerMs: number;
+    };
+    expect(bulk.queued).toHaveLength(2);
+    expect(bulk.staggerMs).toBe(0);
+
+    let states: Array<{ nodeId: string; status: string }> = [];
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const runtimeResponse = await app.inject({
+        method: "GET",
+        url: `/labs/${labId}/runtime`,
+      });
+      states = (
+        runtimeResponse.json() as {
+          states: Array<{ nodeId: string; status: string }>;
+        }
+      ).states;
+      const allRunning = bulk.queued.every((nodeId) =>
+        states.some(
+          (state) => state.nodeId === nodeId && state.status === "running",
+        ),
+      );
+      if (allRunning) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    for (const nodeId of bulk.queued) {
+      expect(
+        states.some(
+          (state) => state.nodeId === nodeId && state.status === "running",
+        ),
+      ).toBe(true);
+    }
+    const secondResponse = await app.inject({
+      method: "POST",
+      url: `/labs/${labId}/power-on`,
+      payload: { staggerMs: 0 },
+    });
+    expect(secondResponse.statusCode).toBe(202);
+    expect((secondResponse.json() as { queued: string[] }).queued).toHaveLength(
+      0,
+    );
+  });
+
   it("marks a qemu runtime console as busy when an external client is attached", async () => {
     const busyApp = buildApp({
       runtime: {

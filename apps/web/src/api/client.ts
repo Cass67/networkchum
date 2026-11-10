@@ -188,7 +188,7 @@ type LabDetails = {
   document: LabDocumentSummary;
 };
 
-type RuntimeState = {
+export type RuntimeState = {
   nodeId: string;
   status: string;
   connectCommand?: string[];
@@ -738,6 +738,20 @@ export function createApiClient(rawFetcher: Fetcher, baseUrl = "/api") {
         response as Response,
       );
       return payload.state;
+    },
+
+    async powerOnLab(
+      labId: string,
+      staggerMs?: number,
+    ): Promise<{ queued: string[]; staggerMs: number }> {
+      const response = await fetcher(`${baseUrl}/labs/${labId}/power-on`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(staggerMs === undefined ? {} : { staggerMs }),
+      });
+      return parseResponse<{ queued: string[]; staggerMs: number }>(
+        response as Response,
+      );
     },
 
     async powerOffNode(labId: string, nodeId: string): Promise<RuntimeState> {

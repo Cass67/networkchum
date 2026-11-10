@@ -15,6 +15,20 @@ afterEach(() => {
 });
 
 describe("LabDetails", () => {
+  it("starts a staged lab power-on from the header", () => {
+    const onPowerOnLab = vi.fn();
+    render(
+      <LabDetails
+        labName="Lab"
+        nodes={[{ id: "node-1", name: "veos-1" }]}
+        onPowerOnLab={onPowerOnLab}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Power On Lab" }));
+    expect(onPowerOnLab).toHaveBeenCalledTimes(1);
+  });
+
   it("disables power on for nodes that are already running", () => {
     render(
       <LabDetails
