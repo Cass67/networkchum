@@ -1,5 +1,9 @@
 # NetworkChum
 
+[![release](https://img.shields.io/github/v/release/Cass67/networkchum?label=release&color=22d3ee)](https://github.com/Cass67/networkchum/releases/latest)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey.svg)](#requirements)
+
 ![NetworkChum topology canvas](docs/screenshots/hero.png)
 
 NetworkChum is a browser-based network lab workbench for building and operating small topologies with QEMU-backed virtual devices and container nodes.
@@ -21,9 +25,8 @@ Device catalog with image bindings and per-template resource limits.
 
 A short demo (generation sped up) — click the GIF for the MP4.
 
-There is also a standalone landing page: [`docs/index.html`](docs/index.html).
-(GitHub Pages is not available for this private repo on the current plan, so the
-page is served locally or by any static host.)
+There is also a standalone landing page, [`docs/index.html`](docs/index.html),
+published via GitHub Pages at <https://cass67.github.io/networkchum/>.
 
 ## What It Does Today
 
@@ -115,7 +118,7 @@ Every tagged release publishes a source bundle and checksums on the Releases
 page:
 
 ```bash
-VERSION=1.0.0
+VERSION=1.0.2
 curl -LO "https://github.com/Cass67/networkchum/releases/download/v${VERSION}/networkchum-${VERSION}.tar.gz"
 curl -LO "https://github.com/Cass67/networkchum/releases/download/v${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
@@ -544,7 +547,7 @@ Console access is exposed over WebSocket at:
 - shared schemas live in `packages/shared`
 - the current persistence model is intentionally simple and file-backed
 
-This project is still early-stage software. The current implementation is best suited for local development, prototyping, and operator workflow iteration rather than a hardened multi-user deployment.
+NetworkChum 1.0 is a stable single-host release. It is best suited for local development, prototyping, and operator workflow iteration rather than a hardened multi-user deployment — see [Current Rough Edges](#current-rough-edges).
 
 ## Verification
 
