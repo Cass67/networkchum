@@ -87,7 +87,7 @@ export const defaultTemplates: Template[] = [
     vendor: "Arista",
     deviceRoleIcon: "switch",
     boot: {
-      console: "serial",
+      console: "vnc",
       machineType: "q35",
       nicModel: "e1000",
       acceleration: "hardware",
