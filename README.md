@@ -23,8 +23,8 @@ The project is aimed at an EVE-NG / PNETLab style workflow, but with a JSON-nati
 
 ## Screenshots and demo
 
-All screenshots are from a single Linux install: the lab's routers and switches
-boot with KVM, and the hosts are container nodes.
+The topology, device-catalog, template and console shots below are from one
+Linux install: routers and switches boot with KVM, hosts are container nodes.
 
 ![Device catalog](docs/screenshots/devices.png)
 
