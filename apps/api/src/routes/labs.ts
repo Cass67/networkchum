@@ -77,7 +77,7 @@ const powerStaggerSchema = z.object({
 });
 
 const DEFAULT_POWER_ON_STAGGER_MS = 8_000;
-const DEFAULT_POWER_OFF_STAGGER_MS = 0;
+const DEFAULT_POWER_OFF_STAGGER_MS = 1_000;
 
 const addNodeSchema = z.object({
   templateId: z.string().min(1),
