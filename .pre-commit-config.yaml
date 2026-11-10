@@ -288,13 +288,19 @@ repos:
         files: \.go$
       - id: go-vet
         name: go vet
-        entry: go vet ./...
+        entry: >-
+          bash -lc 'mod=$(git ls-files "*go.mod" | head -n1); if [ -z "$mod" ];
+          then echo "no go module, skipping"; exit 0; fi; cd
+          "$(dirname "$mod")" && go vet ./...'
         language: system
         files: \.go$
         pass_filenames: false
       - id: go-test
         name: go test
-        entry: go test ./...
+        entry: >-
+          bash -lc 'mod=$(git ls-files "*go.mod" | head -n1); if [ -z "$mod" ];
+          then echo "no go module, skipping"; exit 0; fi; cd
+          "$(dirname "$mod")" && go test ./...'
         language: system
         files: \.(go|js|html|tmpl)$
         pass_filenames: false
