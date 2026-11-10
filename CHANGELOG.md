@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.1.0 — 2026-11-10
+
+### Added
+
+- **Whole-lab power controls**: `POST /labs/:labId/power-on` starts every stopped
+  device in stages — QEMU guests first, one start every 8 seconds — so a host
+  with several VMs does not boot them all in the same second.
+  `POST /labs/:labId/power-off` stops running devices one second apart in the
+  reverse order (hosts and cloud first, QEMU guests last). Both are a single
+  button in Inspector → Lab Details and skip devices already in the target
+  state.
+- **Lab power progress**: the lab header shows `Powering on…` / `Powering off…`
+  and follows each queued device until it reaches the target state.
+- README and landing page now lead with multi-distro installer support (`apt`,
+  `dnf`, `pacman`, `zypper`) and explicit no-paywall positioning, and use new
+  Linux screenshots (topology, device catalog, templates, browser serial
+  console). Added a Buy Me a Coffee link.
+
+### Fixed
+
+- Serial console WebSocket connections now authenticate with the API token, so
+  consoles work against token-gated LAN servers.
+- Canvas no longer hides nodes behind the workspace panel: labs are centred on
+  first load and the viewport accounts for the open panel.
+- Cable labels no longer collide with node status text on routers and switches
+  (larger cable-anchor clearance).
+- Runtime state writes are serialized, so starting several devices at once no
+  longer drops another node's state from `runtime-states.json`.
+- Arista vEOS now uses the graphical VNC console: this vendor image boots to its
+  VGA login prompt, so a serial-only console stayed blank. Serial remains the
+  default console for every other template.
+- AI provider detection recognises models when an OpenCode credential is
+  stored.
+
+### Changed
+
+- Go pre-commit hooks run from the console-bridge module root, and the
+  TypeScript hook checks the workspace tsconfigs.
+- `scripts/release.sh` tags the release commit it creates.
+
 ## 1.0.2 — 2026-11-03
 
 ### Added

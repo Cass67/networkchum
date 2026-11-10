@@ -17,7 +17,8 @@ git rev-parse -q --verify "refs/tags/${tag}" >/dev/null && {
 }
 node scripts/release-notes.mjs "$version" >/dev/null
 
-npm version "$version" --workspaces --include-workspace-root --no-git-tag-version >/dev/null
+node scripts/version-bump.mjs "$version"
+chmod +x scripts/version-bump.mjs
 git add -A
 git commit -m "chore(release): ${version}"
 git tag "$tag"

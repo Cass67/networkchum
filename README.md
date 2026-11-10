@@ -145,7 +145,7 @@ Every tagged release publishes a source bundle and checksums on the Releases
 page:
 
 ```bash
-VERSION=1.0.2
+VERSION=1.1.0
 curl -LO "https://github.com/Cass67/networkchum/releases/download/v${VERSION}/networkchum-${VERSION}.tar.gz"
 curl -LO "https://github.com/Cass67/networkchum/releases/download/v${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS
