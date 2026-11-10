@@ -23,14 +23,27 @@ The project is aimed at an EVE-NG / PNETLab style workflow, but with a JSON-nati
 
 ## Screenshots and demo
 
-![AI Lab Builder preview](docs/screenshots/ai-builder.png)
-
-The AI builder turns a prompt into a validated lab: routers, switches, hosts and
-links, with day-0 configs for the platforms that support them.
+All screenshots are from a single Linux install: the lab's routers and switches
+boot with KVM, and the hosts are container nodes.
 
 ![Device catalog](docs/screenshots/devices.png)
 
 Device catalog with image bindings and per-template resource limits.
+
+![Built-in templates](docs/screenshots/templates.png)
+
+Built-in templates for Cisco, Arista, Juniper, Fortinet, MikroTik and Linux
+platforms, each with editable CPU, RAM and interface limits.
+
+![Browser serial console](docs/screenshots/console.png)
+
+A serial console into a running Cisco IOS XE router — no client pack, no local
+terminal app required.
+
+![AI Lab Builder preview](docs/screenshots/ai-builder.png)
+
+The AI builder turns a prompt into a validated lab: routers, switches, hosts and
+links, with day-0 configs for the platforms that support them.
 
 [![Demo: open a lab, generate a branch office, create it](docs/screenshots/demo.gif)](docs/screenshots/demo.mp4)
 
