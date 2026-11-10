@@ -10,6 +10,17 @@ NetworkChum is a browser-based network lab workbench for building and operating 
 
 The project is aimed at an EVE-NG / PNETLab style workflow, but with a JSON-native lab model, a simple local API, and a cleaner split between topology state, image management, and runtime orchestration.
 
+## Why NetworkChum
+
+- **Not tied to Ubuntu.** EVE-NG and PNETLab only install on Ubuntu. The
+  NetworkChum installer supports `apt` (Debian, Ubuntu), `dnf` (Fedora,
+  RHEL/CentOS Stream, Rocky, Alma, Oracle Linux), `pacman` (Arch) and
+  `zypper` (openSUSE).
+- **Nothing behind a paywall.** Every feature is in the open-source build. That
+  includes cabling two already-running devices: the link is applied to the
+  virtual switch immediately, so traffic flows without restarting anything —
+  no Pro tier, no feature gate.
+
 ## Screenshots and demo
 
 ![AI Lab Builder preview](docs/screenshots/ai-builder.png)
