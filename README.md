@@ -45,9 +45,9 @@ terminal app required.
 The AI builder turns a prompt into a validated lab: routers, switches, hosts and
 links, with day-0 configs for the platforms that support them.
 
-[![Demo: open a lab, generate a branch office, create it](docs/screenshots/demo.gif)](docs/screenshots/demo.mp4)
+[![Demo: power a lab on in stages, then console into the router and the switch](docs/screenshots/demo.gif)](docs/screenshots/demo.mp4)
 
-A short demo (generation sped up) — click the GIF for the MP4.
+A short demo — staged power-on is sped up; both consoles are live. Click the GIF for the MP4.
 
 There is also a standalone landing page, [`docs/index.html`](docs/index.html),
 published via GitHub Pages at <https://cass67.github.io/networkchum/>.
